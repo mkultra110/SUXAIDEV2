@@ -25,9 +25,10 @@ NODE_MAJOR=${NODE_MAJOR:-20}
 SERVICE_NAME=suxai-server
 NGINX_SITE=${NGINX_SITE:-suxai}
 
-# Where the repo is currently checked out (defaults to $PWD; override when
-# running from an unpacked tarball).
-REPO_ROOT=${REPO_ROOT:-$(pwd)}
+# Locate the server source relative to this script's own location so the
+# installer works no matter which directory you invoke it from.
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_ROOT=${REPO_ROOT:-"$(cd "$SCRIPT_DIR/../.." && pwd)"}
 SERVER_SRC=${SERVER_SRC:-"$REPO_ROOT/server"}
 
 # ---- Pre-flight ------------------------------------------------------------

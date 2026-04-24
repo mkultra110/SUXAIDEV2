@@ -1,0 +1,190 @@
+.diffview {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-0);
+  z-index: 30;
+}
+
+.diffview__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--color-border);
+  background: linear-gradient(180deg, rgba(17, 22, 33, 0.9), rgba(11, 15, 23, 0.85));
+  backdrop-filter: blur(16px);
+}
+
+.diffview__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--color-text);
+}
+
+.diffview__badge {
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.22), rgba(84, 87, 216, 0.15));
+  border: 1px solid rgba(125, 130, 248, 0.45);
+  color: #cfd2ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.diffview__file {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+.diffview__label {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+}
+
+.diffview__counter {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.diffview__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.diffview__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.diffview__empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--color-text-muted);
+}
+
+/* ---- Hunk ---- */
+.diff-hunk {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+  position: relative;
+}
+
+.diff-hunk--accepted {
+  border-color: rgba(52, 199, 89, 0.5);
+  box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.3) inset;
+}
+
+.diff-hunk--rejected {
+  opacity: 0.55;
+  border-color: rgba(255, 99, 99, 0.35);
+}
+
+.diff-hunk__context {
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.diff-hunk__changes {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.diff-hunk__line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 1px 10px;
+  white-space: pre;
+}
+
+.diff-hunk__gutter {
+  flex: 0 0 14px;
+  text-align: center;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  opacity: 0.5;
+  user-select: none;
+}
+
+.diff-hunk__text {
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--color-text);
+}
+
+.diff-hunk__line--context .diff-hunk__text {
+  color: var(--color-text-muted);
+  opacity: 0.75;
+}
+
+.diff-hunk__line--removed {
+  background: rgba(255, 99, 99, 0.12);
+}
+.diff-hunk__line--removed .diff-hunk__gutter {
+  color: #ff8f8f;
+  opacity: 0.9;
+}
+
+.diff-hunk__line--added {
+  background: rgba(52, 199, 89, 0.15);
+}
+.diff-hunk__line--added .diff-hunk__gutter {
+  color: #7ae08f;
+  opacity: 0.9;
+}
+
+.diff-hunk__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border-top: 1px solid var(--color-border);
+}
+
+.diff-hunk__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  cursor: pointer;
+}
+
+.diff-hunk__btn--accept:hover,
+.diff-hunk__btn--accept.is-active {
+  color: #7ae08f;
+  border-color: rgba(52, 199, 89, 0.4);
+  background: rgba(52, 199, 89, 0.12);
+}
+.diff-hunk__btn--reject:hover,
+.diff-hunk__btn--reject.is-active {
+  color: #ff8f8f;
+  border-color: rgba(255, 99, 99, 0.4);
+  background: rgba(255, 99, 99, 0.12);
+}

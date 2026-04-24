@@ -14,7 +14,7 @@ const MAX_PERSISTED_MESSAGES = 200;
 
 export function AIPanel() {
   const { token } = useAuth();
-  const { activeFile, selection, updateActiveContent } = useWorkspace();
+  const { activeFile, selection, updateActiveContent, openDiff } = useWorkspace();
   const [modelId, setModelId] = useState<string>(() => {
     return localStorage.getItem(STORAGE_MODEL_KEY) || DEFAULT_MODEL_ID;
   });
@@ -176,6 +176,19 @@ export function AIPanel() {
     [activeFile, updateActiveContent],
   );
 
+  const onDiffCode = useCallback(
+    (code: string) => {
+      if (!activeFile) return;
+      openDiff({
+        path: activeFile.path,
+        original: activeFile.content,
+        proposed: code,
+        label: modelId,
+      });
+    },
+    [activeFile, openDiff, modelId],
+  );
+
   return (
     <aside className="ai">
       <div className="ai__header">
@@ -216,7 +229,9 @@ export function AIPanel() {
             </p>
           </div>
         ) : (
-          messages.map((m) => <Message key={m.id} message={m} onApply={onApplyCode} />)
+          messages.map((m) => (
+            <Message key={m.id} message={m} onApply={onApplyCode} onDiff={onDiffCode} />
+          ))
         )}
       </div>
 

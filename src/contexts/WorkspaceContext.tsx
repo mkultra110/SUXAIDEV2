@@ -9,11 +9,23 @@ export interface OpenFile {
   language?: string;
 }
 
+export interface PendingDiff {
+  /** The file path this diff applies to. */
+  path: string;
+  /** Original content (usually the file's current content when diff opened). */
+  original: string;
+  /** Proposed content (from AI). */
+  proposed: string;
+  /** Short label shown in the diff toolbar (e.g. the model id or command). */
+  label?: string;
+}
+
 interface WorkspaceState {
   workspaceRoot: string | null;
   openFiles: OpenFile[];
   activePath: string | null;
   selection: string;
+  pendingDiff: PendingDiff | null;
 }
 
 interface WorkspaceValue extends WorkspaceState {
@@ -24,6 +36,9 @@ interface WorkspaceValue extends WorkspaceState {
   updateActiveContent: (content: string) => void;
   setSelection: (text: string) => void;
   saveActiveFile: () => Promise<boolean>;
+  openDiff: (d: PendingDiff) => void;
+  closeDiff: () => void;
+  acceptDiff: () => void;
   activeFile: OpenFile | null;
 }
 
@@ -47,6 +62,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     openFiles: [],
     activePath: null,
     selection: '',
+    pendingDiff: null,
   });
 
   const setWorkspaceRoot = useCallback((root: string | null) => {
@@ -118,6 +134,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const openDiff = useCallback((d: PendingDiff) => {
+    setState((s) => ({ ...s, pendingDiff: d }));
+  }, []);
+
+  const closeDiff = useCallback(() => {
+    setState((s) => ({ ...s, pendingDiff: null }));
+  }, []);
+
+  const acceptDiff = useCallback(() => {
+    setState((s) => {
+      const d = s.pendingDiff;
+      if (!d) return s;
+      const next = s.openFiles.map((f) =>
+        f.path === d.path ? { ...f, content: d.proposed, dirty: true } : f,
+      );
+      return { ...s, openFiles: next, pendingDiff: null, activePath: d.path };
+    });
+  }, []);
+
   const activeFile = useMemo(
     () => state.openFiles.find((f) => f.path === state.activePath) ?? null,
     [state.openFiles, state.activePath],
@@ -134,8 +169,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateActiveContent,
       setSelection,
       saveActiveFile,
+      openDiff,
+      closeDiff,
+      acceptDiff,
     }),
-    [state, activeFile, setWorkspaceRoot, openFile, closeFile, setActive, updateActiveContent, setSelection, saveActiveFile],
+    [
+      state, activeFile, setWorkspaceRoot, openFile, closeFile, setActive,
+      updateActiveContent, setSelection, saveActiveFile, openDiff, closeDiff, acceptDiff,
+    ],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

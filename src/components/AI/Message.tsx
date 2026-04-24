@@ -16,6 +16,7 @@ export interface ChatMessage {
 interface Props {
   message: ChatMessage;
   onApply?: (code: string) => void;
+  onDiff?: (code: string) => void;
 }
 
 interface Part {
@@ -41,7 +42,7 @@ function parseMarkdown(text: string): Part[] {
   return parts;
 }
 
-export function Message({ message, onApply }: Props) {
+export function Message({ message, onApply, onDiff }: Props) {
   const parts = useMemo(() => parseMarkdown(message.content), [message.content]);
 
   if (message.role === 'user') {
@@ -72,7 +73,13 @@ export function Message({ message, onApply }: Props) {
           )}
           {parts.map((p, i) =>
             p.kind === 'code' ? (
-              <CodeBlock key={i} code={p.content} language={p.language ?? 'plaintext'} onApply={onApply} />
+              <CodeBlock
+                key={i}
+                code={p.content}
+                language={p.language ?? 'plaintext'}
+                onApply={onApply}
+                onDiff={onDiff}
+              />
             ) : (
               <div key={i} className="msg__text">{renderInline(p.content)}</div>
             ),

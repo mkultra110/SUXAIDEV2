@@ -1,11 +1,20 @@
 import { useCallback, useRef } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { DiffView } from './DiffView';
 import './EditorPanel.css';
 
 export function EditorPanel() {
-  const { openFiles, activePath, activeFile, setActive, closeFile, updateActiveContent, setSelection } =
-    useWorkspace();
+  const {
+    openFiles,
+    activePath,
+    activeFile,
+    setActive,
+    closeFile,
+    updateActiveContent,
+    setSelection,
+    pendingDiff,
+  } = useWorkspace();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -81,6 +90,7 @@ export function EditorPanel() {
       </div>
 
       <div className="editor__body">
+        {pendingDiff && <DiffView diff={pendingDiff} />}
         {activeFile ? (
           <Editor
             key={activeFile.path}

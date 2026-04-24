@@ -15,9 +15,23 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   token?: string | null;
   timeoutMs?: number;
+  /** Internal: set by retry path to avoid infinite loops. */
+  _retried?: boolean;
 }
 
-async function request<T = unknown>(pathname: string, opts: RequestOptions = {}): Promise<T> {
+/**
+ * Hook the AuthContext installs at mount. Called when a request 401s so we
+ * can try the refresh-token flow and retry once. If the refresh itself
+ * fails, resolve to null — the caller will bubble up the 401 and the
+ * AuthContext will log the user out.
+ */
+type TokenRefresher = () => Promise<string | null>;
+let refreshHook: TokenRefresher | null = null;
+export function setTokenRefresher(hook: TokenRefresher | null): void {
+  refreshHook = hook;
+}
+
+async function rawRequest<T>(pathname: string, opts: RequestOptions): Promise<T> {
   const { body, token, timeoutMs = 15_000, headers, ...rest } = opts;
 
   const controller = new AbortController();
@@ -54,6 +68,28 @@ async function request<T = unknown>(pathname: string, opts: RequestOptions = {})
   }
 }
 
+async function request<T = unknown>(pathname: string, opts: RequestOptions = {}): Promise<T> {
+  try {
+    return await rawRequest<T>(pathname, opts);
+  } catch (err) {
+    // Attempt one refresh + retry when a token-bearing call returns 401.
+    if (
+      err instanceof ApiError &&
+      err.status === 401 &&
+      opts.token &&
+      refreshHook &&
+      !opts._retried &&
+      pathname !== '/auth/refresh'
+    ) {
+      const fresh = await refreshHook();
+      if (fresh) {
+        return rawRequest<T>(pathname, { ...opts, token: fresh, _retried: true });
+      }
+    }
+    throw err;
+  }
+}
+
 function safeParse(text: string): any {
   try {
     return JSON.parse(text);
@@ -65,6 +101,8 @@ function safeParse(text: string): any {
 export interface AuthUser {
   id: string;
   email: string;
+  username?: string;
+  tier?: 'free' | 'pro';
 }
 
 export interface AuthResponse {
@@ -77,8 +115,11 @@ export const authApi = {
   login: (email: string, password: string) =>
     request<AuthResponse>('/auth/login', { method: 'POST', body: { email, password } }),
 
-  register: (email: string, password: string) =>
-    request<AuthResponse>('/auth/register', { method: 'POST', body: { email, password } }),
+  register: (email: string, password: string, username?: string) =>
+    request<AuthResponse>('/auth/register', {
+      method: 'POST',
+      body: username ? { email, password, username } : { email, password },
+    }),
 
   me: (token: string) => request<AuthUser>('/auth/me', { method: 'GET', token }),
 

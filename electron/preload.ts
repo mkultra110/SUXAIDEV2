@@ -8,6 +8,10 @@ const api = {
     getToken: (): Promise<string | null> => ipcRenderer.invoke('auth:get-token'),
     setToken: (token: string): Promise<boolean> => ipcRenderer.invoke('auth:set-token', token),
     clearToken: (): Promise<boolean> => ipcRenderer.invoke('auth:clear-token'),
+    getRefreshToken: (): Promise<string | null> => ipcRenderer.invoke('auth:get-refresh-token'),
+    setRefreshToken: (token: string): Promise<boolean> =>
+      ipcRenderer.invoke('auth:set-refresh-token', token),
+    clearRefreshToken: (): Promise<boolean> => ipcRenderer.invoke('auth:clear-refresh-token'),
   },
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),

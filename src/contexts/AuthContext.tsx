@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ApiError, authApi, type AuthUser } from '../api/client';
+import { ApiError, authApi, setTokenRefresher, type AuthUser } from '../api/client';
 
 interface AuthState {
   user: AuthUser | null;
@@ -11,7 +11,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, username?: string) => Promise<void>;
   logout: () => Promise<void>;
   clearError: () => void;
 }
@@ -25,6 +25,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     status: 'loading',
     error: null,
   });
+
+  // The refresher hook is rebuilt every render; keep a stable ref so the
+  // ApiClient can always call the latest version.
+  const tokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    tokenRef.current = state.token;
+  }, [state.token]);
 
   // Bootstrap — read token from secure Electron storage.
   useEffect(() => {
@@ -42,6 +49,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
             await window.suxai.auth.clearToken();
+            await window.suxai.auth.clearRefreshToken();
           }
           if (!cancelled) setState({ user: null, token: null, status: 'unauthenticated', error: null });
         }
@@ -54,17 +62,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const finalizeLogin = useCallback(async (token: string, user: AuthUser) => {
-    await window.suxai.auth.setToken(token);
-    setState({ user, token, status: 'authenticated', error: null });
+  const finalizeLogin = useCallback(
+    async (token: string, refreshToken: string | undefined, user: AuthUser) => {
+      await window.suxai.auth.setToken(token);
+      if (refreshToken) {
+        await window.suxai.auth.setRefreshToken(refreshToken);
+      }
+      setState({ user, token, status: 'authenticated', error: null });
+    },
+    [],
+  );
+
+  const logout = useCallback(async () => {
+    await window.suxai.auth.clearToken();
+    await window.suxai.auth.clearRefreshToken();
+    setState({ user: null, token: null, status: 'unauthenticated', error: null });
   }, []);
+
+  // Install the refresh hook so api/client can retry 401s automatically.
+  useEffect(() => {
+    setTokenRefresher(async () => {
+      try {
+        const refreshToken = await window.suxai.auth.getRefreshToken();
+        if (!refreshToken) return null;
+        const res = await authApi.refresh(refreshToken);
+        await window.suxai.auth.setToken(res.token);
+        if (res.refreshToken) {
+          await window.suxai.auth.setRefreshToken(res.refreshToken);
+        }
+        setState((s) => ({ ...s, token: res.token, user: res.user }));
+        return res.token;
+      } catch {
+        // Refresh failed — force logout so the user re-authenticates.
+        await logout();
+        return null;
+      }
+    });
+    return () => setTokenRefresher(null);
+  }, [logout]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       setState((s) => ({ ...s, error: null }));
       try {
         const res = await authApi.login(email, password);
-        await finalizeLogin(res.token, res.user);
+        await finalizeLogin(res.token, res.refreshToken, res.user);
       } catch (err) {
         const message =
           err instanceof ApiError ? err.message : 'Unable to sign in. Please try again.';
@@ -76,11 +118,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string, username?: string) => {
       setState((s) => ({ ...s, error: null }));
       try {
-        const res = await authApi.register(email, password);
-        await finalizeLogin(res.token, res.user);
+        const res = await authApi.register(email, password, username);
+        await finalizeLogin(res.token, res.refreshToken, res.user);
       } catch (err) {
         const message =
           err instanceof ApiError ? err.message : 'Unable to create account. Please try again.';
@@ -90,11 +132,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [finalizeLogin],
   );
-
-  const logout = useCallback(async () => {
-    await window.suxai.auth.clearToken();
-    setState({ user: null, token: null, status: 'unauthenticated', error: null });
-  }, []);
 
   const clearError = useCallback(() => setState((s) => ({ ...s, error: null })), []);
 

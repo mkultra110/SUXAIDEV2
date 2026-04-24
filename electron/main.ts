@@ -12,6 +12,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 const USER_DATA = () => app.getPath('userData');
 const TOKEN_FILE = () => path.join(USER_DATA(), 'auth.bin');
+const REFRESH_TOKEN_FILE = () => path.join(USER_DATA(), 'refresh.bin');
 
 let mainWindow: BrowserWindow | null = null;
 let updateManager: UpdateManager | null = null;
@@ -91,6 +92,32 @@ async function clearTokenBlob(): Promise<void> {
   }
 }
 
+async function readBlob(file: string): Promise<string | null> {
+  try {
+    const buf = await fs.readFile(file);
+    if (!safeStorage.isEncryptionAvailable()) return buf.toString('utf8');
+    return safeStorage.decryptString(buf);
+  } catch {
+    return null;
+  }
+}
+
+async function writeBlob(file: string, value: string): Promise<void> {
+  await fs.mkdir(USER_DATA(), { recursive: true });
+  const data = safeStorage.isEncryptionAvailable()
+    ? safeStorage.encryptString(value)
+    : Buffer.from(value, 'utf8');
+  await fs.writeFile(file, data, { mode: 0o600 });
+}
+
+async function deleteBlob(file: string): Promise<void> {
+  try {
+    await fs.unlink(file);
+  } catch {
+    /* noop */
+  }
+}
+
 function registerIpc() {
   ipcMain.handle('auth:get-token', async () => readTokenBlob());
   ipcMain.handle('auth:set-token', async (_e, token: string) => {
@@ -100,6 +127,17 @@ function registerIpc() {
   });
   ipcMain.handle('auth:clear-token', async () => {
     await clearTokenBlob();
+    return true;
+  });
+
+  ipcMain.handle('auth:get-refresh-token', () => readBlob(REFRESH_TOKEN_FILE()));
+  ipcMain.handle('auth:set-refresh-token', async (_e, token: string) => {
+    if (typeof token !== 'string' || token.length === 0) throw new Error('Invalid refresh token');
+    await writeBlob(REFRESH_TOKEN_FILE(), token);
+    return true;
+  });
+  ipcMain.handle('auth:clear-refresh-token', async () => {
+    await deleteBlob(REFRESH_TOKEN_FILE());
     return true;
   });
 

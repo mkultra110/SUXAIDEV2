@@ -107,8 +107,16 @@ else
 fi
 
 # ---- Install deps + build --------------------------------------------------
+# Use `npm ci` when a lockfile exists (reproducible), fall back to
+# `npm install` otherwise. Dev deps are required because the build step
+# uses TypeScript.
 echo "==> Installing npm deps + building"
-sudo -u "$SUXAI_USER" -H bash -lc "cd '$SUXAI_ROOT/app' && npm ci --omit=dev=false && npm run build"
+if [[ -f "$SUXAI_ROOT/app/package-lock.json" ]]; then
+  NPM_CMD="npm ci"
+else
+  NPM_CMD="npm install --no-audit --no-fund"
+fi
+sudo -u "$SUXAI_USER" -H bash -lc "cd '$SUXAI_ROOT/app' && $NPM_CMD && npm run build"
 
 # ---- systemd unit ----------------------------------------------------------
 echo "==> Installing systemd unit"

@@ -41,7 +41,11 @@ sudo rsync -a --delete \
   --exclude data \
   "$REMOTE_TMP/" "$SUXAI_ROOT/app/"
 sudo chown -R suxai:suxai "$SUXAI_ROOT/app"
-sudo -u suxai -H bash -lc "cd $SUXAI_ROOT/app && npm ci --omit=dev=false && npm run build"
+if [[ -f "$SUXAI_ROOT/app/package-lock.json" ]]; then
+  sudo -u suxai -H bash -lc "cd $SUXAI_ROOT/app && npm ci && npm run build"
+else
+  sudo -u suxai -H bash -lc "cd $SUXAI_ROOT/app && npm install --no-audit --no-fund && npm run build"
+fi
 sudo cp "$SUXAI_ROOT/app/deploy/suxai-server.service" /etc/systemd/system/suxai-server.service
 sudo systemctl daemon-reload
 sudo systemctl restart suxai-server

@@ -49,15 +49,18 @@ case "${1:-}" in
     ensure_files
     node -e "
       const users = require('$USERS');
-      if (users.length === 0) { console.log('No users yet.'); return; }
-      console.log(users.map(u => ({
-        username:       u.username,
-        email:          u.email,
-        tier:           u.tier,
-        dailyUsageMs:   u.dailyUsageMs,
-        dailyUsageDate: u.dailyUsageDate,
-        createdAt:      u.createdAt,
-      })));
+      if (users.length === 0) {
+        console.log('No users yet.');
+      } else {
+        console.log(users.map(u => ({
+          username:       u.username,
+          email:          u.email,
+          tier:           u.tier,
+          dailyUsageMs:   u.dailyUsageMs,
+          dailyUsageDate: u.dailyUsageDate,
+          createdAt:      u.createdAt,
+        })));
+      }
     "
     ;;
 
@@ -147,8 +150,11 @@ case "${1:-}" in
     ensure_files
     node -e "
       const lic = require('$LICENSES');
-      if (lic.length === 0) { console.log('No licenses yet.'); return; }
-      console.log(lic);
+      if (lic.length === 0) {
+        console.log('No licenses yet.');
+      } else {
+        console.log(lic);
+      }
     "
     ;;
 

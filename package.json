@@ -1,7 +1,7 @@
 {
   "name": "suxai-dev",
   "productName": "SUXAI",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "SUXAI — a premium AI-powered desktop IDE",
   "private": true,
   "type": "module",
@@ -40,6 +40,9 @@
     "appId": "com.suxai.ide",
     "productName": "SUXAI",
     "copyright": "Copyright © 2026 SUXAI",
+    "extraMetadata": {
+      "type": "commonjs"
+    },
     "directories": {
       "output": "release",
       "buildResources": "build"

@@ -44,14 +44,11 @@ function createWindow() {
 
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL);
+    mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'));
-  }
-
-  // Open DevTools in production too until the app is stable, so packaged
-  // installer errors are visible without a manual shortcut.
-  if (!VITE_DEV_SERVER_URL && process.env.SUXAI_NO_DEVTOOLS !== '1') {
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    // Users can open DevTools manually with Ctrl/Cmd+Shift+I or F12 if
+    // something goes wrong, but don't open automatically in production.
   }
 
   mainWindow.webContents.on('did-fail-load', (_e, code, description, url) => {

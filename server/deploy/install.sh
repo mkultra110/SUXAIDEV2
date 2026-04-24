@@ -84,8 +84,12 @@ if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | cut -c2- | cut -d. -f1)"
 fi
 
 # ---- Directory tree --------------------------------------------------------
+# $SUXAI_ROOT must be 0755 so the edge proxy (nginx/caddy) running as its
+# own user can traverse into /releases/ to serve installer downloads.
+# Sensitive content inside keeps its own stricter perms (.env=0600,
+# data=0700) so widening the root is harmless.
 echo "==> Creating $SUXAI_ROOT structure"
-install -d -o "$SUXAI_USER" -g "$SUXAI_GROUP" -m 0750 "$SUXAI_ROOT"
+install -d -o "$SUXAI_USER" -g "$SUXAI_GROUP" -m 0755 "$SUXAI_ROOT"
 install -d -o "$SUXAI_USER" -g "$SUXAI_GROUP" -m 0750 "$SUXAI_ROOT/app"
 install -d -o "$SUXAI_USER" -g "$SUXAI_GROUP" -m 0700 "$SUXAI_ROOT/data"
 install -d -o "$SUXAI_USER" -g "$SUXAI_GROUP" -m 0750 "$SUXAI_ROOT/logs"

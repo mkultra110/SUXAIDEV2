@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
 import './UpdateDialog.css';
 
@@ -55,7 +56,7 @@ export function UpdateDialog() {
 
   const percent = progress ? Math.min(100, Math.round(progress.percent * 100)) : 0;
 
-  return (
+  return createPortal(
     <div className="upd__overlay" role="dialog" aria-modal="true">
       <div className="upd__card glass-strong">
         <div className="upd__head">
@@ -97,6 +98,7 @@ export function UpdateDialog() {
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

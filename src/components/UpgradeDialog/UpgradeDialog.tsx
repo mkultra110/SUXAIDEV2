@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ApiError, authApi } from '../../api/client';
@@ -57,8 +58,8 @@ export function UpgradeDialog({ token, open, onClose, onUpgraded }: Props) {
 
   if (!open) return null;
 
-  return (
-    <div className="upg__overlay" role="dialog" aria-modal="true">
+  return createPortal(
+    <div className="upg__overlay" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="upg__card glass-strong" onClick={(e) => e.stopPropagation()}>
         <div className="upg__head">
           <div className="upg__icon" aria-hidden>
@@ -110,6 +111,7 @@ export function UpgradeDialog({ token, open, onClose, onUpgraded }: Props) {
           Don't have a key? Ask the SUXAI owner to grant access to your username.
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

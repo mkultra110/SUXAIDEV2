@@ -15,7 +15,7 @@ const MAX_PERSISTED_MESSAGES = 200;
 
 export function AIPanel() {
   const { token } = useAuth();
-  const { activeFile, selection, updateActiveContent, openDiff } = useWorkspace();
+  const { activeFile, selection, updateActiveContent, openDiff, openFiles } = useWorkspace();
   const [modelId, setModelId] = useState<string>(() => {
     return localStorage.getItem(STORAGE_MODEL_KEY) || DEFAULT_MODEL_ID;
   });
@@ -87,19 +87,62 @@ export function AIPanel() {
     return { cmd: m[1].toLowerCase() as AiCommand, rest: m[2].trim() };
   }, []);
 
+  // Extract @path/to/file mentions from the composer and read their content
+  // so the AI gets them as explicit context. Returns the cleaned prompt
+  // (without the @-mentions) and the loaded attachments.
+  const extractMentions = useCallback(
+    async (raw: string): Promise<{ cleaned: string; attachments: { path: string; content: string }[] }> => {
+      const re = /@([^\s@]+(?:\.\w+)?)/g;
+      const matches = [...raw.matchAll(re)];
+      if (matches.length === 0) return { cleaned: raw, attachments: [] };
+      const attachments: { path: string; content: string }[] = [];
+      for (const m of matches) {
+        const ref = m[1];
+        // Try a few candidate resolutions before giving up:
+        //   1. treat as an absolute path
+        //   2. treat as a bare filename and match against open files
+        let resolved: { path: string; content: string } | null = null;
+        const open = openFiles.find(
+          (f) => f.path.endsWith(ref) || f.name === ref,
+        );
+        if (open) {
+          resolved = { path: open.path, content: open.content };
+        } else {
+          try {
+            const r = await window.suxai.fs.readFile(ref);
+            resolved = r;
+          } catch {
+            /* can't find — ignore, the raw @mention stays in the prompt */
+          }
+        }
+        if (resolved) attachments.push(resolved);
+      }
+      const cleaned = raw.replace(re, '').replace(/\s+/g, ' ').trim();
+      return { cleaned, attachments };
+    },
+    [openFiles],
+  );
+
   const sendCommand = useCallback(
-    (command: AiCommand, userText?: string) => {
+    async (command: AiCommand, userText?: string) => {
       if (!token) return;
       const text = (userText ?? input).trim();
       if (!text && command === 'chat') return;
 
       abortRef.current?.();
 
+      // Resolve @file mentions so the AI sees them as context without
+      // the raw @-token polluting the user prompt.
+      const { cleaned, attachments } = await extractMentions(text);
+
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
         command,
-        content: command === 'chat' ? text : `${command.toUpperCase()}${text ? `: ${text}` : ''}`,
+        content:
+          command === 'chat'
+            ? cleaned || text
+            : `${command.toUpperCase()}${cleaned ? `: ${cleaned}` : ''}`,
       };
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -112,7 +155,16 @@ export function AIPanel() {
       setInput('');
       setStreaming(true);
 
-      const prompt = buildCommandPrompt(command, text || selection || activeFile?.content || '');
+      const attachmentBlock =
+        attachments.length > 0
+          ? attachments
+              .map((a) => `\n\n<<< FILE: ${a.path} >>>\n${a.content}\n<<< END >>>`)
+              .join('')
+          : '';
+
+      const prompt =
+        buildCommandPrompt(command, cleaned || selection || activeFile?.content || '') +
+        attachmentBlock;
 
       const cancel = streamAi(
         token,
@@ -157,7 +209,7 @@ export function AIPanel() {
       );
       abortRef.current = cancel;
     },
-    [token, input, selection, activeFile, modelId],
+    [token, input, selection, activeFile, modelId, extractMentions],
   );
 
   const stop = () => {
@@ -263,7 +315,11 @@ export function AIPanel() {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={token ? 'Ask anything about your code — or type /explain, /refactor, /fix, /optimize' : 'Sign in to use AI'}
+          placeholder={
+            token
+              ? 'Ask anything — slash commands (/explain, /refactor, /fix, /optimize) and @file mentions work here'
+              : 'Sign in to use AI'
+          }
           rows={3}
           disabled={!token || streaming}
           onKeyDown={(e) => {

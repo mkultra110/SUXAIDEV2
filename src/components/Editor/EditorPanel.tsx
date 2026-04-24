@@ -3,6 +3,7 @@ import Editor, { type OnMount } from '@monaco-editor/react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { DiffView } from './DiffView';
 import { emitAiCommand } from '../../lib/commands';
+import { useSettings } from '../../lib/settings';
 import './EditorPanel.css';
 
 interface ActionBarPos {
@@ -25,6 +26,7 @@ export function EditorPanel() {
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [actionBar, setActionBar] = useState<ActionBarPos | null>(null);
+  const [settings] = useSettings();
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -220,9 +222,9 @@ export function EditorPanel() {
             onMount={onMount}
             options={{
               fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
-              fontSize: 13,
+              fontSize: settings.fontSize,
               fontLigatures: true,
-              minimap: { enabled: false },
+              minimap: { enabled: settings.minimap },
               smoothScrolling: true,
               cursorBlinking: 'smooth',
               cursorSmoothCaretAnimation: 'on',
@@ -231,8 +233,8 @@ export function EditorPanel() {
               renderLineHighlight: 'all',
               lineNumbersMinChars: 3,
               automaticLayout: true,
-              tabSize: 2,
-              wordWrap: 'on',
+              tabSize: settings.tabSize,
+              wordWrap: settings.wordWrap ? 'on' : 'off',
               guides: { indentation: true, bracketPairs: true },
             }}
           />

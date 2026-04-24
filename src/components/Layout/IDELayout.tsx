@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { WorkspaceProvider, useWorkspace } from '../../contexts/WorkspaceContext';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useToast } from '../ui/Toast';
 import { TitleBar } from './TitleBar';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { EditorPanel } from '../Editor/EditorPanel';
@@ -7,7 +8,8 @@ import { AIPanel } from '../AI/AIPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
-  const { openFile, setWorkspaceRoot, saveActiveFile } = useWorkspace();
+  const { openFile, setWorkspaceRoot, saveActiveFile, activeFile } = useWorkspace();
+  const toast = useToast();
 
   useEffect(() => {
     const onDragOver = (e: DragEvent) => {
@@ -27,13 +29,17 @@ function WorkspaceHotkeys() {
         if (parent) setWorkspaceRoot(parent);
       } catch (err) {
         console.error('Failed to open dropped file:', err);
+        toast.error('Cannot open file', (err as Error).message);
       }
     };
-    const onKeyDown = (e: KeyboardEvent) => {
+    const onKeyDown = async (e: KeyboardEvent) => {
       // Ctrl+S on Windows/Linux, Cmd+S on macOS
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
-        saveActiveFile();
+        if (!activeFile) return;
+        const ok = await saveActiveFile();
+        if (ok) toast.success('Saved', activeFile.name);
+        else toast.error('Save failed', activeFile.name);
       }
     };
     window.addEventListener('dragover', onDragOver);
@@ -44,12 +50,12 @@ function WorkspaceHotkeys() {
       window.removeEventListener('drop', onDrop);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [openFile, setWorkspaceRoot, saveActiveFile]);
+  }, [openFile, setWorkspaceRoot, saveActiveFile, activeFile, toast]);
 
   return null;
 }
 
-function Shell() {
+export function IDELayout() {
   return (
     <div className="ide">
       <WorkspaceHotkeys />
@@ -60,13 +66,5 @@ function Shell() {
         <AIPanel />
       </div>
     </div>
-  );
-}
-
-export function IDELayout() {
-  return (
-    <WorkspaceProvider>
-      <Shell />
-    </WorkspaceProvider>
   );
 }

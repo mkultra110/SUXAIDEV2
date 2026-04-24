@@ -1,0 +1,80 @@
+.toast-stack {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 11000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 360px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 36px 10px 12px;
+  position: relative;
+  border-radius: var(--radius-md);
+  background: rgba(14, 20, 34, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  font-size: 12.5px;
+  color: var(--color-text);
+  pointer-events: auto;
+  cursor: pointer;
+  animation: toast-in 220ms var(--ease-out);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.toast__icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.toast--success .toast__icon { background: rgba(52, 199, 89, 0.22); color: #6ee497; }
+.toast--error   .toast__icon { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+.toast--info    .toast__icon { background: rgba(125, 130, 248, 0.22); color: #b8bcff; }
+
+.toast--success { border-color: rgba(52, 199, 89, 0.3); }
+.toast--error   { border-color: rgba(239, 68, 68, 0.35); }
+.toast--info    { border-color: rgba(125, 130, 248, 0.3); }
+
+.toast__body { flex: 1; min-width: 0; }
+.toast__title { font-weight: 600; line-height: 1.25; }
+.toast__desc {
+  margin-top: 2px;
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.toast__close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-dim);
+  font-size: 16px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.toast__close:hover { color: var(--color-text); background: rgba(255, 255, 255, 0.06); }

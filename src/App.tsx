@@ -1,7 +1,11 @@
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
+import { ToastProvider } from './components/ui/Toast';
 import { LoginScreen } from './components/Login/LoginScreen';
 import { IDELayout } from './components/Layout/IDELayout';
 import { UpdateDialog } from './components/UpdateDialog/UpdateDialog';
+import { CommandPalette } from './components/CommandPalette/CommandPalette';
+import { SettingsDialog } from './components/Settings/SettingsDialog';
 import { Spinner } from './components/ui/Spinner';
 
 function Root() {
@@ -9,7 +13,10 @@ function Root() {
 
   if (status === 'loading') {
     return (
-      <div className="stack" style={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}>
+      <div
+        className="stack"
+        style={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}
+      >
         <Spinner size={24} />
       </div>
     );
@@ -19,14 +26,20 @@ function Root() {
     <>
       {status === 'authenticated' ? <IDELayout /> : <LoginScreen />}
       <UpdateDialog />
+      <CommandPalette />
+      <SettingsDialog />
     </>
   );
 }
 
 export function App() {
   return (
-    <AuthProvider>
-      <Root />
-    </AuthProvider>
+    <ToastProvider>
+      <AuthProvider>
+        <WorkspaceProvider>
+          <Root />
+        </WorkspaceProvider>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

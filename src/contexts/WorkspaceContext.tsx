@@ -86,6 +86,34 @@ function langFromPath(p: string): string {
   return map[ext] ?? 'plaintext';
 }
 
+const PERSIST_KEY = 'suxai.workspace.v1';
+
+interface PersistedWorkspace {
+  workspaceRoot: string | null;
+  openPaths: string[];
+  activePath: string | null;
+}
+
+function loadPersisted(): PersistedWorkspace | null {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedWorkspace;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function savePersisted(state: PersistedWorkspace): void {
+  try {
+    localStorage.setItem(PERSIST_KEY, JSON.stringify(state));
+  } catch {
+    /* quota etc. — ignore */
+  }
+}
+
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WorkspaceState>({
     workspaceRoot: null,
@@ -94,10 +122,62 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     selection: '',
     pendingDiff: null,
   });
+  const [restored, setRestored] = useState(false);
 
   const setWorkspaceRoot = useCallback((root: string | null) => {
     setState((s) => ({ ...s, workspaceRoot: root }));
   }, []);
+
+  // Restore last session on first mount.
+  useEffect(() => {
+    if (restored) return;
+    const persisted = loadPersisted();
+    if (!persisted) {
+      setRestored(true);
+      return;
+    }
+    (async () => {
+      try {
+        if (persisted.workspaceRoot) {
+          setState((s) => ({ ...s, workspaceRoot: persisted.workspaceRoot }));
+        }
+        const files: OpenFile[] = [];
+        for (const p of persisted.openPaths ?? []) {
+          try {
+            const f = await window.suxai.fs.readFile(p);
+            const name = p.split(/[\\/]/).pop() ?? p;
+            files.push({
+              path: f.path,
+              name,
+              content: f.content,
+              language: langFromPath(f.path),
+            });
+          } catch {
+            /* file moved/deleted since last session — skip silently */
+          }
+        }
+        if (files.length > 0) {
+          const active =
+            persisted.activePath && files.some((f) => f.path === persisted.activePath)
+              ? persisted.activePath
+              : files[0].path;
+          setState((s) => ({ ...s, openFiles: files, activePath: active }));
+        }
+      } finally {
+        setRestored(true);
+      }
+    })();
+  }, [restored]);
+
+  // Persist on change, only after restoration ran so we don't blow it away.
+  useEffect(() => {
+    if (!restored) return;
+    savePersisted({
+      workspaceRoot: state.workspaceRoot,
+      openPaths: state.openFiles.map((f) => f.path),
+      activePath: state.activePath,
+    });
+  }, [restored, state.workspaceRoot, state.openFiles, state.activePath]);
 
   const openFile = useCallback((file: OpenFile) => {
     setState((s) => {

@@ -13,6 +13,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 const USER_DATA = () => app.getPath('userData');
 const TOKEN_FILE = () => path.join(USER_DATA(), 'auth.bin');
 const REFRESH_TOKEN_FILE = () => path.join(USER_DATA(), 'refresh.bin');
+const CONVERSATIONS_FILE = () => path.join(USER_DATA(), 'conversations.json');
 
 let mainWindow: BrowserWindow | null = null;
 let updateManager: UpdateManager | null = null;
@@ -138,6 +139,36 @@ function registerIpc() {
   });
   ipcMain.handle('auth:clear-refresh-token', async () => {
     await deleteBlob(REFRESH_TOKEN_FILE());
+    return true;
+  });
+
+  // ---- Conversation history (plain JSON in userData) ------------------------
+  // Not encrypted on purpose — the contents aren't secret, and we want
+  // the user to be able to inspect/export the file manually. Use a
+  // temp-rename for atomic writes so a crash mid-write can't corrupt it.
+  ipcMain.handle('conv:read', async () => {
+    try {
+      const raw = await fs.readFile(CONVERSATIONS_FILE(), 'utf8');
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  ipcMain.handle('conv:write', async (_e, data: unknown[]) => {
+    if (!Array.isArray(data)) throw new Error('Conversations must be an array');
+    await fs.mkdir(USER_DATA(), { recursive: true });
+    const tmp = `${CONVERSATIONS_FILE()}.${process.pid}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(data), { mode: 0o600 });
+    await fs.rename(tmp, CONVERSATIONS_FILE());
+    return true;
+  });
+  ipcMain.handle('conv:clear', async () => {
+    try {
+      await fs.unlink(CONVERSATIONS_FILE());
+    } catch {
+      /* noop */
+    }
     return true;
   });
 

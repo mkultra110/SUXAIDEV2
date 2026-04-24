@@ -10,6 +10,7 @@ import { ModelSelector } from './ModelSelector';
 import './AIPanel.css';
 
 const STORAGE_MODEL_KEY = 'suxai.model';
+const MAX_PERSISTED_MESSAGES = 200;
 
 export function AIPanel() {
   const { token } = useAuth();
@@ -19,9 +20,11 @@ export function AIPanel() {
   });
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const abortRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedModel = useMemo(
     () => AI_MODELS.find((m) => m.id === modelId) ?? AI_MODELS[0],
@@ -31,6 +34,45 @@ export function AIPanel() {
   useEffect(() => {
     localStorage.setItem(STORAGE_MODEL_KEY, modelId);
   }, [modelId]);
+
+  // Load persisted conversation once at mount.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const stored = (await window.suxai.conversations.read()) as ChatMessage[];
+        if (!cancelled && Array.isArray(stored) && stored.length > 0) {
+          // Drop any lingering streaming flag from the previous session.
+          setMessages(stored.map((m) => ({ ...m, streaming: false })));
+        }
+      } catch (err) {
+        console.warn('[conv] load failed:', err);
+      } finally {
+        if (!cancelled) setHistoryLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist on change (debounced). Keep last N messages only to cap disk growth.
+  useEffect(() => {
+    if (!historyLoaded) return;
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      const trimmed = messages.slice(-MAX_PERSISTED_MESSAGES).map((m) => ({
+        ...m,
+        streaming: false,
+      }));
+      window.suxai.conversations.write(trimmed).catch((err) => {
+        console.warn('[conv] save failed:', err);
+      });
+    }, 400);
+    return () => {
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+    };
+  }, [messages, historyLoaded]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -123,6 +165,7 @@ export function AIPanel() {
   const clear = () => {
     abortRef.current?.();
     setMessages([]);
+    window.suxai.conversations.clear().catch(() => {});
   };
 
   const onApplyCode = useCallback(

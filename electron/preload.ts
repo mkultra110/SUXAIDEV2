@@ -27,6 +27,11 @@ const api = {
     writeFile: (p: string, content: string): Promise<boolean> =>
       ipcRenderer.invoke('fs:write-file', p, content),
   },
+  conversations: {
+    read: (): Promise<unknown[]> => ipcRenderer.invoke('conv:read'),
+    write: (data: unknown[]): Promise<boolean> => ipcRenderer.invoke('conv:write', data),
+    clear: (): Promise<boolean> => ipcRenderer.invoke('conv:clear'),
+  },
   update: {
     check: (): Promise<{ available: boolean; version: string; notes?: string } | null> =>
       ipcRenderer.invoke('update:check'),

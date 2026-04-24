@@ -54,7 +54,18 @@ fi
 # rsync is used to sync source into /opt/suxai/app; curl is needed for Node
 # repo setup; ca-certificates for TLS. Install whatever's missing.
 MISSING_PKGS=()
-for pkg in rsync curl ca-certificates nginx; do
+# Only install nginx if NO other reverse proxy is already on port 80
+# (e.g. Caddy). That keeps the installer friendly for servers that
+# already have their own edge.
+EDGE_ON_80=false
+if ss -tlnp 2>/dev/null | grep -qE ':80[[:space:]]'; then
+  EDGE_ON_80=true
+fi
+NEED=(rsync curl ca-certificates)
+if [[ "$EDGE_ON_80" == "false" ]]; then
+  NEED+=(nginx)
+fi
+for pkg in "${NEED[@]}"; do
   if ! command -v "$pkg" >/dev/null 2>&1 && ! dpkg -s "$pkg" >/dev/null 2>&1; then
     MISSING_PKGS+=("$pkg")
   fi

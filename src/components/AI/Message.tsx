@@ -7,7 +7,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  command?: 'explain' | 'refactor' | 'fix' | 'chat';
+  command?: 'explain' | 'refactor' | 'fix' | 'optimize' | 'chat';
   streaming?: boolean;
   error?: string;
   modelId?: string;

@@ -38,15 +38,15 @@
 }
 
 .model-sel__menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 260px;
+  position: fixed;
+  min-width: 280px;
   padding: 6px;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 50;
+  z-index: 9999;
   animation: suxai-fade-in var(--dur-base) var(--ease-out);
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
 .model-sel__group { padding: 4px 2px; }

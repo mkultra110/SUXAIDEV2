@@ -47,12 +47,42 @@ const WorkspaceContext = createContext<WorkspaceValue | null>(null);
 function langFromPath(p: string): string {
   const ext = p.split('.').pop()?.toLowerCase() ?? '';
   const map: Record<string, string> = {
+    // Web
     ts: 'typescript', tsx: 'typescript', js: 'javascript', jsx: 'javascript',
-    json: 'json', md: 'markdown', css: 'css', html: 'html', py: 'python',
-    go: 'go', rs: 'rust', java: 'java', c: 'c', cpp: 'cpp', cs: 'csharp',
-    rb: 'ruby', php: 'php', sh: 'shell', yml: 'yaml', yaml: 'yaml', toml: 'toml',
-    sql: 'sql',
+    mjs: 'javascript', cjs: 'javascript',
+    html: 'html', htm: 'html', css: 'css', scss: 'scss', sass: 'scss',
+    less: 'less', vue: 'html', svelte: 'html',
+    // Data
+    json: 'json', jsonc: 'json', md: 'markdown', mdx: 'markdown',
+    yml: 'yaml', yaml: 'yaml', toml: 'toml', xml: 'xml',
+    ini: 'ini',
+    // Systems
+    c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp',
+    cs: 'csharp', go: 'go', rs: 'rust',
+    // JVM
+    java: 'java', kt: 'kotlin', kts: 'kotlin', scala: 'scala', groovy: 'java',
+    // Apple
+    swift: 'swift', m: 'objective-c', mm: 'objective-c',
+    // Scripting
+    py: 'python', pyi: 'python', rb: 'ruby', php: 'php',
+    pl: 'perl', lua: 'lua', sh: 'shell', bash: 'shell', zsh: 'shell',
+    fish: 'shell', ps1: 'powershell',
+    // Functional
+    hs: 'haskell', clj: 'clojure', cljs: 'clojure', ex: 'elixir', exs: 'elixir',
+    // Mobile
+    dart: 'dart',
+    // DB / query
+    sql: 'sql', graphql: 'graphql', gql: 'graphql',
+    // DevOps
+    dockerfile: 'dockerfile', tf: 'hcl', tfvars: 'hcl', hcl: 'hcl',
+    // Data science
+    r: 'r', jl: 'julia',
   };
+
+  // Filename-based fallbacks (no extension or special names).
+  const name = p.split(/[\\/]/).pop()?.toLowerCase() ?? '';
+  if (name === 'dockerfile' || name.startsWith('dockerfile.')) return 'dockerfile';
+
   return map[ext] ?? 'plaintext';
 }
 

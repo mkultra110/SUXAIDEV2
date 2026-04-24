@@ -4,6 +4,9 @@ type FileEntry = { name: string; path: string; isDirectory: boolean };
 type OpenFileResult = { path: string; content: string } | null;
 
 const api = {
+  app: {
+    getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+  },
   auth: {
     getToken: (): Promise<string | null> => ipcRenderer.invoke('auth:get-token'),
     setToken: (token: string): Promise<boolean> => ipcRenderer.invoke('auth:set-token', token),

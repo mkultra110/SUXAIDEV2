@@ -120,6 +120,8 @@ async function deleteBlob(file: string): Promise<void> {
 }
 
 function registerIpc() {
+  ipcMain.handle('app:get-version', () => app.getVersion());
+
   ipcMain.handle('auth:get-token', async () => readTokenBlob());
   ipcMain.handle('auth:set-token', async (_e, token: string) => {
     if (typeof token !== 'string' || token.length === 0) throw new Error('Invalid token');

@@ -1,0 +1,80 @@
+.upg__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: rgba(5, 7, 12, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: suxai-fade-in var(--dur-base) var(--ease-out);
+  padding: 24px;
+}
+
+.upg__card {
+  width: 100%;
+  max-width: 440px;
+  padding: 24px;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  animation: suxai-fade-in var(--dur-slow) var(--ease-out);
+}
+
+.upg__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.upg__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(99, 102, 241, 0.05));
+  border: 1px solid var(--color-border-accent);
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.upg__title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.upg__sub {
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.upg__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.upg__error {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+  font-size: 12.5px;
+}
+
+.upg__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.upg__foot {
+  margin-top: 18px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--color-text-dim);
+}

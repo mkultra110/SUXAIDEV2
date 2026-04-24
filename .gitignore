@@ -24,3 +24,6 @@ logs/
 
 coverage/
 .nyc_output/
+
+# Electron build output
+release/

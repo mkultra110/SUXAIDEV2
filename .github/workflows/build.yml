@@ -1,0 +1,85 @@
+name: Build desktop installers
+
+# Builds the Electron installers on pushes to the dev branch, version tags,
+# or on manual dispatch. Windows builds produce an NSIS .exe; macOS
+# produces a .dmg; Linux produces an .AppImage. The outputs are uploaded
+# as workflow artifacts so they can be downloaded from the Actions tab.
+#
+# On version tag pushes (e.g. v0.1.0) a GitHub Release is created and the
+# binaries are attached.
+
+on:
+  push:
+    branches:
+      - claude/french-greeting-lGwbV
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Platforms to build (comma-separated: win,mac,linux)"
+        required: false
+        default: "win"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            artifact: SUXAI-Windows
+            pattern: release/*.exe
+          - os: macos-latest
+            platform: mac
+            artifact: SUXAI-macOS
+            pattern: release/*.dmg
+          - os: ubuntu-latest
+            platform: linux
+            artifact: SUXAI-Linux
+            pattern: release/*.AppImage
+    runs-on: ${{ matrix.os }}
+    # Only build the platforms the user asked for on manual dispatch.
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      contains(github.event.inputs.platforms, matrix.platform)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build ${{ matrix.platform }} installer
+        run: npm run dist:${{ matrix.platform }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.pattern }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach to GitHub Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.pattern }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

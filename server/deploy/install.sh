@@ -130,10 +130,14 @@ if command -v nginx >/dev/null 2>&1; then
   echo "==> Installing nginx site"
   cp "$SERVER_SRC/deploy/nginx.conf.example" "/etc/nginx/sites-available/${NGINX_SITE}"
   ln -sf "/etc/nginx/sites-available/${NGINX_SITE}" "/etc/nginx/sites-enabled/${NGINX_SITE}"
+  # Remove the default "Welcome to nginx" site if it's still enabled.
+  rm -f /etc/nginx/sites-enabled/default
   if nginx -t; then
-    systemctl reload nginx
+    systemctl enable nginx
+    # reload-or-restart starts nginx if it's not running, otherwise reloads.
+    systemctl reload-or-restart nginx
   else
-    echo "!! nginx config test failed — not reloading. Fix /etc/nginx/sites-available/${NGINX_SITE} and run: sudo nginx -t && sudo systemctl reload nginx" >&2
+    echo "!! nginx config test failed — not reloading. Fix /etc/nginx/sites-available/${NGINX_SITE} and run: sudo nginx -t && sudo systemctl reload-or-restart nginx" >&2
   fi
 else
   echo "(nginx not installed — skipping reverse proxy setup)"

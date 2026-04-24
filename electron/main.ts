@@ -164,7 +164,9 @@ app.whenReady().then(() => {
   createWindow();
 
   updateManager = new UpdateManager({
-    manifestUrl: process.env.UPDATE_MANIFEST_URL ?? 'https://updates.example.com/latest.json',
+    manifestUrl:
+      process.env.UPDATE_MANIFEST_URL ??
+      'https://suxai.209-99-186-238.sslip.io/update/manifest',
     currentVersion: app.getVersion(),
     getWindow: () => mainWindow,
   });
@@ -173,6 +175,11 @@ app.whenReady().then(() => {
   setTimeout(() => {
     updateManager?.check().catch((err) => console.warn('[update] check failed:', err));
   }, 3000);
+
+  // Re-check every hour in case the user keeps the app running.
+  setInterval(() => {
+    updateManager?.check().catch(() => {});
+  }, 60 * 60 * 1000);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

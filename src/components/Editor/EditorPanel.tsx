@@ -1,8 +1,14 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { DiffView } from './DiffView';
+import { emitAiCommand } from '../../lib/commands';
 import './EditorPanel.css';
+
+interface ActionBarPos {
+  top: number;
+  left: number;
+}
 
 export function EditorPanel() {
   const {
@@ -17,6 +23,8 @@ export function EditorPanel() {
   } = useWorkspace();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [actionBar, setActionBar] = useState<ActionBarPos | null>(null);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -30,23 +38,44 @@ export function EditorPanel() {
           { token: '', foreground: 'e8ecf4', background: '0b0f17' },
           { token: 'comment', foreground: '5a6378', fontStyle: 'italic' },
           { token: 'keyword', foreground: '7d82f8' },
+          { token: 'keyword.control', foreground: 'a78bfa' },
           { token: 'string', foreground: '86efac' },
+          { token: 'string.escape', foreground: '34d399' },
           { token: 'number', foreground: 'fbbf24' },
           { token: 'type', foreground: '7dd3fc' },
+          { token: 'type.identifier', foreground: '7dd3fc' },
+          { token: 'function', foreground: 'fde68a' },
+          { token: 'variable', foreground: 'e8ecf4' },
+          { token: 'variable.parameter', foreground: 'fbcfe8' },
+          { token: 'tag', foreground: 'f472b6' },
+          { token: 'attribute.name', foreground: 'fbbf24' },
+          { token: 'attribute.value', foreground: '86efac' },
+          { token: 'delimiter', foreground: '8a95aa' },
+          { token: 'operator', foreground: 'a5b4fc' },
         ],
         colors: {
           'editor.background': '#0b0f17',
           'editor.foreground': '#e8ecf4',
-          'editor.lineHighlightBackground': '#111828',
-          'editorLineNumber.foreground': '#5a6378',
-          'editorLineNumber.activeForeground': '#8a95aa',
-          'editor.selectionBackground': '#2d3b5c',
-          'editorCursor.foreground': '#7d82f8',
-          'editorIndentGuide.background': '#1a2338',
-          'editorIndentGuide.activeBackground': '#2b3551',
-          'scrollbarSlider.background': '#ffffff14',
-          'scrollbarSlider.hoverBackground': '#ffffff1f',
-          'scrollbarSlider.activeBackground': '#ffffff2b',
+          'editor.lineHighlightBackground': '#10162480',
+          'editor.lineHighlightBorder': '#00000000',
+          'editorLineNumber.foreground': '#455065',
+          'editorLineNumber.activeForeground': '#9aa5bd',
+          'editor.selectionBackground': '#3b4b75aa',
+          'editor.inactiveSelectionBackground': '#2d3b5c66',
+          'editor.selectionHighlightBackground': '#3b4b7555',
+          'editor.wordHighlightBackground': '#3b4b7544',
+          'editor.wordHighlightStrongBackground': '#3b4b7566',
+          'editorCursor.foreground': '#a5b4fc',
+          'editorBracketMatch.background': '#2b3551',
+          'editorBracketMatch.border': '#7d82f866',
+          'editorIndentGuide.background': '#182039',
+          'editorIndentGuide.activeBackground': '#2d3b5c',
+          'editorWhitespace.foreground': '#1a233880',
+          'editorGutter.background': '#0b0f17',
+          'scrollbarSlider.background': '#ffffff10',
+          'scrollbarSlider.hoverBackground': '#ffffff1c',
+          'scrollbarSlider.activeBackground': '#ffffff28',
+          'editorOverviewRuler.border': '#00000000',
         },
       });
       monaco.editor.setTheme('suxai-dark');
@@ -56,10 +85,64 @@ export function EditorPanel() {
         if (!model) return;
         const text = model.getValueInRange(e.selection);
         setSelection(text);
+
+        // Show a floating code-action bar above the selection when the
+        // user has actually highlighted something.
+        if (!text || text.trim().length < 2) {
+          setActionBar(null);
+          return;
+        }
+        const editorDom = editor.getDomNode();
+        const host = containerRef.current;
+        if (!editorDom || !host) {
+          setActionBar(null);
+          return;
+        }
+        const startPos = editor.getTopForLineNumber(e.selection.startLineNumber);
+        const scrollTop = editor.getScrollTop();
+        const layoutInfo = editor.getLayoutInfo();
+        const editorRect = editorDom.getBoundingClientRect();
+        const hostRect = host.getBoundingClientRect();
+        const top =
+          editorRect.top - hostRect.top + (startPos - scrollTop) - 38;
+        const left =
+          editorRect.left - hostRect.left + layoutInfo.contentLeft + 8;
+        setActionBar({ top: Math.max(8, top), left });
+      });
+
+      editor.onDidScrollChange(() => {
+        // Selection can still be active but the viewport moved — re-emit
+        // a synthetic selection event to refresh the toolbar position.
+        const sel = editor.getSelection();
+        const model = editor.getModel();
+        if (!sel || !model) return;
+        const text = model.getValueInRange(sel);
+        if (!text || text.trim().length < 2) {
+          setActionBar(null);
+          return;
+        }
+        const editorDom = editor.getDomNode();
+        const host = containerRef.current;
+        if (!editorDom || !host) return;
+        const startPos = editor.getTopForLineNumber(sel.startLineNumber);
+        const scrollTop = editor.getScrollTop();
+        const layoutInfo = editor.getLayoutInfo();
+        const editorRect = editorDom.getBoundingClientRect();
+        const hostRect = host.getBoundingClientRect();
+        const top =
+          editorRect.top - hostRect.top + (startPos - scrollTop) - 38;
+        const left =
+          editorRect.left - hostRect.left + layoutInfo.contentLeft + 8;
+        setActionBar({ top: Math.max(8, top), left });
       });
     },
     [setSelection],
   );
+
+  // Hide the action bar when the active file changes.
+  useEffect(() => {
+    setActionBar(null);
+  }, [activePath]);
 
   return (
     <section className="editor">
@@ -89,8 +172,44 @@ export function EditorPanel() {
         ))}
       </div>
 
-      <div className="editor__body">
+      <div className="editor__body" ref={containerRef}>
         {pendingDiff && <DiffView diff={pendingDiff} />}
+        {actionBar && !pendingDiff && (
+          <div
+            className="editor__actions"
+            style={{ top: actionBar.top, left: actionBar.left }}
+            onMouseDown={(e) => e.preventDefault()}
+          >
+            <button
+              type="button"
+              onClick={() => emitAiCommand({ command: 'explain' })}
+              title="Explain selection"
+            >
+              Explain
+            </button>
+            <button
+              type="button"
+              onClick={() => emitAiCommand({ command: 'refactor' })}
+              title="Refactor selection"
+            >
+              Refactor
+            </button>
+            <button
+              type="button"
+              onClick={() => emitAiCommand({ command: 'fix' })}
+              title="Fix bugs in selection"
+            >
+              Fix
+            </button>
+            <button
+              type="button"
+              onClick={() => emitAiCommand({ command: 'optimize' })}
+              title="Optimize selection"
+            >
+              Optimize
+            </button>
+          </div>
+        )}
         {activeFile ? (
           <Editor
             key={activeFile.path}

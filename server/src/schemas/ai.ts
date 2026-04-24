@@ -28,7 +28,7 @@ export const aiRequestSchema = z.object({
   modelId: z.string().refine((v) => SUPPORTED_MODELS.some((m) => m.id === v), {
     message: 'Unsupported model',
   }),
-  command: z.enum(['explain', 'refactor', 'fix', 'chat']).default('chat'),
+  command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'chat']).default('chat'),
   prompt: z.string().min(1, 'Prompt cannot be empty').max(60_000, 'Prompt too large'),
   context: z
     .object({

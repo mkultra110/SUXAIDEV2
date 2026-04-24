@@ -7,6 +7,7 @@ import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
 import { Message, type ChatMessage } from './Message';
 import { ModelSelector } from './ModelSelector';
+import { onAiCommand } from '../../lib/commands';
 import './AIPanel.css';
 
 const STORAGE_MODEL_KEY = 'suxai.model';
@@ -79,6 +80,12 @@ export function AIPanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  const parseSlashCommand = useCallback((raw: string): { cmd: AiCommand; rest: string } | null => {
+    const m = raw.match(/^\/(explain|refactor|fix|optimize)\b\s*(.*)/is);
+    if (!m) return null;
+    return { cmd: m[1].toLowerCase() as AiCommand, rest: m[2].trim() };
+  }, []);
 
   const sendCommand = useCallback(
     (command: AiCommand, userText?: string) => {
@@ -162,6 +169,9 @@ export function AIPanel() {
     );
   };
 
+  // Listen for code-action commands dispatched from the editor toolbar.
+  useEffect(() => onAiCommand(({ command }) => sendCommand(command)), [sendCommand]);
+
   const clear = () => {
     abortRef.current?.();
     setMessages([]);
@@ -207,14 +217,17 @@ export function AIPanel() {
       </div>
 
       <div className="ai__commands">
-        <button className="ai__cmd" onClick={() => sendCommand('explain')} disabled={!token || streaming}>
+        <button className="ai__cmd" onClick={() => sendCommand('explain')} disabled={!token || streaming} title="/explain">
           <span>Explain</span>
         </button>
-        <button className="ai__cmd" onClick={() => sendCommand('refactor')} disabled={!token || streaming}>
+        <button className="ai__cmd" onClick={() => sendCommand('refactor')} disabled={!token || streaming} title="/refactor">
           <span>Refactor</span>
         </button>
-        <button className="ai__cmd" onClick={() => sendCommand('fix')} disabled={!token || streaming}>
+        <button className="ai__cmd" onClick={() => sendCommand('fix')} disabled={!token || streaming} title="/fix">
           <span>Fix bugs</span>
+        </button>
+        <button className="ai__cmd" onClick={() => sendCommand('optimize')} disabled={!token || streaming} title="/optimize">
+          <span>Optimize</span>
         </button>
       </div>
 
@@ -239,19 +252,26 @@ export function AIPanel() {
         className="ai__composer"
         onSubmit={(e) => {
           e.preventDefault();
-          sendCommand('chat');
+          const slash = parseSlashCommand(input);
+          if (slash) {
+            sendCommand(slash.cmd, slash.rest);
+          } else {
+            sendCommand('chat');
+          }
         }}
       >
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={token ? 'Ask anything about your code…' : 'Sign in to use AI'}
+          placeholder={token ? 'Ask anything about your code — or type /explain, /refactor, /fix, /optimize' : 'Sign in to use AI'}
           rows={3}
           disabled={!token || streaming}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
               e.preventDefault();
-              sendCommand('chat');
+              const slash = parseSlashCommand(input);
+              if (slash) sendCommand(slash.cmd, slash.rest);
+              else sendCommand('chat');
             }
           }}
         />

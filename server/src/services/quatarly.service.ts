@@ -19,6 +19,8 @@ function buildSystemPrompt(command: AiRequestInput['command']): string {
       return `${base} Your task: refactor for readability and maintainability, keeping behavior identical. Return the complete refactored snippet in one code block followed by a short changelog.`;
     case 'fix':
       return `${base} Your task: find bugs and propose a fix. Return corrected code in one block, then a brief explanation.`;
+    case 'optimize':
+      return `${base} Your task: optimize for performance and memory while keeping the public API and behavior unchanged. Return the full optimized snippet in one fenced block, then a short list of the applied optimizations.`;
     default:
       return base;
   }

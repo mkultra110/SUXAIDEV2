@@ -19,6 +19,19 @@ interface Props {
   onClose: () => void;
 }
 
+function countOccurrences(haystack: string, needle: string): number {
+  if (!needle) return 0;
+  let count = 0;
+  let from = 0;
+  while (true) {
+    const idx = haystack.indexOf(needle, from);
+    if (idx < 0) return count;
+    count++;
+    if (count > 1) return count; // early exit — we only care about 0/1/more
+    from = idx + needle.length;
+  }
+}
+
 function extractFirstCodeBlock(text: string): string | null {
   const fence = text.match(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/);
   if (fence) return fence[1];
@@ -99,19 +112,25 @@ export function InlineEdit({ top, left, width, selectedText, file, onClose }: Pr
             setError('Model returned no code block');
             return;
           }
-          // Swap the selection with the replacement and open the diff on
-          // the full file so the user can accept/reject the change.
-          const before = file.content.indexOf(selectedText);
+          // Splice the replacement back in. Two safety rails:
+          //   1. If the selection appears multiple times, we can't know
+          //      which one the user meant. Fall back to diffing the whole
+          //      file so DiffView presents it unambiguously.
+          //   2. If the selection doesn't appear at all (user edited the
+          //      file mid-stream), same fallback.
+          const occurrences = countOccurrences(file.content, selectedText);
           let proposed: string;
-          if (before < 0) {
-            // Selection not found verbatim (e.g. user had cursor-only);
-            // fall back to appending the replacement.
-            proposed = replacement;
-          } else {
+          if (occurrences === 1) {
+            const idx = file.content.indexOf(selectedText);
             proposed =
-              file.content.slice(0, before) +
+              file.content.slice(0, idx) +
               replacement +
-              file.content.slice(before + selectedText.length);
+              file.content.slice(idx + selectedText.length);
+          } else {
+            // Unambiguous diff: show the replacement as the whole-file
+            // proposal. DiffView's per-hunk Accept/Reject still works
+            // correctly.
+            proposed = replacement;
           }
           openDiff({
             path: file.path,

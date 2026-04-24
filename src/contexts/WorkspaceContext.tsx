@@ -240,18 +240,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const s = stateRef.current;
     const toSave = s.openFiles.find((f) => f.path === s.activePath);
     if (!toSave) return false;
-    // Untitled files need a destination path first — fall back to the
-    // native Save-As dialog via the main process.
+
     let targetPath = toSave.path;
+    let alreadyWritten = false;
+
     if (toSave.untitled) {
-      const picked = await window.suxai.fs.saveAs?.(toSave.content, toSave.name);
-      if (!picked) return false;
-      targetPath = picked;
-    } else {
-      if (!toSave.dirty) return false;
+      // Save-As flow: the dialog handler also writes the file, so we
+      // don't need a second writeFile afterwards.
+      try {
+        const picked = await window.suxai.fs.saveAs?.(toSave.content, toSave.name);
+        if (!picked) return false;
+        targetPath = picked;
+        alreadyWritten = true;
+      } catch (err) {
+        console.error('[save-as] failed:', err);
+        return false;
+      }
+    } else if (!toSave.dirty) {
+      return false;
     }
+
     try {
-      await window.suxai.fs.writeFile(targetPath, toSave.content);
+      if (!alreadyWritten) {
+        await window.suxai.fs.writeFile(targetPath, toSave.content);
+      }
       setState((prev) => ({
         ...prev,
         openFiles: prev.openFiles.map((f) =>
@@ -350,20 +362,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const renameFile = useCallback((oldPath: string, newPath: string) => {
-    setState((s) => ({
-      ...s,
-      openFiles: s.openFiles.map((f) =>
-        f.path === oldPath
-          ? {
-              ...f,
-              path: newPath,
-              name: newPath.split(/[\\/]/).pop() ?? f.name,
-              language: langFromPath(newPath),
-            }
-          : f,
-      ),
-      activePath: s.activePath === oldPath ? newPath : s.activePath,
-    }));
+    setState((s) => {
+      // If the destination is already open, drop the stale tab first so
+      // we don't end up with two entries pointing at the same path.
+      const withoutDest = s.openFiles.filter((f) => f.path !== newPath || f.path === oldPath);
+      return {
+        ...s,
+        openFiles: withoutDest.map((f) =>
+          f.path === oldPath
+            ? {
+                ...f,
+                path: newPath,
+                name: newPath.split(/[\\/]/).pop() ?? f.name,
+                language: langFromPath(newPath),
+              }
+            : f,
+        ),
+        activePath: s.activePath === oldPath ? newPath : s.activePath,
+      };
+    });
   }, []);
 
   const openDiff = useCallback((d: PendingDiff) => {

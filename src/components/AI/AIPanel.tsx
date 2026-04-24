@@ -102,7 +102,9 @@ export function AIPanel() {
   // (without the @-mentions) and the loaded attachments.
   const extractMentions = useCallback(
     async (raw: string): Promise<{ cleaned: string; attachments: { path: string; content: string }[] }> => {
-      const re = /@([^\s@]+(?:\.\w+)?)/g;
+      // Match everything after an @ until whitespace / newline / another @.
+      // Previous version stopped at multi-dot file names ('file.test.ts').
+      const re = /@([^\s@\n]+)/g;
       const matches = [...raw.matchAll(re)];
       if (matches.length === 0) return { cleaned: raw, attachments: [] };
       const attachments: { path: string; content: string }[] = [];

@@ -88,7 +88,10 @@ export function Sidebar() {
     const name = window.prompt('Rename to:', entry.name);
     if (!name || name === entry.name) return;
     const parent = entry.path.replace(/[\\/][^\\/]+$/, '');
-    const newPath = `${parent}/${name}`.replace(/\\/g, '/');
+    // Preserve the separator style the parent uses so Windows paths stay
+    // uniformly backslashed and POSIX stays forward-slashed.
+    const sep = entry.path.includes('\\') ? '\\' : '/';
+    const newPath = `${parent}${sep}${name}`;
     try {
       await window.suxai.fs.rename?.(entry.path, newPath);
       if (!entry.isDirectory) renameFile(entry.path, newPath);

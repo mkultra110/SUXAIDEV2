@@ -53,41 +53,47 @@ export function EditorPanel() {
     [settings.fontSize, zoomOffset],
   );
 
-  // Ctrl+= / Ctrl+- / Ctrl+0 zoom. Scoped to the editor view.
+  // All editor-scoped shortcuts in a single listener. One attachment =
+  // no risk of duplicate registrations when deps change. Ref-based
+  // accessors read the freshest activeFile so the Ctrl+L dispatch can
+  // never stamp a stale path onto the event.
+  const activeFileRef = useRef(activeFile);
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key === '=' || e.key === '+') {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.altKey) return;
+
+      // Zoom shortcuts (without Shift).
+      if (!e.shiftKey && (e.key === '=' || e.key === '+')) {
         e.preventDefault();
         setZoomOffset((z) => Math.min(z + 1, 20));
-      } else if (e.key === '-') {
+        return;
+      }
+      if (!e.shiftKey && e.key === '-') {
         e.preventDefault();
         setZoomOffset((z) => Math.max(z - 1, -6));
-      } else if (e.key === '0') {
+        return;
+      }
+      if (!e.shiftKey && e.key === '0') {
         e.preventDefault();
         setZoomOffset(0);
+        return;
       }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
 
-  // Ctrl+N → new untitled file.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+      if (e.shiftKey) return;
+      const k = e.key.toLowerCase();
+
+      if (k === 'n') {
         e.preventDefault();
         newUntitled();
+        return;
       }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [newUntitled]);
 
-  // Ctrl+K → open an inline AI edit prompt anchored at the selection.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+      if (k === 'k') {
         const ed = editorRef.current;
         const host = containerRef.current;
         if (!ed || !host) return;
@@ -95,7 +101,6 @@ export function EditorPanel() {
         const sel = ed.getSelection();
         const model = ed.getModel();
         if (!sel || !model) return;
-        // Fall back to the current line if the user hasn't selected anything.
         let text = model.getValueInRange(sel);
         let anchorLine = sel.startLineNumber;
         if (!text) {
@@ -106,26 +111,25 @@ export function EditorPanel() {
         if (!editorDom) return;
         const editorRect = editorDom.getBoundingClientRect();
         const hostRect = host.getBoundingClientRect();
-        const lineTop = ed.getTopForLineNumber(anchorLine);
+        const rawLineTop = ed.getTopForLineNumber(anchorLine);
+        const lineTop = Number.isFinite(rawLineTop) ? rawLineTop : 0;
         const scrollTop = ed.getScrollTop();
         const layoutInfo = ed.getLayoutInfo();
         const top = editorRect.top - hostRect.top + (lineTop - scrollTop) + 24;
+        const clampedTop = Math.max(
+          8,
+          Math.min(top, hostRect.height - 120),
+        );
         const left = editorRect.left - hostRect.left + layoutInfo.contentLeft + 8;
         const width = Math.min(
           640,
           Math.max(380, layoutInfo.contentWidth - 16),
         );
-        setInlineEdit({ top: Math.max(8, top), left, width, text });
+        setInlineEdit({ top: clampedTop, left, width, text });
+        return;
       }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
 
-  // Ctrl+L → add current selection to AI chat.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'l') {
+      if (k === 'l') {
         const ed = editorRef.current;
         if (!ed) return;
         const sel = ed.getSelection();
@@ -136,15 +140,16 @@ export function EditorPanel() {
         e.preventDefault();
         window.dispatchEvent(
           new CustomEvent<{ path?: string; text: string }>('suxai:add-to-chat', {
-            detail: { path: activeFile?.path, text },
+            detail: { path: activeFileRef.current?.path, text },
           }),
         );
         toast.info('Added to chat', `${text.length} chars`);
+        return;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeFile?.path, toast]);
+  }, [newUntitled, toast]);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {

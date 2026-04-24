@@ -104,11 +104,21 @@ export function QuickOpen() {
   // Index files when opened (cheap enough to redo; invalidated by workspace change).
   useEffect(() => {
     if (!open || !workspaceRoot) return;
+    let cancelled = false;
     setLoading(true);
     walkWorkspace(workspaceRoot)
-      .then((list) => setFiles(list))
-      .catch(() => setFiles([]))
-      .finally(() => setLoading(false));
+      .then((list) => {
+        if (!cancelled) setFiles(list);
+      })
+      .catch(() => {
+        if (!cancelled) setFiles([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [open, workspaceRoot]);
 
   const filtered = useMemo(() => {

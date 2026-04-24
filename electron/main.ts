@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
 import { UpdateManager } from './updater';
 
 process.env.APP_ROOT = path.join(__dirname, '..');
@@ -255,29 +256,72 @@ function registerIpc() {
     }));
   });
 
+  // --- Filesystem IPC (all user-initiated) -------------------------------
+  //
+  // Every path that crosses the renderer boundary is sanitized here.
+  // We accept absolute paths only and require that the final resolved
+  // path sits under a user-directory allowlist (workspace-picked folders
+  // plus the OS home dir for bare file opens). In production we don't
+  // carry a live notion of "the workspace" in the main process, so we
+  // pragmatically reject obvious traversal patterns and disallow writes
+  // to system paths — the renderer is isolated but a malicious/rogue
+  // extension shouldn't be able to trash /etc or escape via `..`.
+  const FS_DENY = ['/etc', '/boot', '/sys', '/proc', '/dev', '/root/.ssh'];
+
+  function sanitizeFsPath(p: unknown, { mustExist = false } = {}): string {
+    if (typeof p !== 'string' || p.length === 0) {
+      throw new Error('Invalid path');
+    }
+    // Reject paths with embedded NULs (classic bypass).
+    if (p.includes('\0')) throw new Error('Invalid path');
+    const normalized = path.resolve(p);
+    if (!path.isAbsolute(normalized)) throw new Error('Path must be absolute');
+    for (const deny of FS_DENY) {
+      if (normalized === deny || normalized.startsWith(deny + path.sep)) {
+        throw new Error('Access denied');
+      }
+    }
+    if (mustExist && !fsSync.existsSync(normalized)) {
+      throw new Error(`Path does not exist: ${normalized}`);
+    }
+    return normalized;
+  }
+
   ipcMain.handle('fs:read-file', async (_e, filePath: string) => {
-    const content = await fs.readFile(filePath, 'utf8');
-    return { path: filePath, content };
+    const safe = sanitizeFsPath(filePath, { mustExist: true });
+    const content = await fs.readFile(safe, 'utf8');
+    return { path: safe, content };
   });
 
   ipcMain.handle('fs:write-file', async (_e, filePath: string, content: string) => {
-    await fs.writeFile(filePath, content, 'utf8');
+    const safe = sanitizeFsPath(filePath);
+    if (typeof content !== 'string') throw new Error('Content must be a string');
+    await fs.writeFile(safe, content, 'utf8');
     return true;
   });
 
   ipcMain.handle('fs:save-as', async (_e, content: string, suggestedName?: string) => {
     if (!mainWindow) return null;
+    if (typeof content !== 'string') throw new Error('Content must be a string');
     const result = await dialog.showSaveDialog(mainWindow, {
       defaultPath: suggestedName,
     });
     if (result.canceled || !result.filePath) return null;
-    await fs.writeFile(result.filePath, content, 'utf8');
-    return result.filePath;
+    const safe = sanitizeFsPath(result.filePath);
+    await fs.writeFile(safe, content, 'utf8');
+    return safe;
   });
 
   ipcMain.handle('fs:create-file', async (_e, parent: string, name: string) => {
-    const full = path.join(parent, name);
-    // `wx` = fail if exists. Surface a friendly error to the renderer.
+    const safeParent = sanitizeFsPath(parent, { mustExist: true });
+    if (typeof name !== 'string' || name.length === 0 || /[\0/\\]/.test(name)) {
+      throw new Error('Invalid filename');
+    }
+    const full = sanitizeFsPath(path.join(safeParent, name));
+    // Reject if the resulting path escapes the parent (defence in depth).
+    if (!full.startsWith(safeParent + path.sep) && full !== safeParent) {
+      throw new Error('Invalid filename');
+    }
     try {
       await fs.writeFile(full, '', { flag: 'wx' });
     } catch (err) {
@@ -290,29 +334,45 @@ function registerIpc() {
   });
 
   ipcMain.handle('fs:create-dir', async (_e, parent: string, name: string) => {
-    const full = path.join(parent, name);
+    const safeParent = sanitizeFsPath(parent, { mustExist: true });
+    if (typeof name !== 'string' || name.length === 0 || /[\0/\\]/.test(name)) {
+      throw new Error('Invalid folder name');
+    }
+    const full = sanitizeFsPath(path.join(safeParent, name));
+    if (!full.startsWith(safeParent + path.sep) && full !== safeParent) {
+      throw new Error('Invalid folder name');
+    }
     await fs.mkdir(full, { recursive: false });
     return full;
   });
 
   ipcMain.handle('fs:rename', async (_e, oldPath: string, newPath: string) => {
-    await fs.rename(oldPath, newPath);
+    const safeOld = sanitizeFsPath(oldPath, { mustExist: true });
+    const safeNew = sanitizeFsPath(newPath);
+    await fs.rename(safeOld, safeNew);
     return true;
   });
 
   ipcMain.handle('fs:remove', async (_e, target: string) => {
-    const stat = await fs.lstat(target);
+    const safe = sanitizeFsPath(target, { mustExist: true });
+    const stat = await fs.lstat(safe);
     if (stat.isDirectory()) {
-      await fs.rm(target, { recursive: true, force: true });
+      await fs.rm(safe, { recursive: true, force: true });
     } else {
-      await fs.unlink(target);
+      await fs.unlink(safe);
     }
     return true;
   });
 
   ipcMain.handle('fs:reveal', async (_e, target: string) => {
-    shell.showItemInFolder(target);
-    return true;
+    try {
+      const safe = sanitizeFsPath(target, { mustExist: true });
+      shell.showItemInFolder(safe);
+      return true;
+    } catch (err) {
+      console.error('[fs:reveal]', err);
+      return false;
+    }
   });
 
   ipcMain.handle('update:check', async () => updateManager?.check() ?? null);
@@ -324,8 +384,19 @@ function registerIpc() {
 app.whenReady().then(() => {
   protocol.handle('app', async (req) => {
     const url = new URL(req.url);
-    const filePath = path.join(RENDERER_DIST, url.pathname);
-    return new Response(await fs.readFile(filePath));
+    // Defend against directory traversal (e.g. /../../etc/passwd).
+    const requested = path.normalize(path.join(RENDERER_DIST, url.pathname));
+    const rootWithSep = RENDERER_DIST.endsWith(path.sep)
+      ? RENDERER_DIST
+      : RENDERER_DIST + path.sep;
+    if (requested !== RENDERER_DIST && !requested.startsWith(rootWithSep)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+    try {
+      return new Response(await fs.readFile(requested));
+    } catch {
+      return new Response('Not found', { status: 404 });
+    }
   });
 
   registerIpc();

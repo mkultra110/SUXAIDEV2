@@ -32,7 +32,7 @@
 
 .sx-field__wrap:focus-within {
   border-color: var(--color-border-accent);
-  box-shadow: 0 0 0 4px var(--color-accent-soft);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
   background: rgba(8, 12, 22, 0.75);
 }
 
@@ -63,7 +63,7 @@
 }
 
 .sx-field--error .sx-field__wrap:focus-within {
-  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
 }
 
 .sx-field__error {

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../config';
+import { tryRefreshToken } from './client';
 
 export type AiCommand = 'explain' | 'refactor' | 'fix' | 'chat';
 
@@ -33,19 +34,29 @@ export function streamAi(
   const controller = new AbortController();
   const url = `${API_BASE_URL}/ai/chat`;
 
+  const doFetch = (authToken: string) =>
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${authToken}`,
+        accept: 'text/event-stream',
+      },
+      body: JSON.stringify(req),
+      signal: controller.signal,
+    });
+
   (async () => {
     let full = '';
     try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${token}`,
-          accept: 'text/event-stream',
-        },
-        body: JSON.stringify(req),
-        signal: controller.signal,
-      });
+      let res = await doFetch(token);
+
+      // Auto-refresh on expired token — the SSE path bypasses the normal
+      // api/client wrapper, so we replicate its 401-retry behaviour here.
+      if (res.status === 401) {
+        const fresh = await tryRefreshToken();
+        if (fresh) res = await doFetch(fresh);
+      }
 
       if (!res.ok || !res.body) {
         const text = await res.text().catch(() => '');

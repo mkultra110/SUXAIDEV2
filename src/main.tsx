@@ -1,8 +1,29 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { loader } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
 import { App } from './App';
 import './styles/theme.css';
 import './styles/globals.css';
+
+// Bundle Monaco locally instead of loading from jsDelivr CDN — Electron
+// packaged apps load index.html via file:// and CDN requests were hanging,
+// which is why less-common languages (Lua, Kotlin, Dart…) showed
+// "Loading…" forever.
+loader.config({ monaco });
+
+// We don't ship Monaco's web workers in production (they require a
+// special build step). Feed getWorker an inline empty worker so Monaco
+// runs tokenization on the main thread — syntax highlighting still
+// works for every registered language.
+self.MonacoEnvironment = {
+  getWorker() {
+    const blob = new Blob(['self.onmessage=()=>{};'], {
+      type: 'text/javascript',
+    });
+    return new Worker(URL.createObjectURL(blob));
+  },
+};
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

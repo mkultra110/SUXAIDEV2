@@ -31,6 +31,20 @@ export function setTokenRefresher(hook: TokenRefresher | null): void {
   refreshHook = hook;
 }
 
+/**
+ * Get a fresh token via the refresh flow. Returns null if no refresh is
+ * possible (no hook installed, or refresh itself failed). Callers that
+ * own their own fetch (e.g. SSE streams) use this to retry once on 401.
+ */
+export async function tryRefreshToken(): Promise<string | null> {
+  if (!refreshHook) return null;
+  try {
+    return await refreshHook();
+  } catch {
+    return null;
+  }
+}
+
 async function rawRequest<T>(pathname: string, opts: RequestOptions): Promise<T> {
   const { body, token, timeoutMs = 15_000, headers, ...rest } = opts;
 

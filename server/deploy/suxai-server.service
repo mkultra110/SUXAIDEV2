@@ -1,0 +1,29 @@
+[Unit]
+Description=SUXAI backend (auth, AI proxy, updates)
+After=network.target
+
+[Service]
+Type=simple
+User=suxai
+Group=suxai
+WorkingDirectory=/opt/suxai/server
+EnvironmentFile=/opt/suxai/server/.env
+ExecStart=/usr/bin/node /opt/suxai/server/dist/index.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/suxai/server/data
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

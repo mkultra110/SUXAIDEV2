@@ -1,0 +1,147 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+
+.editor__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  height: 36px;
+  background: var(--color-bg-1);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.editor__tabs::-webkit-scrollbar { display: none; }
+
+.editor__empty-tab {
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--color-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.editor__tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 14px;
+  font-size: 12.5px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-1);
+  border-right: 1px solid var(--color-border);
+  cursor: pointer;
+  max-width: 220px;
+  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.editor__tab:hover { background: var(--color-bg-2); color: var(--color-text); }
+
+.editor__tab--active {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.editor__tab--active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #7d82f8, #5457d8);
+  border-radius: 0 0 2px 2px;
+}
+
+.editor__tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor__tab-close {
+  color: var(--color-text-dim);
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+  transition: opacity var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+}
+.editor__tab-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+
+.editor__body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.editor__welcome {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 40px;
+  background:
+    radial-gradient(50% 50% at 50% 40%, rgba(99, 102, 241, 0.10), transparent 60%),
+    var(--color-bg);
+}
+
+.editor__welcome-card {
+  max-width: 480px;
+  text-align: center;
+  animation: suxai-fade-in var(--dur-slow) var(--ease-out);
+}
+
+.editor__welcome-brand {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3em;
+  color: var(--color-text-dim);
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  margin-bottom: 18px;
+}
+
+.editor__welcome h2 {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.editor__welcome p {
+  margin: 0 auto;
+  color: var(--color-text-muted);
+  font-size: 13.5px;
+  max-width: 420px;
+  line-height: 1.65;
+}
+
+.editor__welcome-shortcuts {
+  margin-top: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+}
+
+kbd {
+  display: inline-block;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 4px;
+  color: var(--color-text);
+}

@@ -1,0 +1,93 @@
+.model-sel {
+  position: relative;
+}
+
+.model-sel__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 12px;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+.model-sel__trigger:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--color-border-strong); }
+.model-sel__trigger--open { background: rgba(99, 102, 241, 0.10); border-color: var(--color-border-accent); }
+
+.model-sel__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.model-sel__dot--anthropic { background: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 0 6px rgba(245, 158, 11, 0.45); }
+.model-sel__dot--openai    { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 0 6px rgba(16, 185, 129, 0.45); }
+
+.model-sel__name {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-sel__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 260px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 50;
+  animation: suxai-fade-in var(--dur-base) var(--ease-out);
+}
+
+.model-sel__group { padding: 4px 2px; }
+.model-sel__group + .model-sel__group { border-top: 1px solid var(--color-border); margin-top: 4px; padding-top: 8px; }
+
+.model-sel__group-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+  padding: 4px 8px 6px;
+}
+
+.model-sel__option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 12.5px;
+  transition: background var(--dur-fast) var(--ease-out);
+  text-align: left;
+}
+.model-sel__option:hover { background: rgba(255, 255, 255, 0.05); }
+.model-sel__option--active { background: var(--color-accent-soft); }
+
+.model-sel__option-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.model-sel__tag {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.model-sel__check {
+  color: var(--color-accent);
+}

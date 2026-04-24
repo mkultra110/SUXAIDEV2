@@ -1,0 +1,73 @@
+:root {
+  /* ---- Base surfaces ---- */
+  --color-bg: #0b0f17;
+  --color-bg-1: #0d1220;
+  --color-bg-2: #111828;
+  --color-bg-3: #151d30;
+  --color-glass: rgba(22, 28, 44, 0.55);
+  --color-glass-strong: rgba(28, 36, 56, 0.75);
+
+  /* ---- Borders ---- */
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-strong: rgba(255, 255, 255, 0.1);
+  --color-border-accent: rgba(99, 102, 241, 0.45);
+
+  /* ---- Text ---- */
+  --color-text: #e8ecf4;
+  --color-text-muted: #8a95aa;
+  --color-text-dim: #5a6378;
+
+  /* ---- Accents ---- */
+  --color-accent: #6366f1;
+  --color-accent-hover: #7c7ef5;
+  --color-accent-press: #5457d8;
+  --color-accent-soft: rgba(99, 102, 241, 0.14);
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+
+  /* ---- Diffs ---- */
+  --color-diff-add: rgba(34, 197, 94, 0.16);
+  --color-diff-add-strong: rgba(34, 197, 94, 0.35);
+  --color-diff-remove: rgba(239, 68, 68, 0.16);
+  --color-diff-remove-strong: rgba(239, 68, 68, 0.35);
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.45);
+  --shadow-glow: 0 0 0 1px var(--color-border-accent), 0 8px 32px rgba(99, 102, 241, 0.22);
+
+  /* ---- Radii ---- */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* ---- Spacing ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ---- Type ---- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, 'Courier New', monospace;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* ---- Layout ---- */
+  --titlebar-height: 36px;
+  --sidebar-width: 260px;
+  --ai-panel-width: 420px;
+}

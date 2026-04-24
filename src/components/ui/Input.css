@@ -1,0 +1,72 @@
+.sx-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sx-field__label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.sx-field__wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(8, 12, 22, 0.55);
+  border: 1px solid var(--color-border);
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    background var(--dur-base) var(--ease-out);
+}
+
+.sx-field__wrap:hover {
+  border-color: var(--color-border-strong);
+}
+
+.sx-field__wrap:focus-within {
+  border-color: var(--color-border-accent);
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
+  background: rgba(8, 12, 22, 0.75);
+}
+
+.sx-field__icon,
+.sx-field__right {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-dim);
+}
+
+.sx-field__input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  color: var(--color-text);
+  height: 100%;
+}
+
+.sx-field__input::placeholder {
+  color: var(--color-text-dim);
+}
+
+.sx-field--error .sx-field__wrap {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.sx-field--error .sx-field__wrap:focus-within {
+  box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12);
+}
+
+.sx-field__error {
+  font-size: 12px;
+  color: #fca5a5;
+}

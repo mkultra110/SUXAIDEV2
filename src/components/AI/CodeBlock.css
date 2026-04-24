@@ -1,0 +1,58 @@
+.codeblk {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: #0a0f19;
+  overflow: hidden;
+}
+
+.codeblk__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.codeblk__lang {
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+}
+
+.codeblk__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.codeblk__btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+}
+.codeblk__btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--color-text); }
+
+.codeblk__btn--primary {
+  background: var(--color-accent-soft);
+  border-color: var(--color-border-accent);
+  color: #c7d2fe;
+}
+.codeblk__btn--primary:hover { background: rgba(99, 102, 241, 0.22); color: #fff; }
+
+.codeblk__pre {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #d7dce8;
+  overflow-x: auto;
+  white-space: pre;
+  user-select: text;
+}

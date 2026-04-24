@@ -1,0 +1,22 @@
+.ide {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: var(--color-bg);
+}
+
+.ide__body {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--ai-panel-width);
+  height: calc(100% - var(--titlebar-height));
+  gap: 1px;
+  background: var(--color-border);
+  border-top: 1px solid var(--color-border);
+}
+
+.ide__body > * {
+  background: var(--color-bg);
+  min-height: 0;
+  min-width: 0;
+}

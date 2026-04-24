@@ -1,0 +1,54 @@
+# /etc/nginx/sites-available/suxai
+#
+# Reverse proxy for the SUXAI backend with SSE-friendly settings
+# (AI streaming via /ai/chat needs flushed, unbuffered responses).
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api.suxai.example 209.99.186.238;
+
+    # Recommended: redirect to HTTPS after obtaining a cert via certbot.
+    # return 301 https://$host$request_uri;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+
+    location /ai/ {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+
+        # SSE tuning — do not buffer, stream immediately.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+        chunked_transfer_encoding on;
+        add_header X-Accel-Buffering no;
+    }
+}
+
+# HTTPS example (after certbot):
+#
+# server {
+#     listen 443 ssl http2;
+#     server_name api.suxai.example;
+#     ssl_certificate     /etc/letsencrypt/live/api.suxai.example/fullchain.pem;
+#     ssl_certificate_key /etc/letsencrypt/live/api.suxai.example/privkey.pem;
+#     include /etc/letsencrypt/options-ssl-nginx.conf;
+#     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+#     # ...same location blocks as above
+# }

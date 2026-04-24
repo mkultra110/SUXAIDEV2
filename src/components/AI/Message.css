@@ -1,0 +1,121 @@
+.msg {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  animation: suxai-fade-in var(--dur-base) var(--ease-out);
+}
+
+.msg--user {
+  justify-content: flex-end;
+}
+
+.msg--assistant {
+  align-items: flex-start;
+}
+
+.msg__avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #7d82f8, #5457d8);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.msg__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msg__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+}
+.msg__role { font-weight: 600; color: var(--color-text); }
+.msg__model {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.msg__content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.msg__text {
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  color: var(--color-text);
+}
+
+.msg__thinking {
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  font-style: italic;
+  animation: suxai-pulse 1.2s var(--ease-in-out) infinite;
+}
+
+.msg__inline-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 1px 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.msg__bubble--user {
+  max-width: 85%;
+  padding: 10px 12px;
+  border-radius: 12px 12px 4px 12px;
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.18), rgba(99, 102, 241, 0.10));
+  border: 1px solid var(--color-border-accent);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.msg__cmd {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.msg__cmd--explain  { background: rgba(125, 211, 252, 0.22); color: #bae6fd; }
+.msg__cmd--refactor { background: rgba(192, 132, 252, 0.22); color: #e9d5ff; }
+.msg__cmd--fix      { background: rgba(250, 204, 21, 0.22);  color: #fef08a; }
+
+.msg__error {
+  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}

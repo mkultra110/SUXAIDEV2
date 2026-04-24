@@ -134,3 +134,61 @@ jobs:
           BODY=$(curl -sfL "${URL_BASE}/update/manifest")
           echo "$BODY"
           echo "$BODY" | grep -q "\"version\":\"${VERSION}\""
+
+  deploy-server:
+    # Redeploys the server code to the VPS on every push to the dev branch.
+    # Runs in parallel with the Windows build so AI proxy / auth fixes land
+    # without needing a manual \`install.sh\` invocation.
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/claude/french-greeting-lGwbV' ||
+       startsWith(github.ref, 'refs/tags/v'))
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Rsync server/ to VPS
+        run: |
+          rsync -az --delete \
+            --exclude node_modules \
+            --exclude dist \
+            --exclude data \
+            --exclude .env \
+            -e "ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=accept-new" \
+            ./server/ \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/suxai/app/"
+
+      - name: Install deps, build, restart
+        env:
+          SSH_TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
+        run: |
+          ssh -i ~/.ssh/id_deploy "$SSH_TARGET" "bash -s" <<'EOF'
+          set -euo pipefail
+          cd /opt/suxai/app
+          chown -R suxai:suxai /opt/suxai/app
+          sudo -u suxai -H bash -lc '
+            cd /opt/suxai/app
+            if [[ -f package-lock.json ]]; then
+              npm ci
+            else
+              npm install --no-audit --no-fund
+            fi
+            npm run build
+          '
+          # Also refresh the systemd unit in case it changed.
+          if [[ -f /opt/suxai/app/deploy/suxai-server.service ]]; then
+            install -m 0644 /opt/suxai/app/deploy/suxai-server.service /etc/systemd/system/suxai-server.service
+            systemctl daemon-reload
+          fi
+          systemctl restart suxai-server
+          sleep 2
+          curl -sfL http://127.0.0.1:4000/health
+          EOF

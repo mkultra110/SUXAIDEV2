@@ -53,7 +53,7 @@ fi
 # rsync is used to sync source into /opt/suxai/app; curl is needed for Node
 # repo setup; ca-certificates for TLS. Install whatever's missing.
 MISSING_PKGS=()
-for pkg in rsync curl ca-certificates; do
+for pkg in rsync curl ca-certificates nginx; do
   if ! command -v "$pkg" >/dev/null 2>&1 && ! dpkg -s "$pkg" >/dev/null 2>&1; then
     MISSING_PKGS+=("$pkg")
   fi

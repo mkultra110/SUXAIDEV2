@@ -31,7 +31,8 @@ ProtectKernelLogs=true
 ProtectControlGroups=true
 ProtectHostname=true
 LockPersonality=true
-MemoryDenyWriteExecute=true
+# NOTE: MemoryDenyWriteExecute=true would be ideal, but it breaks Node.js
+# because V8's JIT compiler needs writable+executable pages. Leave it off.
 RestrictRealtime=true
 RestrictSUIDSGID=true
 RestrictNamespaces=true

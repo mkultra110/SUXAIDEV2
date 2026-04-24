@@ -1,11 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol } from 'electron';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import { UpdateManager } from './updater';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];

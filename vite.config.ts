@@ -4,6 +4,9 @@ import electron from 'vite-plugin-electron/simple';
 import path from 'node:path';
 
 export default defineConfig({
+  // Electron loads the built HTML via file://, so asset URLs must be
+  // relative. Without this, the app ships a blank white screen.
+  base: './',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),

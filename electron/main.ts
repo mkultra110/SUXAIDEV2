@@ -52,6 +52,16 @@ function createWindow() {
     mainWindow.loadFile(path.join(RENDERER_DIST, 'index.html'));
   }
 
+  // Open DevTools in production too until the app is stable, so packaged
+  // installer errors are visible without a manual shortcut.
+  if (!VITE_DEV_SERVER_URL && process.env.SUXAI_NO_DEVTOOLS !== '1') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, description, url) => {
+    console.error('[renderer] did-fail-load', { code, description, url });
+  });
+
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };

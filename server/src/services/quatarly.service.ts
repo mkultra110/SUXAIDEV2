@@ -71,6 +71,10 @@ async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandl
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        // Quatarly accepts any of these; send all three so we match whichever
+        // header its upstream validator checks.
+        authorization: `Bearer ${env.QUATARLY_API_KEY}`,
+        'x-api-key': env.QUATARLY_API_KEY,
         apiKey: env.QUATARLY_API_KEY,
         accept: 'text/event-stream',
       },
@@ -126,6 +130,9 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        authorization: `Bearer ${env.QUATARLY_API_KEY}`,
+        'x-api-key': env.QUATARLY_API_KEY,
         apiKey: env.QUATARLY_API_KEY,
         accept: 'text/event-stream',
       },

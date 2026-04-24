@@ -11,6 +11,12 @@ import { onAiCommand } from '../../lib/commands';
 import './AIPanel.css';
 
 const STORAGE_MODEL_KEY = 'suxai.model';
+
+/** Pull the first fenced code block out of a streamed response. */
+function extractFirstCodeBlock(text: string): string | null {
+  const m = text.match(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/);
+  return m ? m[1] : null;
+}
 const MAX_PERSISTED_MESSAGES = 200;
 
 export function AIPanel() {
@@ -23,6 +29,10 @@ export function AIPanel() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
+  // Files the user has explicitly attached via the paperclip. These
+  // travel alongside the prompt as context, on top of the active file
+  // and any @file mentions.
+  const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
   const abortRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -133,7 +143,7 @@ export function AIPanel() {
 
       // Resolve @file mentions so the AI sees them as context without
       // the raw @-token polluting the user prompt.
-      const { cleaned, attachments } = await extractMentions(text);
+      const { cleaned, attachments: resolvedMentions } = await extractMentions(text);
 
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -153,11 +163,20 @@ export function AIPanel() {
       };
       setMessages((m) => [...m, userMsg, assistantMsg]);
       setInput('');
+      setAttachments([]);
       setStreaming(true);
 
+      // Merge explicit attachments (paperclip button) with @-mention
+      // attachments — de-dup by path.
+      const seen = new Set(attachments.map((a) => a.path));
+      const merged = [
+        ...attachments.map((a) => ({ path: a.path, content: a.content })),
+        ...resolvedMentions.filter((a) => !seen.has(a.path)),
+      ];
+
       const attachmentBlock =
-        attachments.length > 0
-          ? attachments
+        merged.length > 0
+          ? merged
               .map((a) => `\n\n<<< FILE: ${a.path} >>>\n${a.content}\n<<< END >>>`)
               .join('')
           : '';
@@ -165,6 +184,13 @@ export function AIPanel() {
       const prompt =
         buildCommandPrompt(command, cleaned || selection || activeFile?.content || '') +
         attachmentBlock;
+
+      // Snapshot the target file at send-time — if the user switches tabs
+      // mid-stream, we still diff against the file they asked about.
+      const diffTarget =
+        command === 'fix' || command === 'refactor' || command === 'optimize'
+          ? activeFile
+          : null;
 
       const cancel = streamAi(
         token,
@@ -187,12 +213,27 @@ export function AIPanel() {
               ),
             );
           },
-          onDone: () => {
+          onDone: (full) => {
             setMessages((m) =>
               m.map((msg) => (msg.id === assistantMsg.id ? { ...msg, streaming: false } : msg)),
             );
             setStreaming(false);
             abortRef.current = null;
+
+            // Auto-open diff for fix/refactor/optimize commands when the
+            // response contains at least one code block. User-friendly:
+            // same experience as Cursor's edit-and-accept flow.
+            if (diffTarget) {
+              const proposed = extractFirstCodeBlock(full);
+              if (proposed && proposed.trim() !== diffTarget.content.trim()) {
+                openDiff({
+                  path: diffTarget.path,
+                  original: diffTarget.content,
+                  proposed,
+                  label: `${command} · ${modelId}`,
+                });
+              }
+            }
           },
           onError: (err) => {
             setMessages((m) =>
@@ -209,7 +250,7 @@ export function AIPanel() {
       );
       abortRef.current = cancel;
     },
-    [token, input, selection, activeFile, modelId, extractMentions],
+    [token, input, selection, activeFile, modelId, extractMentions, attachments],
   );
 
   const stop = () => {
@@ -312,6 +353,35 @@ export function AIPanel() {
           }
         }}
       >
+        {attachments.length > 0 && (
+          <div className="ai__attachments">
+            {attachments.map((a) => (
+              <span key={a.path} className="ai__attach" title={a.path}>
+                <svg width="10" height="12" viewBox="0 0 10 12" aria-hidden>
+                  <path
+                    d="M7.5 3.5v-2a1 1 0 0 0-1-1H2a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V3.5H7.5zM7.5 0.5 9 2.5"
+                    stroke="currentColor"
+                    strokeWidth="1.1"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="ai__attach-name">{a.name}</span>
+                <button
+                  type="button"
+                  className="ai__attach-x"
+                  onClick={() =>
+                    setAttachments((list) => list.filter((x) => x.path !== a.path))
+                  }
+                  aria-label={`Remove ${a.name}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -342,6 +412,32 @@ export function AIPanel() {
               <span className="ai__composer-hint">No file — chat only</span>
             )}
           </div>
+          <button
+            type="button"
+            className="ai__attach-btn"
+            onClick={async () => {
+              const f = await window.suxai.fs.openFile();
+              if (!f) return;
+              const name = f.path.split(/[\\/]/).pop() ?? f.path;
+              setAttachments((list) =>
+                list.some((a) => a.path === f.path)
+                  ? list
+                  : [...list, { path: f.path, content: f.content, name }],
+              );
+            }}
+            disabled={!token || streaming}
+            title="Attach file as context"
+          >
+            <svg width="14" height="16" viewBox="0 0 14 16" fill="none" aria-hidden>
+              <path
+                d="M10.5 6 5.5 11a2.5 2.5 0 1 1-3.5-3.5L8 1.5a4 4 0 0 1 5.5 5.5L7.5 13"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
           {streaming ? (
             <Button type="button" variant="secondary" size="sm" onClick={stop} leftIcon={<Spinner size={12} />}>
               Stop

@@ -25,7 +25,10 @@ app.use(
     allowedHeaders: ['content-type', 'authorization', 'accept'],
   }),
 );
-app.use(express.json({ limit: '1mb' }));
+// 10 MB is plenty for even a fat attachment + full file context. Upstream
+// providers reject sooner than this anyway. The prompt schema's per-field
+// caps are the real safety net.
+app.use(express.json({ limit: '10mb' }));
 
 // Global soft-limit to protect against bursts.
 app.use(

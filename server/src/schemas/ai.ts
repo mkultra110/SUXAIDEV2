@@ -29,13 +29,16 @@ export const aiRequestSchema = z.object({
     message: 'Unsupported model',
   }),
   command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'chat']).default('chat'),
-  prompt: z.string().min(1, 'Prompt cannot be empty').max(60_000, 'Prompt too large'),
+  // Generous upper bound — raise this if users report hitting it. The
+  // main cost here is upstream token usage (billed by Quatarly), not
+  // server resources.
+  prompt: z.string().min(1, 'Prompt cannot be empty').max(2_000_000, 'Prompt too large'),
   context: z
     .object({
       filePath: z.string().optional(),
       language: z.string().optional(),
-      fileContent: z.string().max(200_000).optional(),
-      selection: z.string().max(50_000).optional(),
+      fileContent: z.string().max(1_000_000).optional(),
+      selection: z.string().max(200_000).optional(),
     })
     .optional(),
 });

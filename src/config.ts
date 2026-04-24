@@ -1,9 +1,9 @@
 export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL?.trim() || 'http://209.99.186.238:4000';
+  import.meta.env.VITE_API_BASE_URL?.trim() || 'https://suxai.209-99-186-238.sslip.io';
 
 export const UPDATE_MANIFEST_URL =
   import.meta.env.VITE_UPDATE_MANIFEST_URL?.trim() ||
-  'http://209.99.186.238:4000/update/manifest';
+  'https://suxai.209-99-186-238.sslip.io/update/manifest';
 
 export type AiProvider = 'anthropic' | 'openai';
 

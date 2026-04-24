@@ -1,7 +1,7 @@
 import { API_BASE_URL } from '../config';
 import { tryRefreshToken } from './client';
 
-export type AiCommand = 'explain' | 'refactor' | 'fix' | 'optimize' | 'chat';
+export type AiCommand = 'explain' | 'refactor' | 'fix' | 'optimize' | 'edit' | 'chat';
 
 export interface AiRequest {
   modelId: string;
@@ -115,6 +115,8 @@ export function buildCommandPrompt(command: AiCommand, userText: string): string
       return `Identify bugs in the selected code and propose a fix. Return corrected code in a fenced block, then explain the fix.\n\n${userText}`;
     case 'optimize':
       return `Optimize the selected code for performance and memory. Preserve the public API and behavior. Return the final code in a single fenced block, then a short list of the optimizations applied.\n\n${userText}`;
+    case 'edit':
+      return `Apply the following instruction to the selected code. Return ONLY the modified code in a single fenced code block — no commentary, no explanation, no prose before or after the code block. Keep everything outside the instruction unchanged.\n\n${userText}`;
     case 'chat':
     default:
       return userText;

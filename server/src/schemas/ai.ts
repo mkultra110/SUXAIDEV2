@@ -28,7 +28,7 @@ export const aiRequestSchema = z.object({
   modelId: z.string().refine((v) => SUPPORTED_MODELS.some((m) => m.id === v), {
     message: 'Unsupported model',
   }),
-  command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'chat']).default('chat'),
+  command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'edit', 'chat']).default('chat'),
   // Generous upper bound — raise this if users report hitting it. The
   // main cost here is upstream token usage (billed by Quatarly), not
   // server resources.

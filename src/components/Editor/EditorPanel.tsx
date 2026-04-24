@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { DiffView } from './DiffView';
+import { InlineEdit } from './InlineEdit';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { emitAiCommand } from '../../lib/commands';
@@ -40,6 +41,12 @@ export function EditorPanel() {
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [zoomOffset, setZoomOffset] = useState(0);
+  const [inlineEdit, setInlineEdit] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    text: string;
+  } | null>(null);
 
   const effectiveFontSize = useMemo(
     () => Math.max(8, Math.min(40, settings.fontSize + zoomOffset)),
@@ -76,6 +83,44 @@ export function EditorPanel() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [newUntitled]);
+
+  // Ctrl+K → open an inline AI edit prompt anchored at the selection.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        const ed = editorRef.current;
+        const host = containerRef.current;
+        if (!ed || !host) return;
+        e.preventDefault();
+        const sel = ed.getSelection();
+        const model = ed.getModel();
+        if (!sel || !model) return;
+        // Fall back to the current line if the user hasn't selected anything.
+        let text = model.getValueInRange(sel);
+        let anchorLine = sel.startLineNumber;
+        if (!text) {
+          anchorLine = sel.positionLineNumber;
+          text = model.getLineContent(anchorLine);
+        }
+        const editorDom = ed.getDomNode();
+        if (!editorDom) return;
+        const editorRect = editorDom.getBoundingClientRect();
+        const hostRect = host.getBoundingClientRect();
+        const lineTop = ed.getTopForLineNumber(anchorLine);
+        const scrollTop = ed.getScrollTop();
+        const layoutInfo = ed.getLayoutInfo();
+        const top = editorRect.top - hostRect.top + (lineTop - scrollTop) + 24;
+        const left = editorRect.left - hostRect.left + layoutInfo.contentLeft + 8;
+        const width = Math.min(
+          640,
+          Math.max(380, layoutInfo.contentWidth - 16),
+        );
+        setInlineEdit({ top: Math.max(8, top), left, width, text });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Ctrl+L → add current selection to AI chat.
   useEffect(() => {
@@ -154,6 +199,20 @@ export function EditorPanel() {
         },
       });
       monaco.editor.setTheme('suxai-dark');
+
+      // Ctrl+K is Monaco's chord leader for "delete line" etc. Override it
+      // so our inline AI edit gets the keystroke cleanly. Dispatches the
+      // same Monaco keyboard event our global listener handles.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyK, () => {
+        window.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'k',
+            ctrlKey: true,
+            metaKey: true,
+            bubbles: true,
+          }),
+        );
+      });
 
       editor.onDidChangeCursorSelection((e) => {
         const model = editor.getModel();
@@ -323,12 +382,41 @@ export function EditorPanel() {
 
       <div className="editor__body" ref={containerRef}>
         {pendingDiff && <DiffView diff={pendingDiff} />}
-        {actionBar && !pendingDiff && (
+        {inlineEdit && activeFile && !pendingDiff && (
+          <InlineEdit
+            top={inlineEdit.top}
+            left={inlineEdit.left}
+            width={inlineEdit.width}
+            selectedText={inlineEdit.text}
+            file={activeFile}
+            onClose={() => setInlineEdit(null)}
+          />
+        )}
+        {actionBar && !pendingDiff && !inlineEdit && (
           <div
             className="editor__actions"
             style={{ top: actionBar.top, left: actionBar.left }}
             onMouseDown={(e) => e.preventDefault()}
           >
+            <button
+              type="button"
+              onClick={() => {
+                // Fire the same keystroke the hotkey listens to so the
+                // inline-edit overlay opens at the right anchor.
+                window.dispatchEvent(
+                  new KeyboardEvent('keydown', {
+                    key: 'k',
+                    ctrlKey: true,
+                    metaKey: true,
+                    bubbles: true,
+                  }),
+                );
+              }}
+              title="Edit selection with AI (Ctrl+K)"
+              className="editor__actions-primary"
+            >
+              ✨ Edit
+            </button>
             <button
               type="button"
               onClick={() => emitAiCommand({ command: 'explain' })}

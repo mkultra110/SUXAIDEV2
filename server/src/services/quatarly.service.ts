@@ -21,6 +21,8 @@ function buildSystemPrompt(command: AiRequestInput['command']): string {
       return `${base} Your task: find bugs and propose a fix. Return corrected code in one block, then a brief explanation.`;
     case 'optimize':
       return `${base} Your task: optimize for performance and memory while keeping the public API and behavior unchanged. Return the full optimized snippet in one fenced block, then a short list of the applied optimizations.`;
+    case 'edit':
+      return `${base} Your task: apply a precise edit to the code. The user will describe what to change. Return ONLY the modified code in a single fenced block. No commentary, no explanation, no surrounding prose. Preserve everything outside the scope of the instruction.`;
     default:
       return base;
   }

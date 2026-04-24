@@ -198,3 +198,12 @@ kbd {
   animation: suxai-fade-in 180ms var(--ease-out);
   z-index: 20;
 }
+
+.editor__actions-primary {
+  background: rgba(125, 130, 248, 0.18) !important;
+  color: #d8dbff !important;
+  font-weight: 600 !important;
+}
+.editor__actions-primary:hover {
+  background: rgba(125, 130, 248, 0.28) !important;
+}

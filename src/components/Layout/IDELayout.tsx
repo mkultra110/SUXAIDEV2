@@ -7,7 +7,7 @@ import { AIPanel } from '../AI/AIPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
-  const { openFile, setWorkspaceRoot } = useWorkspace();
+  const { openFile, setWorkspaceRoot, saveActiveFile } = useWorkspace();
 
   useEffect(() => {
     const onDragOver = (e: DragEvent) => {
@@ -29,13 +29,22 @@ function WorkspaceHotkeys() {
         console.error('Failed to open dropped file:', err);
       }
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+S on Windows/Linux, Cmd+S on macOS
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        saveActiveFile();
+      }
+    };
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('drop', onDrop);
+    window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
+      window.removeEventListener('keydown', onKeyDown);
     };
-  }, [openFile, setWorkspaceRoot]);
+  }, [openFile, setWorkspaceRoot, saveActiveFile]);
 
   return null;
 }

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export interface OpenFile {
@@ -23,6 +23,7 @@ interface WorkspaceValue extends WorkspaceState {
   setActive: (path: string) => void;
   updateActiveContent: (content: string) => void;
   setSelection: (text: string) => void;
+  saveActiveFile: () => Promise<boolean>;
   activeFile: OpenFile | null;
 }
 
@@ -93,6 +94,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, selection: text }));
   }, []);
 
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  const saveActiveFile = useCallback(async () => {
+    const s = stateRef.current;
+    const toSave = s.openFiles.find((f) => f.path === s.activePath);
+    if (!toSave || !toSave.dirty) return false;
+    try {
+      await window.suxai.fs.writeFile(toSave.path, toSave.content);
+      setState((prev) => ({
+        ...prev,
+        openFiles: prev.openFiles.map((f) =>
+          f.path === toSave.path ? { ...f, dirty: false } : f,
+        ),
+      }));
+      return true;
+    } catch (err) {
+      console.error('Failed to save file:', err);
+      return false;
+    }
+  }, []);
+
   const activeFile = useMemo(
     () => state.openFiles.find((f) => f.path === state.activePath) ?? null,
     [state.openFiles, state.activePath],
@@ -108,8 +133,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setActive,
       updateActiveContent,
       setSelection,
+      saveActiveFile,
     }),
-    [state, activeFile, setWorkspaceRoot, openFile, closeFile, setActive, updateActiveContent, setSelection],
+    [state, activeFile, setWorkspaceRoot, openFile, closeFile, setActive, updateActiveContent, setSelection, saveActiveFile],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

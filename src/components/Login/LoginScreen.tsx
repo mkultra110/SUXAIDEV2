@@ -11,6 +11,7 @@ export function LoginScreen() {
   const { login, register, error, clearError } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -23,20 +24,34 @@ export function LoginScreen() {
       setFieldError('Email and password are required.');
       return;
     }
-    if (mode === 'register' && password !== confirm) {
-      setFieldError('Passwords do not match.');
-      return;
-    }
-    if (mode === 'register' && password.length < 8) {
-      setFieldError('Password must be at least 8 characters.');
-      return;
+    if (mode === 'register') {
+      if (!username.trim()) {
+        setFieldError('Username is required.');
+        return;
+      }
+      if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
+        setFieldError('Username can only contain letters, digits, underscore and dash.');
+        return;
+      }
+      if (username.trim().length < 3) {
+        setFieldError('Username must be at least 3 characters.');
+        return;
+      }
+      if (password !== confirm) {
+        setFieldError('Passwords do not match.');
+        return;
+      }
+      if (password.length < 8) {
+        setFieldError('Password must be at least 8 characters.');
+        return;
+      }
     }
     setSubmitting(true);
     try {
       if (mode === 'login') {
         await login(email.trim(), password);
       } else {
-        await register(email.trim(), password);
+        await register(email.trim(), password, username.trim());
       }
     } catch {
       /* error is surfaced via context */
@@ -115,6 +130,18 @@ export function LoginScreen() {
             disabled={submitting}
             required
           />
+          {mode === 'register' && (
+            <Input
+              label="Username"
+              type="text"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="pseudonyme"
+              disabled={submitting}
+              required
+            />
+          )}
           <Input
             label="Password"
             type="password"

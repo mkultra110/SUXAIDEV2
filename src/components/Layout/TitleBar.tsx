@@ -1,8 +1,38 @@
+import { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { authApi, ApiError } from '../../api/client';
 import './TitleBar.css';
 
 export function TitleBar() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [redeemOk, setRedeemOk] = useState(false);
+
+  const onRedeem = async () => {
+    if (!token) return;
+    const input = window.prompt('Enter your SUXAI license key:');
+    if (!input) return;
+    setRedeeming(true);
+    setRedeemError(null);
+    setRedeemOk(false);
+    try {
+      await authApi.redeemLicense(token, input.trim());
+      setRedeemOk(true);
+      // Force-refresh the auth state: easiest is to re-fetch /auth/me via a
+      // full logout+reload cycle. Instead we just reload the window since
+      // every screen is behind AuthContext anyway.
+      setTimeout(() => window.location.reload(), 800);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'Unknown error';
+      setRedeemError(msg);
+    } finally {
+      setRedeeming(false);
+    }
+  };
+
+  const displayName = user?.username ?? user?.email ?? '';
+  const tier = user?.tier ?? 'free';
 
   return (
     <header className="titlebar">
@@ -16,8 +46,30 @@ export function TitleBar() {
       <div className="titlebar__actions">
         {user && (
           <div className="titlebar__user">
-            <span className="titlebar__avatar">{user.email.charAt(0).toUpperCase()}</span>
-            <span className="titlebar__email">{user.email}</span>
+            <span
+              className={`titlebar__tier titlebar__tier--${tier}`}
+              title={
+                tier === 'pro'
+                  ? 'Pro — unlimited AI'
+                  : 'Free — 30 min of AI per day'
+              }
+            >
+              {tier.toUpperCase()}
+            </span>
+            {tier === 'free' && (
+              <button
+                className="titlebar__upgrade"
+                onClick={onRedeem}
+                disabled={redeeming}
+                title="Redeem a license key"
+              >
+                {redeeming ? '…' : 'Upgrade'}
+              </button>
+            )}
+            <span className="titlebar__avatar">
+              {displayName.charAt(0).toUpperCase()}
+            </span>
+            <span className="titlebar__email">{displayName}</span>
             <button className="titlebar__logout" onClick={logout} title="Sign out">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
                 <path
@@ -43,6 +95,15 @@ export function TitleBar() {
           </button>
         </div>
       </div>
+
+      {redeemError && (
+        <div className="titlebar__redeem-msg titlebar__redeem-msg--err">{redeemError}</div>
+      )}
+      {redeemOk && (
+        <div className="titlebar__redeem-msg titlebar__redeem-msg--ok">
+          Upgrade successful — reloading…
+        </div>
+      )}
     </header>
   );
 }

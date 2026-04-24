@@ -4,6 +4,8 @@ import { requireAuth } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { aiRequestSchema, SUPPORTED_MODELS } from '../schemas/ai.js';
 import { streamCompletion } from '../services/quatarly.service.js';
+import { userStore } from '../store/users.js';
+import { env } from '../config/env.js';
 
 const router = Router();
 
@@ -27,13 +29,28 @@ router.post(
   aiLimiter,
   validateBody(aiRequestSchema),
   async (req, res) => {
+    const userId = req.user!.sub;
+
+    // Enforce free-tier daily cap before opening the upstream stream.
+    const usage = await userStore.getDailyUsage(userId);
+    if (usage.tier === 'free' && usage.usedMs >= env.FREE_DAILY_LIMIT_MS) {
+      res.status(402).json({
+        message: 'Free daily limit reached. Redeem a license key or contact the owner to upgrade.',
+        code: 'QUOTA_EXCEEDED',
+        usedMs: usage.usedMs,
+        limitMs: env.FREE_DAILY_LIMIT_MS,
+      });
+      return;
+    }
+
     res.status(200);
     res.setHeader('content-type', 'text/event-stream');
     res.setHeader('cache-control', 'no-cache, no-transform');
     res.setHeader('connection', 'keep-alive');
-    res.setHeader('x-accel-buffering', 'no'); // disable nginx buffering
+    res.setHeader('x-accel-buffering', 'no');
     res.flushHeaders?.();
 
+    const startedAt = Date.now();
     let closed = false;
     const writeEvent = (obj: unknown) => {
       if (closed) return;
@@ -57,6 +74,12 @@ router.post(
         writeEvent({ error: err.message });
         writeDone();
       },
+    });
+
+    // Track actual streaming duration against the user's daily budget.
+    const elapsed = Date.now() - startedAt;
+    userStore.trackUsage(userId, elapsed).catch((err) => {
+      console.error('[ai] failed to track usage:', err);
     });
   },
 );

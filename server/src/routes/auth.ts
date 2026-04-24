@@ -3,7 +3,12 @@ import rateLimit from 'express-rate-limit';
 import { authController } from '../controllers/auth.controller.js';
 import { validateBody } from '../middleware/validate.js';
 import { requireAuth } from '../middleware/auth.js';
-import { credentialsSchema, refreshSchema } from '../schemas/auth.js';
+import {
+  loginSchema,
+  registerSchema,
+  refreshSchema,
+  redeemLicenseSchema,
+} from '../schemas/auth.js';
 
 const router = Router();
 
@@ -15,9 +20,15 @@ const authLimiter = rateLimit({
   message: { message: 'Too many attempts, please try again later', code: 'RATE_LIMIT' },
 });
 
-router.post('/register', authLimiter, validateBody(credentialsSchema), authController.register);
-router.post('/login', authLimiter, validateBody(credentialsSchema), authController.login);
+router.post('/register', authLimiter, validateBody(registerSchema), authController.register);
+router.post('/login', authLimiter, validateBody(loginSchema), authController.login);
 router.post('/refresh', authLimiter, validateBody(refreshSchema), authController.refresh);
 router.get('/me', requireAuth, authController.me);
+router.post(
+  '/redeem-license',
+  requireAuth,
+  validateBody(redeemLicenseSchema),
+  authController.redeemLicense,
+);
 
 export default router;

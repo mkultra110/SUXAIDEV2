@@ -111,3 +111,58 @@
 }
 .titlebar__btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--color-text); }
 .titlebar__btn--close:hover { background: #e81123; color: #fff; }
+
+.titlebar__tier {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+.titlebar__tier--free {
+  color: #9ea3b5;
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+.titlebar__tier--pro {
+  color: #ffdf91;
+  border-color: rgba(255, 199, 44, 0.35);
+  background: linear-gradient(135deg, rgba(255, 199, 44, 0.15), rgba(255, 146, 44, 0.1));
+}
+
+.titlebar__upgrade {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(125, 130, 248, 0.4);
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(84, 87, 216, 0.12));
+  color: #cfd2ff;
+  transition: filter var(--dur-base) var(--ease-out);
+}
+.titlebar__upgrade:hover:not(:disabled) { filter: brightness(1.15); }
+.titlebar__upgrade:disabled { opacity: 0.5; cursor: default; }
+
+.titlebar__redeem-msg {
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  margin-top: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  z-index: 20;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.titlebar__redeem-msg--ok {
+  background: rgba(52, 199, 89, 0.15);
+  color: #6ee497;
+  border: 1px solid rgba(52, 199, 89, 0.3);
+}
+.titlebar__redeem-msg--err {
+  background: rgba(255, 77, 77, 0.12);
+  color: #ff9f9f;
+  border: 1px solid rgba(255, 77, 77, 0.3);
+}

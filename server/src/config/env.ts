@@ -18,6 +18,10 @@ const schema = z.object({
   QUATARLY_API_KEY: z.string().default(''),
   QUATARLY_BASE_URL: z.string().url().default('https://api.quatarly.cloud'),
 
+  // Free tier cap — milliseconds of cumulative AI streaming time per
+  // UTC day. Default 30 min.
+  FREE_DAILY_LIMIT_MS: z.coerce.number().int().nonnegative().default(30 * 60 * 1000),
+
   UPDATE_VERSION: z.string().default('0.1.0'),
   UPDATE_URL: z.string().url().default('https://downloads.suxai.example/latest.exe'),
   UPDATE_NOTES: z.string().default(''),

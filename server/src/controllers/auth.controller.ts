@@ -1,19 +1,24 @@
 import type { Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service.js';
-import type { CredentialsInput, RefreshInput } from '../schemas/auth.js';
+import type {
+  LoginInput,
+  RegisterInput,
+  RefreshInput,
+  RedeemLicenseInput,
+} from '../schemas/auth.js';
 
 export const authController = {
-  async register(req: Request<unknown, unknown, CredentialsInput>, res: Response, next: NextFunction) {
+  async register(req: Request<unknown, unknown, RegisterInput>, res: Response, next: NextFunction) {
     try {
-      const { email, password } = req.body;
-      const result = await authService.register(email, password);
+      const { email, password, username } = req.body;
+      const result = await authService.register(email, password, username);
       res.status(201).json(result);
     } catch (err) {
       next(err);
     }
   },
 
-  async login(req: Request<unknown, unknown, CredentialsInput>, res: Response, next: NextFunction) {
+  async login(req: Request<unknown, unknown, LoginInput>, res: Response, next: NextFunction) {
     try {
       const { email, password } = req.body;
       const result = await authService.login(email, password);
@@ -36,6 +41,19 @@ export const authController = {
     try {
       const user = await authService.me(req.user!.sub);
       res.json(user);
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async redeemLicense(
+    req: Request<unknown, unknown, RedeemLicenseInput>,
+    res: Response,
+    next: NextFunction,
+  ) {
+    try {
+      const user = await authService.redeemLicense(req.user!.sub, req.body.key);
+      res.json({ user });
     } catch (err) {
       next(err);
     }

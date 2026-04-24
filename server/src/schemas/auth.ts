@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const credentialsSchema = z.object({
+export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email('Invalid email'),
   password: z
     .string()
@@ -8,10 +8,30 @@ export const credentialsSchema = z.object({
     .max(128, 'Password is too long'),
 });
 
-export type CredentialsInput = z.infer<typeof credentialsSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+
+export const registerSchema = loginSchema.extend({
+  username: z
+    .string()
+    .trim()
+    .min(3, 'Username must be at least 3 characters')
+    .max(24, 'Username is too long')
+    .regex(
+      /^[a-zA-Z0-9_-]+$/,
+      'Username can only contain letters, digits, underscore and dash',
+    ),
+});
+
+export type RegisterInput = z.infer<typeof registerSchema>;
 
 export const refreshSchema = z.object({
   refreshToken: z.string().min(10),
 });
 
 export type RefreshInput = z.infer<typeof refreshSchema>;
+
+export const redeemLicenseSchema = z.object({
+  key: z.string().trim().min(8).max(64),
+});
+
+export type RedeemLicenseInput = z.infer<typeof redeemLicenseSchema>;

@@ -111,6 +111,10 @@ export interface AuthResponse {
   user: AuthUser;
 }
 
+export interface MeResponse extends AuthUser {
+  usedMs: number;
+}
+
 export const authApi = {
   login: (email: string, password: string) =>
     request<AuthResponse>('/auth/login', { method: 'POST', body: { email, password } }),
@@ -121,10 +125,17 @@ export const authApi = {
       body: username ? { email, password, username } : { email, password },
     }),
 
-  me: (token: string) => request<AuthUser>('/auth/me', { method: 'GET', token }),
+  me: (token: string) => request<MeResponse>('/auth/me', { method: 'GET', token }),
 
   refresh: (refreshToken: string) =>
     request<AuthResponse>('/auth/refresh', { method: 'POST', body: { refreshToken } }),
+
+  redeemLicense: (token: string, key: string) =>
+    request<{ user: AuthUser }>('/auth/redeem-license', {
+      method: 'POST',
+      token,
+      body: { key },
+    }),
 };
 
 export const api = { request };

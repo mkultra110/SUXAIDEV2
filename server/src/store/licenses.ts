@@ -1,0 +1,107 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { env } from '../config/env.js';
+
+export interface LicenseRecord {
+  key: string;
+  tier: 'pro';
+  createdAt: string;
+  redeemedBy?: string;  // userId
+  redeemedAt?: string;
+  note?: string;
+}
+
+const DB_FILE = path.join(env.DATA_DIR, 'licenses.json');
+
+let writeQueue: Promise<void> = Promise.resolve();
+function enqueueWrite(fn: () => Promise<void>): Promise<void> {
+  writeQueue = writeQueue.then(fn, fn);
+  return writeQueue;
+}
+
+async function ensureDataDir(): Promise<void> {
+  await fs.mkdir(env.DATA_DIR, { recursive: true });
+}
+
+async function readAll(): Promise<LicenseRecord[]> {
+  try {
+    const raw = await fs.readFile(DB_FILE, 'utf8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as LicenseRecord[]) : [];
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
+}
+
+async function writeAll(records: LicenseRecord[]): Promise<void> {
+  await ensureDataDir();
+  const tmp = `${DB_FILE}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(records, null, 2), { mode: 0o600 });
+  await fs.rename(tmp, DB_FILE);
+}
+
+function generateKey(): string {
+  // 4×5-char blocks: SUXAI-XXXXX-XXXXX-XXXXX-XXXXX
+  const bytes = crypto.randomBytes(12);
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Crockford-ish, no 0/O/1/I
+  let out = '';
+  for (let i = 0; i < bytes.length; i++) {
+    out += alphabet[bytes[i] % alphabet.length];
+  }
+  return `SUXAI-${out.slice(0, 4)}-${out.slice(4, 8)}-${out.slice(8, 12)}`;
+}
+
+export const licenseStore = {
+  async create(note?: string): Promise<LicenseRecord> {
+    let created!: LicenseRecord;
+    await enqueueWrite(async () => {
+      const records = await readAll();
+      let key: string;
+      do {
+        key = generateKey();
+      } while (records.some((r) => r.key === key));
+      created = { key, tier: 'pro', createdAt: new Date().toISOString(), note };
+      await writeAll([...records, created]);
+    });
+    return created;
+  },
+
+  async findByKey(key: string): Promise<LicenseRecord | null> {
+    const records = await readAll();
+    return records.find((r) => r.key === key) ?? null;
+  },
+
+  async redeem(key: string, userId: string): Promise<LicenseRecord | null> {
+    let updated: LicenseRecord | null = null;
+    let alreadyRedeemed = false;
+    await enqueueWrite(async () => {
+      const records = await readAll();
+      const idx = records.findIndex((r) => r.key === key);
+      if (idx < 0) return;
+      if (records[idx].redeemedBy) {
+        alreadyRedeemed = true;
+        return;
+      }
+      records[idx] = {
+        ...records[idx],
+        redeemedBy: userId,
+        redeemedAt: new Date().toISOString(),
+      };
+      updated = records[idx];
+      await writeAll(records);
+    });
+    if (alreadyRedeemed) {
+      throw Object.assign(new Error('License already redeemed'), {
+        status: 409,
+        code: 'ALREADY_REDEEMED',
+      });
+    }
+    return updated;
+  },
+
+  async list(): Promise<LicenseRecord[]> {
+    return readAll();
+  },
+};

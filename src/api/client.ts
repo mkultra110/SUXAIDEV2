@@ -100,8 +100,7 @@ function safeParse(text: string): any {
 
 export interface AuthUser {
   id: string;
-  email: string;
-  username?: string;
+  username: string;
   tier?: 'free' | 'pro';
 }
 
@@ -116,13 +115,13 @@ export interface MeResponse extends AuthUser {
 }
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    request<AuthResponse>('/auth/login', { method: 'POST', body: { email, password } }),
+  login: (username: string, password: string) =>
+    request<AuthResponse>('/auth/login', { method: 'POST', body: { username, password } }),
 
-  register: (email: string, password: string, username?: string) =>
+  register: (username: string, password: string) =>
     request<AuthResponse>('/auth/register', {
       method: 'POST',
-      body: username ? { email, password, username } : { email, password },
+      body: { username, password },
     }),
 
   me: (token: string) => request<MeResponse>('/auth/me', { method: 'GET', token }),

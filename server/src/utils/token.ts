@@ -4,7 +4,7 @@ import { env } from '../config/env.js';
 
 export interface AccessClaims {
   sub: string;
-  email: string;
+  username: string;
   type: 'access';
 }
 

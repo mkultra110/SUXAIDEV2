@@ -10,7 +10,6 @@ import {
 
 export interface PublicUser {
   id: string;
-  email: string;
   username: string;
   tier: 'free' | 'pro';
 }
@@ -24,29 +23,28 @@ export interface AuthResult {
 function toPublic(user: UserRecord): PublicUser {
   return {
     id: user.id,
-    email: user.email,
     username: user.username,
     tier: user.tier,
   };
 }
 
 function buildTokens(user: UserRecord): AuthResult {
-  const token = signAccessToken({ sub: user.id, email: user.email });
+  const token = signAccessToken({ sub: user.id, username: user.username });
   const refreshToken = signRefreshToken({ sub: user.id, jti: crypto.randomUUID() });
   return { token, refreshToken, user: toPublic(user) };
 }
 
 export const authService = {
-  async register(email: string, password: string, username: string): Promise<AuthResult> {
+  async register(username: string, password: string): Promise<AuthResult> {
     const passwordHash = await hashPassword(password);
-    const user = await userStore.create({ email, username, passwordHash });
+    const user = await userStore.create({ username, passwordHash });
     return buildTokens(user);
   },
 
-  async login(email: string, password: string): Promise<AuthResult> {
-    const user = await userStore.findByEmail(email);
+  async login(username: string, password: string): Promise<AuthResult> {
+    const user = await userStore.findByUsername(username);
     const invalid = () =>
-      Object.assign(new Error('Invalid email or password'), {
+      Object.assign(new Error('Invalid username or password'), {
         status: 401,
         code: 'INVALID_CREDENTIALS',
       });

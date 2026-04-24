@@ -7,10 +7,11 @@ import './LoginScreen.css';
 
 type Mode = 'login' | 'register';
 
+const USERNAME_RE = /^[a-zA-Z0-9_-]+$/;
+
 export function LoginScreen() {
   const { login, register, error, clearError } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
-  const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
@@ -20,23 +21,20 @@ export function LoginScreen() {
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setFieldError(null);
-    if (!email.trim() || !password.trim()) {
-      setFieldError('Email and password are required.');
+    const u = username.trim();
+    if (!u || !password.trim()) {
+      setFieldError('Username and password are required.');
+      return;
+    }
+    if (!USERNAME_RE.test(u)) {
+      setFieldError('Username can only contain letters, digits, underscore and dash.');
+      return;
+    }
+    if (u.length < 3) {
+      setFieldError('Username must be at least 3 characters.');
       return;
     }
     if (mode === 'register') {
-      if (!username.trim()) {
-        setFieldError('Username is required.');
-        return;
-      }
-      if (!/^[a-zA-Z0-9_-]+$/.test(username.trim())) {
-        setFieldError('Username can only contain letters, digits, underscore and dash.');
-        return;
-      }
-      if (username.trim().length < 3) {
-        setFieldError('Username must be at least 3 characters.');
-        return;
-      }
       if (password !== confirm) {
         setFieldError('Passwords do not match.');
         return;
@@ -49,9 +47,9 @@ export function LoginScreen() {
     setSubmitting(true);
     try {
       if (mode === 'login') {
-        await login(email.trim(), password);
+        await login(u, password);
       } else {
-        await register(email.trim(), password, username.trim());
+        await register(u, password);
       }
     } catch {
       /* error is surfaced via context */
@@ -121,27 +119,15 @@ export function LoginScreen() {
 
         <form className="login__form" onSubmit={onSubmit}>
           <Input
-            label="Email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            label="Username"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="pseudonyme"
             disabled={submitting}
             required
           />
-          {mode === 'register' && (
-            <Input
-              label="Username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="pseudonyme"
-              disabled={submitting}
-              required
-            />
-          )}
           <Input
             label="Password"
             type="password"

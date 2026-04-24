@@ -7,8 +7,11 @@ export type UserTier = 'free' | 'pro';
 
 export interface UserRecord {
   id: string;
-  email: string;
   username: string;
+  /** Legacy field — still stored for records created before usernames
+   *  were required, but no longer collected or displayed. Empty for new
+   *  registrations. */
+  email?: string;
   passwordHash: string;
   tier: UserTier;
   // Daily AI usage — cumulative wall time spent streaming (ms) for the
@@ -41,8 +44,8 @@ async function readAll(): Promise<UserRecord[]> {
     // working without a separate migration step.
     return (parsed as Partial<UserRecord>[]).map((u) => ({
       id: u.id ?? crypto.randomUUID(),
-      email: u.email ?? '',
       username: u.username ?? (u.email ? u.email.split('@')[0] : 'user'),
+      email: u.email,
       passwordHash: u.passwordHash ?? '',
       tier: (u.tier as UserTier) ?? 'free',
       dailyUsageMs: typeof u.dailyUsageMs === 'number' ? u.dailyUsageMs : 0,
@@ -68,11 +71,6 @@ function todayUtc(): string {
 }
 
 export const userStore = {
-  async findByEmail(email: string): Promise<UserRecord | null> {
-    const users = await readAll();
-    return users.find((u) => u.email.toLowerCase() === email.toLowerCase()) ?? null;
-  },
-
   async findByUsername(username: string): Promise<UserRecord | null> {
     const users = await readAll();
     return users.find((u) => u.username.toLowerCase() === username.toLowerCase()) ?? null;
@@ -84,19 +82,12 @@ export const userStore = {
   },
 
   async create(input: {
-    email: string;
     username: string;
     passwordHash: string;
   }): Promise<UserRecord> {
     let created!: UserRecord;
     await enqueueWrite(async () => {
       const users = await readAll();
-      if (users.some((u) => u.email.toLowerCase() === input.email.toLowerCase())) {
-        throw Object.assign(new Error('Email already registered'), {
-          status: 409,
-          code: 'EMAIL_IN_USE',
-        });
-      }
       if (users.some((u) => u.username.toLowerCase() === input.username.toLowerCase())) {
         throw Object.assign(new Error('Username already taken'), {
           status: 409,
@@ -106,7 +97,6 @@ export const userStore = {
       const now = new Date().toISOString();
       created = {
         id: crypto.randomUUID(),
-        email: input.email,
         username: input.username,
         passwordHash: input.passwordHash,
         tier: 'free',

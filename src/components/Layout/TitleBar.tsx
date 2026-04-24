@@ -31,7 +31,7 @@ export function TitleBar() {
     }
   };
 
-  const displayName = user?.username ?? user?.email ?? '';
+  const displayName = user?.username ?? '';
   const tier = user?.tier ?? 'free';
 
   return (

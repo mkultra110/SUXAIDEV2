@@ -20,6 +20,16 @@ const api = {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     maximizeToggle: (): Promise<void> => ipcRenderer.invoke('window:maximize-toggle'),
     close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+    setTitle: (title: string): Promise<void> =>
+      ipcRenderer.invoke('window:set-title', title),
+    setDirty: (dirty: boolean): Promise<void> =>
+      ipcRenderer.invoke('window:set-dirty', dirty),
+    onCloseRequested: (cb: () => void) => {
+      const listener = () => cb();
+      ipcRenderer.on('window:close-requested', listener);
+      return () => ipcRenderer.removeListener('window:close-requested', listener);
+    },
+    confirmClose: (): Promise<void> => ipcRenderer.invoke('window:confirm-close'),
   },
   fs: {
     openFile: (): Promise<OpenFileResult> => ipcRenderer.invoke('fs:open-file'),
@@ -29,6 +39,17 @@ const api = {
       ipcRenderer.invoke('fs:read-file', p),
     writeFile: (p: string, content: string): Promise<boolean> =>
       ipcRenderer.invoke('fs:write-file', p, content),
+    saveAs: (content: string, suggestedName?: string): Promise<string | null> =>
+      ipcRenderer.invoke('fs:save-as', content, suggestedName),
+    createFile: (parent: string, name: string): Promise<string> =>
+      ipcRenderer.invoke('fs:create-file', parent, name),
+    createDir: (parent: string, name: string): Promise<string> =>
+      ipcRenderer.invoke('fs:create-dir', parent, name),
+    rename: (oldPath: string, newPath: string): Promise<boolean> =>
+      ipcRenderer.invoke('fs:rename', oldPath, newPath),
+    remove: (p: string): Promise<boolean> => ipcRenderer.invoke('fs:remove', p),
+    revealInFolder: (p: string): Promise<boolean> =>
+      ipcRenderer.invoke('fs:reveal', p),
   },
   conversations: {
     read: (): Promise<unknown[]> => ipcRenderer.invoke('conv:read'),

@@ -265,6 +265,26 @@ export function AIPanel() {
   // Listen for code-action commands dispatched from the editor toolbar.
   useEffect(() => onAiCommand(({ command }) => sendCommand(command)), [sendCommand]);
 
+  // Ctrl+L from the editor: add the selected code as an attachment chip
+  // so the user can add a question around it before sending.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ path?: string; text: string }>).detail;
+      if (!detail?.text) return;
+      const virtualPath =
+        detail.path ? `${detail.path}#selection-${Date.now()}` : `selection-${Date.now()}`;
+      const name = detail.path
+        ? `${detail.path.split(/[\\/]/).pop()} (selection)`
+        : `Selection`;
+      setAttachments((list) => [
+        ...list.filter((a) => a.path !== virtualPath),
+        { path: virtualPath, content: detail.text, name },
+      ]);
+    };
+    window.addEventListener('suxai:add-to-chat', handler);
+    return () => window.removeEventListener('suxai:add-to-chat', handler);
+  }, []);
+
   const clear = () => {
     abortRef.current?.();
     setMessages([]);

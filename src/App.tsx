@@ -6,6 +6,7 @@ import { IDELayout } from './components/Layout/IDELayout';
 import { UpdateDialog } from './components/UpdateDialog/UpdateDialog';
 import { CommandPalette } from './components/CommandPalette/CommandPalette';
 import { SettingsDialog } from './components/Settings/SettingsDialog';
+import { QuickOpen } from './components/QuickOpen/QuickOpen';
 import { Spinner } from './components/ui/Spinner';
 
 function Root() {
@@ -28,6 +29,7 @@ function Root() {
       <UpdateDialog />
       <CommandPalette />
       <SettingsDialog />
+      <QuickOpen />
     </>
   );
 }

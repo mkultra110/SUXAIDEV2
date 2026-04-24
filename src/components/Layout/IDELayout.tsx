@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useToast } from '../ui/Toast';
 import { TitleBar } from './TitleBar';
+import { StatusBar } from './StatusBar';
+import { WindowState } from './WindowState';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { EditorPanel } from '../Editor/EditorPanel';
 import { AIPanel } from '../AI/AIPanel';
@@ -59,12 +61,14 @@ export function IDELayout() {
   return (
     <div className="ide">
       <WorkspaceHotkeys />
+      <WindowState />
       <TitleBar />
       <div className="ide__body">
         <Sidebar />
         <EditorPanel />
         <AIPanel />
       </div>
+      <StatusBar />
     </div>
   );
 }

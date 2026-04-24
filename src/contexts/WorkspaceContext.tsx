@@ -7,6 +7,9 @@ export interface OpenFile {
   content: string;
   dirty?: boolean;
   language?: string;
+  pinned?: boolean;
+  /** True for files created in-memory that haven't been saved to disk yet. */
+  untitled?: boolean;
 }
 
 export interface PendingDiff {
@@ -32,10 +35,18 @@ interface WorkspaceValue extends WorkspaceState {
   setWorkspaceRoot: (root: string | null) => void;
   openFile: (file: OpenFile) => void;
   closeFile: (path: string) => void;
+  closeOthers: (keepPath: string) => void;
+  closeToTheRight: (fromPath: string) => void;
+  closeAll: () => void;
   setActive: (path: string) => void;
   updateActiveContent: (content: string) => void;
   setSelection: (text: string) => void;
   saveActiveFile: () => Promise<boolean>;
+  newUntitled: () => void;
+  reorderTab: (fromPath: string, toPath: string) => void;
+  togglePin: (path: string) => void;
+  renameFile: (oldPath: string, newPath: string) => void;
+  hasUnsaved: boolean;
   openDiff: (d: PendingDiff) => void;
   closeDiff: () => void;
   acceptDiff: () => void;
@@ -228,20 +239,131 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const saveActiveFile = useCallback(async () => {
     const s = stateRef.current;
     const toSave = s.openFiles.find((f) => f.path === s.activePath);
-    if (!toSave || !toSave.dirty) return false;
+    if (!toSave) return false;
+    // Untitled files need a destination path first — fall back to the
+    // native Save-As dialog via the main process.
+    let targetPath = toSave.path;
+    if (toSave.untitled) {
+      const picked = await window.suxai.fs.saveAs?.(toSave.content, toSave.name);
+      if (!picked) return false;
+      targetPath = picked;
+    } else {
+      if (!toSave.dirty) return false;
+    }
     try {
-      await window.suxai.fs.writeFile(toSave.path, toSave.content);
+      await window.suxai.fs.writeFile(targetPath, toSave.content);
       setState((prev) => ({
         ...prev,
         openFiles: prev.openFiles.map((f) =>
-          f.path === toSave.path ? { ...f, dirty: false } : f,
+          f.path === toSave.path
+            ? {
+                ...f,
+                path: targetPath,
+                name: targetPath.split(/[\\/]/).pop() ?? f.name,
+                dirty: false,
+                untitled: false,
+                language: langFromPath(targetPath),
+              }
+            : f,
         ),
+        activePath: prev.activePath === toSave.path ? targetPath : prev.activePath,
       }));
       return true;
     } catch (err) {
       console.error('Failed to save file:', err);
       return false;
     }
+  }, []);
+
+  const closeOthers = useCallback((keepPath: string) => {
+    setState((s) => {
+      const filtered = s.openFiles.filter((f) => f.path === keepPath || f.pinned);
+      return {
+        ...s,
+        openFiles: filtered,
+        activePath: filtered.some((f) => f.path === keepPath) ? keepPath : filtered[0]?.path ?? null,
+      };
+    });
+  }, []);
+
+  const closeToTheRight = useCallback((fromPath: string) => {
+    setState((s) => {
+      const idx = s.openFiles.findIndex((f) => f.path === fromPath);
+      if (idx < 0) return s;
+      const kept = s.openFiles.filter((f, i) => i <= idx || f.pinned);
+      return {
+        ...s,
+        openFiles: kept,
+        activePath: kept.some((f) => f.path === s.activePath)
+          ? s.activePath
+          : fromPath,
+      };
+    });
+  }, []);
+
+  const closeAll = useCallback(() => {
+    setState((s) => {
+      const kept = s.openFiles.filter((f) => f.pinned);
+      return {
+        ...s,
+        openFiles: kept,
+        activePath: kept[0]?.path ?? null,
+      };
+    });
+  }, []);
+
+  const newUntitled = useCallback(() => {
+    setState((s) => {
+      let i = 1;
+      // Keep incrementing until the name is free.
+      while (s.openFiles.some((f) => f.path === `untitled://${i}`)) i++;
+      const virtualPath = `untitled://${i}`;
+      const entry: OpenFile = {
+        path: virtualPath,
+        name: `Untitled-${i}`,
+        content: '',
+        dirty: true,
+        untitled: true,
+        language: 'plaintext',
+      };
+      return { ...s, openFiles: [...s.openFiles, entry], activePath: virtualPath };
+    });
+  }, []);
+
+  const reorderTab = useCallback((fromPath: string, toPath: string) => {
+    setState((s) => {
+      const from = s.openFiles.findIndex((f) => f.path === fromPath);
+      const to = s.openFiles.findIndex((f) => f.path === toPath);
+      if (from < 0 || to < 0 || from === to) return s;
+      const next = s.openFiles.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return { ...s, openFiles: next };
+    });
+  }, []);
+
+  const togglePin = useCallback((path: string) => {
+    setState((s) => ({
+      ...s,
+      openFiles: s.openFiles.map((f) => (f.path === path ? { ...f, pinned: !f.pinned } : f)),
+    }));
+  }, []);
+
+  const renameFile = useCallback((oldPath: string, newPath: string) => {
+    setState((s) => ({
+      ...s,
+      openFiles: s.openFiles.map((f) =>
+        f.path === oldPath
+          ? {
+              ...f,
+              path: newPath,
+              name: newPath.split(/[\\/]/).pop() ?? f.name,
+              language: langFromPath(newPath),
+            }
+          : f,
+      ),
+      activePath: s.activePath === oldPath ? newPath : s.activePath,
+    }));
   }, []);
 
   const openDiff = useCallback((d: PendingDiff) => {
@@ -268,24 +390,39 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [state.openFiles, state.activePath],
   );
 
+  const hasUnsaved = useMemo(
+    () => state.openFiles.some((f) => f.dirty && !f.untitled),
+    [state.openFiles],
+  );
+
   const value = useMemo<WorkspaceValue>(
     () => ({
       ...state,
       activeFile,
+      hasUnsaved,
       setWorkspaceRoot,
       openFile,
       closeFile,
+      closeOthers,
+      closeToTheRight,
+      closeAll,
       setActive,
       updateActiveContent,
       setSelection,
       saveActiveFile,
+      newUntitled,
+      reorderTab,
+      togglePin,
+      renameFile,
       openDiff,
       closeDiff,
       acceptDiff,
     }),
     [
-      state, activeFile, setWorkspaceRoot, openFile, closeFile, setActive,
-      updateActiveContent, setSelection, saveActiveFile, openDiff, closeDiff, acceptDiff,
+      state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
+      closeOthers, closeToTheRight, closeAll, setActive,
+      updateActiveContent, setSelection, saveActiveFile, newUntitled, reorderTab,
+      togglePin, renameFile, openDiff, closeDiff, acceptDiff,
     ],
   );
 

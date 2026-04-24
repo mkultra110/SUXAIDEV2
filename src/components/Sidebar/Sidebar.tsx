@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Button } from '../ui/Button';
+import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
+import { useToast } from '../ui/Toast';
 import './Sidebar.css';
 
 interface TreeEntry {
@@ -13,9 +15,12 @@ interface TreeEntry {
 }
 
 export function Sidebar() {
-  const { workspaceRoot, setWorkspaceRoot, openFile, activePath } = useWorkspace();
+  const { workspaceRoot, setWorkspaceRoot, openFile, activePath, closeFile, renameFile } =
+    useWorkspace();
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [menu, setMenu] = useState<{ x: number; y: number; entry: TreeEntry } | null>(null);
+  const toast = useToast();
 
   const loadRoot = useCallback(async (root: string) => {
     setLoading(true);
@@ -45,6 +50,104 @@ export function Sidebar() {
     openFile({ path: file.path, name, content: file.content });
     const parent = file.path.replace(/[\\/][^\\/]+$/, '');
     if (parent) setWorkspaceRoot(parent);
+  };
+
+  const refreshTree = useCallback(async () => {
+    if (workspaceRoot) await loadRoot(workspaceRoot);
+  }, [workspaceRoot, loadRoot]);
+
+  const handleNewFile = async (parentPath: string) => {
+    const name = window.prompt('New file name:');
+    if (!name) return;
+    try {
+      const created = await window.suxai.fs.createFile?.(parentPath, name);
+      if (created) {
+        const r = await window.suxai.fs.readFile(created);
+        openFile({ path: created, name, content: r.content });
+        toast.success('Created', name);
+        await refreshTree();
+      }
+    } catch (err) {
+      toast.error('Could not create file', (err as Error).message);
+    }
+  };
+
+  const handleNewFolder = async (parentPath: string) => {
+    const name = window.prompt('New folder name:');
+    if (!name) return;
+    try {
+      await window.suxai.fs.createDir?.(parentPath, name);
+      toast.success('Created', name);
+      await refreshTree();
+    } catch (err) {
+      toast.error('Could not create folder', (err as Error).message);
+    }
+  };
+
+  const handleRename = async (entry: TreeEntry) => {
+    const name = window.prompt('Rename to:', entry.name);
+    if (!name || name === entry.name) return;
+    const parent = entry.path.replace(/[\\/][^\\/]+$/, '');
+    const newPath = `${parent}/${name}`.replace(/\\/g, '/');
+    try {
+      await window.suxai.fs.rename?.(entry.path, newPath);
+      if (!entry.isDirectory) renameFile(entry.path, newPath);
+      toast.success('Renamed', name);
+      await refreshTree();
+    } catch (err) {
+      toast.error('Rename failed', (err as Error).message);
+    }
+  };
+
+  const handleDelete = async (entry: TreeEntry) => {
+    const ok = window.confirm(`Delete "${entry.name}"? This cannot be undone.`);
+    if (!ok) return;
+    try {
+      await window.suxai.fs.remove?.(entry.path);
+      closeFile(entry.path);
+      toast.success('Deleted', entry.name);
+      await refreshTree();
+    } catch (err) {
+      toast.error('Delete failed', (err as Error).message);
+    }
+  };
+
+  const buildMenu = (entry: TreeEntry): (MenuItem | 'separator')[] => {
+    const parentPath = entry.isDirectory
+      ? entry.path
+      : entry.path.replace(/[\\/][^\\/]+$/, '');
+    return [
+      {
+        label: 'New file…',
+        onClick: () => handleNewFile(parentPath),
+      },
+      {
+        label: 'New folder…',
+        onClick: () => handleNewFolder(parentPath),
+      },
+      'separator',
+      {
+        label: 'Rename…',
+        hint: 'F2',
+        onClick: () => handleRename(entry),
+      },
+      {
+        label: 'Delete',
+        danger: true,
+        onClick: () => handleDelete(entry),
+      },
+      'separator',
+      {
+        label: 'Copy path',
+        onClick: () => navigator.clipboard?.writeText(entry.path),
+      },
+      {
+        label: 'Reveal in file explorer',
+        onClick: () => {
+          window.suxai.fs.revealInFolder?.(entry.path);
+        },
+      },
+    ];
   };
 
   const toggleDir = async (entry: TreeEntry) => {
@@ -107,9 +210,27 @@ export function Sidebar() {
           {loading ? (
             <div className="sidebar__empty"><span>Loading…</span></div>
           ) : (
-            <TreeList entries={tree} depth={0} onToggle={toggleDir} activePath={activePath} />
+            <TreeList
+              entries={tree}
+              depth={0}
+              onToggle={toggleDir}
+              activePath={activePath}
+              onContextMenu={(entry, e) => {
+                e.preventDefault();
+                setMenu({ x: e.clientX, y: e.clientY, entry });
+              }}
+            />
           )}
         </div>
+      )}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          items={buildMenu(menu.entry)}
+        />
       )}
     </aside>
   );
@@ -120,11 +241,13 @@ function TreeList({
   depth,
   onToggle,
   activePath,
+  onContextMenu,
 }: {
   entries: TreeEntry[];
   depth: number;
   onToggle: (e: TreeEntry) => void;
   activePath: string | null;
+  onContextMenu: (entry: TreeEntry, e: React.MouseEvent) => void;
 }) {
   return (
     <ul className="sidebar__list">
@@ -140,6 +263,7 @@ function TreeList({
               className={`sidebar__entry ${activePath === e.path ? 'sidebar__entry--active' : ''}`}
               style={{ paddingLeft: 8 + depth * 12 }}
               onClick={() => onToggle(e)}
+              onContextMenu={(ev) => onContextMenu(e, ev)}
             >
               <span className="sidebar__chev" aria-hidden>
                 {e.isDirectory ? (
@@ -154,7 +278,13 @@ function TreeList({
               <span className="sidebar__entry-name">{e.name}</span>
             </button>
             {e.isDirectory && e.expanded && e.children && (
-              <TreeList entries={e.children} depth={depth + 1} onToggle={onToggle} activePath={activePath} />
+              <TreeList
+                entries={e.children}
+                depth={depth + 1}
+                onToggle={onToggle}
+                activePath={activePath}
+                onContextMenu={onContextMenu}
+              />
             )}
           </li>
         ))}

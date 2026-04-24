@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { DiffView } from './DiffView';
+import { Breadcrumbs } from './Breadcrumbs';
+import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { emitAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
+import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
 
 interface ActionBarPos {
@@ -18,15 +21,85 @@ export function EditorPanel() {
     activeFile,
     setActive,
     closeFile,
+    closeOthers,
+    closeToTheRight,
+    closeAll,
+    togglePin,
+    reorderTab,
     updateActiveContent,
     setSelection,
     pendingDiff,
+    newUntitled,
   } = useWorkspace();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [actionBar, setActionBar] = useState<ActionBarPos | null>(null);
   const [settings] = useSettings();
+  const toast = useToast();
+  const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
+  const [dragPath, setDragPath] = useState<string | null>(null);
+  const [zoomOffset, setZoomOffset] = useState(0);
+
+  const effectiveFontSize = useMemo(
+    () => Math.max(8, Math.min(40, settings.fontSize + zoomOffset)),
+    [settings.fontSize, zoomOffset],
+  );
+
+  // Ctrl+= / Ctrl+- / Ctrl+0 zoom. Scoped to the editor view.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (e.key === '=' || e.key === '+') {
+        e.preventDefault();
+        setZoomOffset((z) => Math.min(z + 1, 20));
+      } else if (e.key === '-') {
+        e.preventDefault();
+        setZoomOffset((z) => Math.max(z - 1, -6));
+      } else if (e.key === '0') {
+        e.preventDefault();
+        setZoomOffset(0);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // Ctrl+N → new untitled file.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        newUntitled();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [newUntitled]);
+
+  // Ctrl+L → add current selection to AI chat.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'l') {
+        const ed = editorRef.current;
+        if (!ed) return;
+        const sel = ed.getSelection();
+        const model = ed.getModel();
+        if (!sel || !model) return;
+        const text = model.getValueInRange(sel);
+        if (!text || text.trim().length === 0) return;
+        e.preventDefault();
+        window.dispatchEvent(
+          new CustomEvent<{ path?: string; text: string }>('suxai:add-to-chat', {
+            detail: { path: activeFile?.path, text },
+          }),
+        );
+        toast.info('Added to chat', `${text.length} chars`);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeFile?.path, toast]);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -87,6 +160,15 @@ export function EditorPanel() {
         if (!model) return;
         const text = model.getValueInRange(e.selection);
         setSelection(text);
+        window.dispatchEvent(
+          new CustomEvent('suxai:cursor', {
+            detail: {
+              line: e.selection.positionLineNumber,
+              column: e.selection.positionColumn,
+              selection: text.length,
+            },
+          }),
+        );
 
         // Show a floating code-action bar above the selection when the
         // user has actually highlighted something.
@@ -155,11 +237,46 @@ export function EditorPanel() {
             key={f.path}
             role="tab"
             aria-selected={f.path === activePath}
-            className={`editor__tab ${f.path === activePath ? 'editor__tab--active' : ''}`}
+            className={`editor__tab ${f.path === activePath ? 'editor__tab--active' : ''} ${
+              f.pinned ? 'editor__tab--pinned' : ''
+            } ${dragPath === f.path ? 'editor__tab--dragging' : ''}`}
             onClick={() => setActive(f.path)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setTabMenu({ x: e.clientX, y: e.clientY, path: f.path });
+            }}
             title={f.path}
+            draggable
+            onDragStart={() => setDragPath(f.path)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (dragPath && dragPath !== f.path) reorderTab(dragPath, f.path);
+              setDragPath(null);
+            }}
+            onDragEnd={() => setDragPath(null)}
           >
-            <span className="editor__tab-name">{f.name}{f.dirty ? ' •' : ''}</span>
+            {f.pinned && (
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 10 10"
+                aria-hidden
+                className="editor__tab-pin"
+              >
+                <path
+                  d="M5 1v4l2 2H3l2-2V1z"
+                  stroke="currentColor"
+                  strokeWidth="1"
+                  fill="currentColor"
+                  fillOpacity="0.4"
+                />
+              </svg>
+            )}
+            <span className="editor__tab-name">
+              {f.name}
+              {f.dirty ? ' •' : ''}
+            </span>
             <button
               className="editor__tab-close"
               onClick={(e) => {
@@ -168,11 +285,41 @@ export function EditorPanel() {
               }}
               aria-label={`Close ${f.name}`}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" /></svg>
+              <svg width="10" height="10" viewBox="0 0 10 10">
+                <path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" />
+              </svg>
             </button>
           </div>
         ))}
       </div>
+
+      <Breadcrumbs />
+
+      {tabMenu && (
+        <ContextMenu
+          x={tabMenu.x}
+          y={tabMenu.y}
+          onClose={() => setTabMenu(null)}
+          items={buildTabMenu(
+            tabMenu.path,
+            openFiles,
+            {
+              closeFile,
+              closeOthers,
+              closeToTheRight,
+              closeAll,
+              togglePin,
+              setActive,
+            },
+          )}
+        />
+      )}
+
+      {zoomOffset !== 0 && (
+        <div className="editor__zoom-hint">
+          Zoom {zoomOffset > 0 ? '+' : ''}{zoomOffset} · Ctrl+0 to reset
+        </div>
+      )}
 
       <div className="editor__body" ref={containerRef}>
         {pendingDiff && <DiffView diff={pendingDiff} />}
@@ -222,7 +369,7 @@ export function EditorPanel() {
             onMount={onMount}
             options={{
               fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
-              fontSize: settings.fontSize,
+              fontSize: effectiveFontSize,
               fontLigatures: true,
               minimap: { enabled: settings.minimap },
               smoothScrolling: true,
@@ -260,4 +407,62 @@ function EditorWelcome() {
       </div>
     </div>
   );
+}
+
+interface TabMenuActions {
+  closeFile: (p: string) => void;
+  closeOthers: (p: string) => void;
+  closeToTheRight: (p: string) => void;
+  closeAll: () => void;
+  togglePin: (p: string) => void;
+  setActive: (p: string) => void;
+}
+
+function buildTabMenu(
+  path: string,
+  openFiles: import('../../contexts/WorkspaceContext').OpenFile[],
+  actions: TabMenuActions,
+): (MenuItem | 'separator')[] {
+  const file = openFiles.find((f) => f.path === path);
+  const tabIndex = openFiles.findIndex((f) => f.path === path);
+  const hasRight = tabIndex >= 0 && tabIndex < openFiles.length - 1;
+  return [
+    {
+      label: file?.pinned ? 'Unpin tab' : 'Pin tab',
+      onClick: () => actions.togglePin(path),
+    },
+    'separator',
+    {
+      label: 'Close',
+      hint: 'Ctrl+W',
+      onClick: () => actions.closeFile(path),
+    },
+    {
+      label: 'Close others',
+      disabled: openFiles.filter((f) => !f.pinned || f.path === path).length <= 1,
+      onClick: () => actions.closeOthers(path),
+    },
+    {
+      label: 'Close to the right',
+      disabled: !hasRight,
+      onClick: () => actions.closeToTheRight(path),
+    },
+    {
+      label: 'Close all',
+      disabled: openFiles.length === 0,
+      danger: true,
+      onClick: () => actions.closeAll(),
+    },
+    'separator',
+    {
+      label: 'Copy path',
+      disabled: path.startsWith('untitled://'),
+      onClick: () => navigator.clipboard?.writeText(path),
+    },
+    {
+      label: 'Reveal in file explorer',
+      disabled: path.startsWith('untitled://'),
+      onClick: () => window.suxai.fs.revealInFolder?.(path),
+    },
+  ];
 }

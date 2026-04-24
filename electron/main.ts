@@ -89,6 +89,18 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+
+  // Renderer owns the unsaved-changes state; intercept close and ask it.
+  let confirmedClose = false;
+  mainWindow.on('close', (e) => {
+    if (confirmedClose) return;
+    e.preventDefault();
+    mainWindow?.webContents.send('window:close-requested');
+  });
+  ipcMain.handle('window:confirm-close', () => {
+    confirmedClose = true;
+    mainWindow?.close();
+  });
 }
 
 async function readTokenBlob(): Promise<string | null> {
@@ -205,6 +217,14 @@ function registerIpc() {
     else mainWindow.maximize();
   });
   ipcMain.handle('window:close', () => mainWindow?.close());
+  ipcMain.handle('window:set-title', (_e, title: string) => {
+    if (typeof title === 'string') mainWindow?.setTitle(title);
+  });
+  ipcMain.handle('window:set-dirty', (_e, dirty: boolean) => {
+    // macOS shows a filled dot in the close button when the document is
+    // edited; other platforms we just prefix the title.
+    mainWindow?.setDocumentEdited(!!dirty);
+  });
 
   ipcMain.handle('fs:open-file', async () => {
     if (!mainWindow) return null;
@@ -242,6 +262,56 @@ function registerIpc() {
 
   ipcMain.handle('fs:write-file', async (_e, filePath: string, content: string) => {
     await fs.writeFile(filePath, content, 'utf8');
+    return true;
+  });
+
+  ipcMain.handle('fs:save-as', async (_e, content: string, suggestedName?: string) => {
+    if (!mainWindow) return null;
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: suggestedName,
+    });
+    if (result.canceled || !result.filePath) return null;
+    await fs.writeFile(result.filePath, content, 'utf8');
+    return result.filePath;
+  });
+
+  ipcMain.handle('fs:create-file', async (_e, parent: string, name: string) => {
+    const full = path.join(parent, name);
+    // `wx` = fail if exists. Surface a friendly error to the renderer.
+    try {
+      await fs.writeFile(full, '', { flag: 'wx' });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+        throw new Error(`"${name}" already exists`);
+      }
+      throw err;
+    }
+    return full;
+  });
+
+  ipcMain.handle('fs:create-dir', async (_e, parent: string, name: string) => {
+    const full = path.join(parent, name);
+    await fs.mkdir(full, { recursive: false });
+    return full;
+  });
+
+  ipcMain.handle('fs:rename', async (_e, oldPath: string, newPath: string) => {
+    await fs.rename(oldPath, newPath);
+    return true;
+  });
+
+  ipcMain.handle('fs:remove', async (_e, target: string) => {
+    const stat = await fs.lstat(target);
+    if (stat.isDirectory()) {
+      await fs.rm(target, { recursive: true, force: true });
+    } else {
+      await fs.unlink(target);
+    }
+    return true;
+  });
+
+  ipcMain.handle('fs:reveal', async (_e, target: string) => {
+    shell.showItemInFolder(target);
     return true;
   });
 

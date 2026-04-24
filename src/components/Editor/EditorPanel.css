@@ -174,3 +174,27 @@ kbd {
   background: rgba(125, 130, 248, 0.18);
   color: #d8dbff;
 }
+
+.editor__tab--pinned { background: rgba(125, 130, 248, 0.08); }
+.editor__tab--dragging { opacity: 0.4; }
+.editor__tab-pin {
+  color: var(--color-accent);
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.editor__zoom-hint {
+  position: absolute;
+  bottom: 10px;
+  right: 14px;
+  padding: 3px 10px;
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  background: rgba(14, 20, 34, 0.85);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  animation: suxai-fade-in 180ms var(--ease-out);
+  z-index: 20;
+}

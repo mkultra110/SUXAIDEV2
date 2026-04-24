@@ -49,6 +49,21 @@ if ! id -u "$SUXAI_USER" >/dev/null 2>&1; then
   useradd --system --home-dir "$SUXAI_ROOT" --shell /usr/sbin/nologin "$SUXAI_USER"
 fi
 
+# ---- Base packages ---------------------------------------------------------
+# rsync is used to sync source into /opt/suxai/app; curl is needed for Node
+# repo setup; ca-certificates for TLS. Install whatever's missing.
+MISSING_PKGS=()
+for pkg in rsync curl ca-certificates; do
+  if ! command -v "$pkg" >/dev/null 2>&1 && ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    MISSING_PKGS+=("$pkg")
+  fi
+done
+if (( ${#MISSING_PKGS[@]} > 0 )); then
+  echo "==> Installing missing packages: ${MISSING_PKGS[*]}"
+  apt-get update -y
+  apt-get install -y "${MISSING_PKGS[@]}"
+fi
+
 # ---- Node.js ---------------------------------------------------------------
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -v | cut -c2- | cut -d. -f1)" -lt "$NODE_MAJOR" ]]; then
   echo "==> Installing Node.js $NODE_MAJOR via NodeSource"

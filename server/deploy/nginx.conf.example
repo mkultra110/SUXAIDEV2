@@ -1,28 +1,34 @@
 # /etc/nginx/sites-available/suxai
 #
-# Reverse proxy for the SUXAI backend with SSE-friendly settings
-# (AI streaming via /ai/chat needs flushed, unbuffered responses).
+# Reverse proxy for the SUXAI backend.
+# - Proxies API traffic to the Node server on 127.0.0.1:4000
+# - Serves update binaries directly from /opt/suxai/releases/
+# - SSE-friendly settings for /ai/ (no buffering)
 
 server {
     listen 80;
     listen [::]:80;
     server_name api.suxai.example 209.99.186.238;
 
-    # Recommended: redirect to HTTPS after obtaining a cert via certbot.
+    # After you get a TLS cert, uncomment to force HTTPS:
     # return 301 https://$host$request_uri;
 
-    location / {
-        proxy_pass http://127.0.0.1:4000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Connection "";
-        proxy_read_timeout 300s;
-        proxy_send_timeout 300s;
+    # Limit request body size (server already caps JSON at 1MB).
+    client_max_body_size 2m;
+
+    # Serve installer binaries for the auto-updater. Files live in
+    # /opt/suxai/releases/ and are owned by the suxai user.
+    location /releases/ {
+        alias /opt/suxai/releases/;
+        autoindex off;
+        add_header Cache-Control "public, max-age=300";
+        types {
+            application/octet-stream exe dmg AppImage zip tar gz;
+            application/json json;
+        }
     }
 
+    # SSE endpoint — must NOT be buffered.
     location /ai/ {
         proxy_pass http://127.0.0.1:4000;
         proxy_http_version 1.1;
@@ -32,23 +38,33 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header Connection "";
 
-        # SSE tuning — do not buffer, stream immediately.
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 1h;
         chunked_transfer_encoding on;
         add_header X-Accel-Buffering no;
     }
+
+    # Everything else → API.
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Connection "";
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
 }
 
-# HTTPS example (after certbot):
+# HTTPS example (once certbot has issued a cert):
 #
 # server {
 #     listen 443 ssl http2;
 #     server_name api.suxai.example;
 #     ssl_certificate     /etc/letsencrypt/live/api.suxai.example/fullchain.pem;
 #     ssl_certificate_key /etc/letsencrypt/live/api.suxai.example/privkey.pem;
-#     include /etc/letsencrypt/options-ssl-nginx.conf;
-#     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
-#     # ...same location blocks as above
+#     # ... same location blocks as above
 # }

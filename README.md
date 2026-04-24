@@ -33,23 +33,35 @@ SUXAIDEV2/
 
 ### 1) Server (on your VPS — `209.99.186.238`)
 
-```bash
-cd server
-cp .env.example .env
-# Edit .env:
-#   JWT_SECRET    = a 64-byte random hex string
-#   QUATARLY_API_KEY = your Quatarly key
-#   UPDATE_*      = pointing at your release binary
+Everything lives under **one isolated folder**: `/opt/suxai/`. A one-shot
+installer creates the directory tree, the `suxai` system user, the systemd
+unit, and (optionally) the nginx site — nothing else on the VPS is touched.
 
-npm install
-npm run build
-npm start
+```bash
+# on the VPS, from the project root:
+sudo ./server/deploy/install.sh
+
+# then edit your secrets:
+sudo -e /opt/suxai/.env       # set QUATARLY_API_KEY + UPDATE_*
+sudo systemctl restart suxai-server
 ```
 
-Generate a strong `JWT_SECRET`:
-```bash
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+Layout:
 ```
+/opt/suxai/
+├── app/         # Node.js server code
+├── data/        # users.json, persistent state  (DATA_DIR, 0700)
+├── logs/        # server.log
+├── releases/    # update binaries (served at /releases/<file>)
+└── .env         # secrets (0600, owned by suxai)
+```
+
+Push a new server build later:
+```bash
+./server/deploy/deploy.sh deploy@209.99.186.238
+```
+
+See `server/deploy/README.md` for full deployment docs.
 
 Default endpoints:
 

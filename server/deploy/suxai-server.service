@@ -1,28 +1,43 @@
 [Unit]
 Description=SUXAI backend (auth, AI proxy, updates)
-After=network.target
+Documentation=https://github.com/mkultra110/suxaidev2
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=suxai
 Group=suxai
-WorkingDirectory=/opt/suxai/server
-EnvironmentFile=/opt/suxai/server/.env
-ExecStart=/usr/bin/node /opt/suxai/server/dist/index.js
+
+# Everything lives under /opt/suxai/ — isolated from the rest of the VPS.
+WorkingDirectory=/opt/suxai/app
+EnvironmentFile=/opt/suxai/.env
+ExecStart=/usr/bin/node /opt/suxai/app/dist/index.js
+
 Restart=on-failure
 RestartSec=3
+StandardOutput=append:/opt/suxai/logs/server.log
+StandardError=append:/opt/suxai/logs/server.log
+
+# --- Hardening ---
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/opt/suxai/server/data
+ReadWritePaths=/opt/suxai/data /opt/suxai/logs /opt/suxai/releases
 ProtectHome=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectHostname=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 RestrictRealtime=true
 RestrictSUIDSGID=true
+RestrictNamespaces=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
 LimitNOFILE=65536
 
 [Install]

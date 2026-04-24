@@ -22,6 +22,10 @@ export default defineConfig({
             outDir: 'dist-electron',
             rollupOptions: {
               external: ['electron'],
+              // Force CommonJS so Electron can require() the preload/main
+              // at runtime (our package.json has "type": "module" which
+              // would otherwise produce ESM output).
+              output: { format: 'cjs', entryFileNames: '[name].js' },
             },
           },
         },
@@ -33,6 +37,7 @@ export default defineConfig({
             outDir: 'dist-electron',
             rollupOptions: {
               external: ['electron'],
+              output: { format: 'cjs', entryFileNames: '[name].js' },
             },
           },
         },

@@ -10,12 +10,14 @@ export function TitleBar() {
 
   useEffect(() => {
     let alive = true;
-    window.suxai.app
-      ?.getVersion?.()
-      .then((v) => {
-        if (alive) setVersion(v ?? '');
-      })
-      .catch(() => {});
+    (async () => {
+      try {
+        const v = await window.suxai?.app?.getVersion?.();
+        if (alive && typeof v === 'string') setVersion(v);
+      } catch {
+        /* older preload without app.getVersion — silently ignore */
+      }
+    })();
     return () => {
       alive = false;
     };

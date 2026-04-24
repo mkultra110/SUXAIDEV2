@@ -42,7 +42,21 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow?.show());
+  // Force-show the window even if the renderer takes too long / crashes.
+  // Without this, a single preload or bootstrap error leaves a zombie
+  // process with no visible window.
+  const forceShowTimer = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      console.warn('[suxai] ready-to-show did not fire in 3s — force-showing window');
+      mainWindow.show();
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+  }, 3000);
+
+  mainWindow.once('ready-to-show', () => {
+    clearTimeout(forceShowTimer);
+    mainWindow?.show();
+  });
 
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL);
@@ -55,6 +69,16 @@ function createWindow() {
 
   mainWindow.webContents.on('did-fail-load', (_e, code, description, url) => {
     console.error('[renderer] did-fail-load', { code, description, url });
+    if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[renderer] render-process-gone', details);
+    if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
+  });
+
+  mainWindow.webContents.on('unresponsive', () => {
+    console.warn('[renderer] unresponsive');
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {

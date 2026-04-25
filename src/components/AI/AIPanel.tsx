@@ -19,6 +19,7 @@ import {
 } from '../../lib/conversations';
 import { executeTool, toolsForMode, type ToolCall } from '../../lib/agent';
 import { buildAdditionalDataXml } from '../../lib/additional-data';
+import { TokenUsageBar } from './TokenUsageBar';
 import type { AgentMessage, AgentContentBlock } from '../../api/quatarly';
 import { useToast } from '../ui/Toast';
 import './AIPanel.css';
@@ -825,39 +826,145 @@ export function AIPanel() {
   // Extract @path/to/file mentions from the composer and read their content
   // so the AI gets them as explicit context. Returns the cleaned prompt
   // (without the @-mentions) and the loaded attachments.
+  /**
+   * Extract @-mentions from the user's raw input and resolve each one
+   * to an inline content block. Supports a Cursor-like vocabulary on
+   * top of the legacy @file:
+   *
+   *   @selection         — current editor selection
+   *   @cursor            — line around the cursor (-5/+5)
+   *   @problems          — Monaco markers (errors/warnings) for active file
+   *   @recent_changes    — recent edits ring buffer
+   *   @recent            — recently viewed files
+   *   @workspace         — workspace root
+   *   @<bare-name>       — fuzzy match against an open file's path/name
+   *   @<absolute-path>   — read the file via fs.readFile
+   *
+   * Returns a cleaned prompt (mentions stripped) and an array of
+   * resolved attachments. Each attachment becomes a <<<FILE … END>>>
+   * block in the outgoing prompt.
+   */
   const extractMentions = useCallback(
     async (raw: string): Promise<{ cleaned: string; attachments: { path: string; content: string }[] }> => {
-      // Match everything after an @ until whitespace / newline / another @.
-      // Previous version stopped at multi-dot file names ('file.test.ts').
-      const re = /@([^\s@\n]+)/g;
+      const re = /@([a-zA-Z_][\w-]*|[^\s@\n]+)/g;
       const matches = [...raw.matchAll(re)];
       if (matches.length === 0) return { cleaned: raw, attachments: [] };
       const attachments: { path: string; content: string }[] = [];
+      const consumed: string[] = [];
       for (const m of matches) {
         const ref = m[1];
-        // Try a few candidate resolutions before giving up:
-        //   1. treat as an absolute path
-        //   2. treat as a bare filename and match against open files
         let resolved: { path: string; content: string } | null = null;
-        const open = openFiles.find(
-          (f) => f.path.endsWith(ref) || f.name === ref,
-        );
-        if (open) {
-          resolved = { path: open.path, content: open.content };
-        } else {
-          try {
-            const r = await window.suxai.fs.readFile(ref);
-            resolved = r;
-          } catch {
-            /* can't find — ignore, the raw @mention stays in the prompt */
+        switch (ref.toLowerCase()) {
+          case 'selection': {
+            if (selection) {
+              resolved = {
+                path: '@selection',
+                content: `Current editor selection${activeFile ? ' (' + activeFile.path + ')' : ''}:\n${selection}`,
+              };
+            }
+            break;
+          }
+          case 'cursor': {
+            if (activeFile && editorContext.cursorPosition) {
+              const cur = editorContext.cursorPosition.line;
+              const lines = activeFile.content.split('\n');
+              const start = Math.max(0, cur - 6);
+              const end = Math.min(lines.length, cur + 5);
+              const window = lines.slice(start, end).join('\n');
+              resolved = {
+                path: '@cursor',
+                content:
+                  `Active file: ${activeFile.path}\nLines ${start + 1}-${end} (cursor at line ${cur}):\n${window}`,
+              };
+            }
+            break;
+          }
+          case 'problems':
+          case 'lint':
+          case 'lint_errors': {
+            if (editorContext.diagnostics.length > 0) {
+              resolved = {
+                path: '@problems',
+                content:
+                  'Linter / language-server diagnostics on the active file:\n' +
+                  editorContext.diagnostics
+                    .map((d) => `[${d.severity}] ${d.path}:${d.line}:${d.column} — ${d.message}`)
+                    .join('\n'),
+              };
+            }
+            break;
+          }
+          case 'recent_changes':
+          case 'recent_edits': {
+            if (editorContext.recentEdits.length > 0) {
+              resolved = {
+                path: '@recent_changes',
+                content:
+                  'Recent edits (newest first):\n' +
+                  editorContext.recentEdits
+                    .map((e) => {
+                      const ago = Math.max(1, Math.round((Date.now() - e.ts) / 1000));
+                      return `- ${e.path} line ${e.line} (${ago}s ago)`;
+                    })
+                    .join('\n'),
+              };
+            }
+            break;
+          }
+          case 'recent':
+          case 'recently_viewed': {
+            if (editorContext.recentlyViewedFiles.length > 0) {
+              resolved = {
+                path: '@recent',
+                content:
+                  'Recently viewed files (most recent first):\n' +
+                  editorContext.recentlyViewedFiles.map((p) => `- ${p}`).join('\n'),
+              };
+            }
+            break;
+          }
+          case 'workspace': {
+            if (workspaceRoot) {
+              resolved = {
+                path: '@workspace',
+                content: `Workspace root: ${workspaceRoot}`,
+              };
+            }
+            break;
+          }
+          default: {
+            // File mention — try open files first, then read from disk.
+            const open = openFiles.find(
+              (f) => f.path.endsWith(ref) || f.name === ref,
+            );
+            if (open) {
+              resolved = { path: open.path, content: open.content };
+            } else {
+              try {
+                const r = await window.suxai.fs.readFile(ref);
+                resolved = r;
+              } catch {
+                /* unresolved — leave the @mention in the prompt as-is */
+              }
+            }
           }
         }
-        if (resolved) attachments.push(resolved);
+        if (resolved) {
+          attachments.push(resolved);
+          consumed.push(m[0]);
+        }
       }
-      const cleaned = raw.replace(re, '').replace(/\s+/g, ' ').trim();
+      // Strip ONLY the mentions we successfully resolved; unresolved
+      // ones stay in the prompt as the user typed them, in case the
+      // model can still make sense of them.
+      let cleaned = raw;
+      for (const c of consumed) {
+        cleaned = cleaned.replace(c, '');
+      }
+      cleaned = cleaned.replace(/\s+/g, ' ').trim();
       return { cleaned, attachments };
     },
-    [openFiles],
+    [openFiles, selection, activeFile, editorContext, workspaceRoot],
   );
 
   const sendCommand = useCallback(
@@ -1708,6 +1815,7 @@ export function AIPanel() {
             ) : (
               <span className="ai__composer-hint">No file — chat only</span>
             )}
+            <TokenUsageBar />
           </div>
           <button
             type="button"

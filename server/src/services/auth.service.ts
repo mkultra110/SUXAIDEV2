@@ -7,6 +7,9 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from '../utils/token.js';
+import { env } from '../config/env.js';
+
+function envFreeLimit(): number { return env.FREE_DAILY_LIMIT_MS; }
 
 export interface PublicUser {
   id: string;
@@ -95,13 +98,17 @@ export const authService = {
     return buildTokens(user);
   },
 
-  async me(userId: string): Promise<PublicUser & { usedMs: number }> {
+  async me(userId: string): Promise<PublicUser & { usedMs: number; limitMs: number }> {
     const user = await userStore.findById(userId);
     if (!user) {
       throw Object.assign(new Error('User not found'), { status: 404, code: 'NOT_FOUND' });
     }
     const { usedMs } = await userStore.getDailyUsage(userId);
-    return { ...toPublic(user), usedMs };
+    // Pro tier has no daily cap at the server level — surface 0 as
+    // "unlimited" so the client can render an "∞" badge instead of
+    // a progress bar that fills past 100%.
+    const limitMs = user.tier === 'pro' ? 0 : Number(envFreeLimit());
+    return { ...toPublic(user), usedMs, limitMs };
   },
 
   async redeemLicense(userId: string, key: string): Promise<PublicUser> {

@@ -172,6 +172,10 @@ export interface AuthResponse {
 
 export interface MeResponse extends AuthUser {
   usedMs: number;
+  /** Daily streaming budget in ms. 0 means unlimited (e.g. pro tier).
+   *  Defaults to 0 when the server is on an older build that didn't
+   *  yet send the field. */
+  limitMs?: number;
 }
 
 export const authApi = {

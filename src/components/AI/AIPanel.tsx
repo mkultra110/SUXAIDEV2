@@ -38,6 +38,29 @@ function modelProviderForId(id: string): 'anthropic' | 'openai' | undefined {
 const MAX_AGENT_ITERATIONS = 10;
 
 /**
+ * JSON.stringify with sorted keys — used to compute a stable signature
+ * of a tool call's arguments for loop detection. Object key order is
+ * insertion-dependent in JS, so a naive JSON.stringify can give two
+ * different strings for the same conceptual payload.
+ */
+function stableStringify(value: unknown): string {
+  const seen = new WeakSet();
+  return JSON.stringify(value, function (_key, v) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      if (seen.has(v as object)) return '[circular]';
+      seen.add(v as object);
+      return Object.keys(v as Record<string, unknown>)
+        .sort()
+        .reduce<Record<string, unknown>>((acc, k) => {
+          acc[k] = (v as Record<string, unknown>)[k];
+          return acc;
+        }, {});
+    }
+    return v;
+  });
+}
+
+/**
  * Convert the panel's ChatMessage list into Anthropic agent-shaped
  * messages: assistant turns become block arrays of text + tool_use,
  * tool calls with results spawn synthetic user turns of tool_result
@@ -191,49 +214,113 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
     }
 
     // Execute each tool call with status updates.
-    for (const call of collectedTools) {
-      setMessages((m) => {
-        const next = m.map((msg) =>
-          msg.id === currentAssistantId
-            ? {
-                ...msg,
-                toolCalls: msg.toolCalls?.map((tc) =>
-                  tc.id === call.id ? { ...tc, status: 'running' as const } : tc,
-                ),
-              }
-            : msg,
-        );
-        working = next;
-        return next;
-      });
+    // Tool calls in the same assistant turn run in PARALLEL — the
+    // model emits them as one batch and Anthropic expects all
+    // tool_results back in one user turn anyway. Sequential execution
+    // wastes wall time when read_file + read_file + grep arrive together.
+    //
+    // Approval prompts are awaited inside executeTool, so two parallel
+    // edits will pop two approval dialogs back-to-back rather than
+    // showing them simultaneously (the ApprovalDialog itself is a
+    // single-instance component). That's intentional — concurrent
+    // approval UI would be confusing.
+    //
+    // Mark every call running first (so the UI shows the right state
+    // for each card), then Promise.all the executions, then write back
+    // all results in a single setMessages update.
+    setMessages((m) => {
+      const next = m.map((msg) =>
+        msg.id === currentAssistantId
+          ? {
+              ...msg,
+              toolCalls: msg.toolCalls?.map((tc) =>
+                collectedTools.some((c) => c.id === tc.id)
+                  ? { ...tc, status: 'running' as const }
+                  : tc,
+              ),
+            }
+          : msg,
+      );
+      working = next;
+      return next;
+    });
 
-      const result = await executeTool(call, {
-        approve: (c, preview) => args.requestApproval(c, preview),
-      });
+    // Loop detection: if the same (name, sortedInput) appears 3 times in
+    // a row across recent assistant turns, short-circuit with a synthetic
+    // error result so the model has to change strategy.
+    const repeatKey = (c: ToolCall): string =>
+      `${c.name}::${stableStringify(c.input)}`;
+    const recentKeys = working
+      .filter((m) => m.role === 'assistant' && m.toolCalls)
+      .flatMap((m) => m.toolCalls!.map(repeatKey))
+      .slice(-6); // last 6 tool calls across the conversation
 
-      const finalStatus: ToolCallSnapshot['status'] = result.is_error
-        ? 'error'
-        : (typeof result.content === 'string' && result.content.startsWith('User rejected'))
-        ? 'rejected'
-        : 'done';
+    type ExecOutcome = {
+      call: ToolCall;
+      result: { content: string; is_error?: boolean; tool_use_id: string };
+      status: ToolCallSnapshot['status'];
+    };
 
-      setMessages((m) => {
-        const next = m.map((msg) =>
-          msg.id === currentAssistantId
-            ? {
-                ...msg,
-                toolCalls: msg.toolCalls?.map((tc) =>
-                  tc.id === call.id
-                    ? { ...tc, status: finalStatus, result: result.content }
-                    : tc,
-                ),
-              }
-            : msg,
-        );
-        working = next;
-        return next;
-      });
-    }
+    const outcomes: ExecOutcome[] = await Promise.all(
+      collectedTools.map(async (call): Promise<ExecOutcome> => {
+        const key = repeatKey(call);
+        const sameRunCount = recentKeys.filter((k) => k === key).length;
+        if (sameRunCount >= 3) {
+          return {
+            call,
+            result: {
+              tool_use_id: call.id,
+              content:
+                `Loop detected: this exact tool call ran ${sameRunCount} times ` +
+                `with the same arguments. Change strategy — try different inputs, ` +
+                `read different files, or ask the user for clarification.`,
+              is_error: true,
+            },
+            status: 'error',
+          };
+        }
+        try {
+          const result = await executeTool(call, {
+            approve: (c, preview) => args.requestApproval(c, preview),
+          });
+          const status: ToolCallSnapshot['status'] = result.is_error
+            ? 'error'
+            : typeof result.content === 'string' &&
+              result.content.startsWith('User rejected')
+            ? 'rejected'
+            : 'done';
+          return { call, result, status };
+        } catch (err) {
+          return {
+            call,
+            result: {
+              tool_use_id: call.id,
+              content: `Tool threw: ${(err as Error).message}`,
+              is_error: true,
+            },
+            status: 'error',
+          };
+        }
+      }),
+    );
+
+    setMessages((m) => {
+      const next = m.map((msg) =>
+        msg.id === currentAssistantId
+          ? {
+              ...msg,
+              toolCalls: msg.toolCalls?.map((tc) => {
+                const out = outcomes.find((o) => o.call.id === tc.id);
+                return out
+                  ? { ...tc, status: out.status, result: out.result.content }
+                  : tc;
+              }),
+            }
+          : msg,
+      );
+      working = next;
+      return next;
+    });
 
     // Spawn a fresh assistant message for the next iteration.
     const next: ChatMessage = {
@@ -691,7 +778,19 @@ export function AIPanel() {
     abortRef.current = null;
     setStreaming(false);
     setMessages((m) =>
-      m.map((msg) => (msg.streaming ? { ...msg, streaming: false } : msg)),
+      m.map((msg) => {
+        if (!msg.streaming) return msg;
+        const next: ChatMessage = { ...msg, streaming: false };
+        // Drop any tool_use that was still streaming when the user
+        // hit Stop. Keeping a partial tool_use in the transcript
+        // would orphan it — the next request would fail with 400
+        // "tool_use without tool_result".
+        if (next.toolCalls && next.toolCalls.some((tc) => tc.status === 'pending')) {
+          next.toolCalls = next.toolCalls.filter((tc) => tc.status !== 'pending');
+          if (next.toolCalls.length === 0) delete next.toolCalls;
+        }
+        return next;
+      }),
     );
   };
 

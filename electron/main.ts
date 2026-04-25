@@ -302,7 +302,24 @@ function registerIpc() {
   ipcMain.handle('fs:write-file', async (_e, filePath: string, content: string) => {
     const safe = sanitizeFsPath(filePath);
     if (typeof content !== 'string') throw new Error('Content must be a string');
-    await fs.writeFile(safe, content, 'utf8');
+    // Atomic write: write to a sibling tmp file, fsync, then rename. A
+    // crash mid-write leaves the original file untouched. Falls back to
+    // a direct write only if the rename itself fails — e.g. crossing
+    // device boundaries on a /tmp-mounted filesystem.
+    const tmp = `${safe}.${process.pid}.${Date.now()}.tmp`;
+    try {
+      await fs.writeFile(tmp, content, 'utf8');
+      await fs.rename(tmp, safe);
+    } catch (err) {
+      // Best-effort cleanup of the tmp; ignore secondary errors.
+      try { await fs.unlink(tmp); } catch { /* */ }
+      // EXDEV (cross-device link) → fall back to a non-atomic write.
+      if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
+        await fs.writeFile(safe, content, 'utf8');
+        return true;
+      }
+      throw err;
+    }
     return true;
   });
 

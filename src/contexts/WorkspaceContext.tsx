@@ -183,35 +183,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     })();
   }, [restored]);
 
-  // Persist on change. We only need to react when the path list / active
-  // path / workspace root changes — content edits don't affect what we
-  // store. Untitled buffers (no on-disk file yet) are excluded from the
-  // saved list so we don't try to read a virtual `untitled://N` path on
-  // next launch.
-  const persistedKey = useMemo(() => {
+  // Persist on change. Keyed off a cheap fingerprint ('path1|path2||active')
+  // so content edits, selection moves, and dirty-flag toggles don't
+  // thrash localStorage. Untitled buffers are excluded from the saved
+  // list so we don't try to read a virtual `untitled://N` path on next
+  // launch.
+  const persistedFingerprint = useMemo(() => {
     const paths = state.openFiles
       .filter((f) => !f.untitled && !f.path.startsWith('untitled://'))
       .map((f) => f.path);
-    return JSON.stringify({
-      root: state.workspaceRoot,
-      paths,
-      active: state.activePath,
-    });
+    return `${state.workspaceRoot ?? ''}||${paths.join('|')}||${state.activePath ?? ''}`;
   }, [state.workspaceRoot, state.openFiles, state.activePath]);
 
   useEffect(() => {
     if (!restored) return;
-    const parsed = JSON.parse(persistedKey) as {
-      root: string | null;
-      paths: string[];
-      active: string | null;
-    };
+    const [root = '', pathStr = '', active = ''] = persistedFingerprint.split('||');
     savePersisted({
-      workspaceRoot: parsed.root,
-      openPaths: parsed.paths,
-      activePath: parsed.active,
+      workspaceRoot: root || null,
+      openPaths: pathStr ? pathStr.split('|') : [],
+      activePath: active || null,
     });
-  }, [restored, persistedKey]);
+  }, [restored, persistedFingerprint]);
 
   const openFile = useCallback((file: OpenFile) => {
     setState((s) => {

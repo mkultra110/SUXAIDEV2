@@ -49,14 +49,17 @@ export function deriveTitle(messages: ChatMessage[]): string {
  * conversation so users don't lose their history when upgrading.
  */
 export async function loadConversations(): Promise<PersistedV2> {
+  const empty: PersistedV2 = { version: 2, active: null, list: [] };
   try {
     const raw = (await window.suxai.conversations.read()) as unknown;
+    if (raw == null) return empty;
+
+    // Legacy v1 — flat array of ChatMessage. Wrap it in a single conv.
     if (Array.isArray(raw)) {
-      // Legacy v1 — flat array of ChatMessage. Wrap it.
-      const messages = raw as ChatMessage[];
-      if (messages.length === 0) {
-        return { version: 2, active: null, list: [] };
-      }
+      const messages = (raw as ChatMessage[]).filter(
+        (m) => m && typeof m.role === 'string' && typeof m.content === 'string',
+      );
+      if (messages.length === 0) return empty;
       const conv: Conversation = {
         id: newId(),
         title: deriveTitle(messages),
@@ -66,18 +69,26 @@ export async function loadConversations(): Promise<PersistedV2> {
       };
       return { version: 2, active: conv.id, list: [conv] };
     }
-    if (raw && typeof raw === 'object' && (raw as PersistedV2).version === 2) {
-      const v2 = raw as PersistedV2;
-      return {
-        version: 2,
-        active: v2.active ?? v2.list[0]?.id ?? null,
-        list: Array.isArray(v2.list) ? v2.list : [],
-      };
+
+    // v2 payload — trust only the minimum shape; anything else falls back.
+    if (typeof raw === 'object') {
+      const obj = raw as Partial<PersistedV2>;
+      if (obj.version === 2 && Array.isArray(obj.list)) {
+        const list = obj.list.filter(
+          (c): c is Conversation =>
+            !!c && typeof c.id === 'string' && Array.isArray((c as Conversation).messages),
+        );
+        const active =
+          (typeof obj.active === 'string' && list.some((c) => c.id === obj.active))
+            ? obj.active
+            : list[0]?.id ?? null;
+        return { version: 2, active, list };
+      }
     }
   } catch (err) {
     console.warn('[conv] load failed:', err);
   }
-  return { version: 2, active: null, list: [] };
+  return empty;
 }
 
 export async function saveConversations(state: PersistedV2): Promise<void> {

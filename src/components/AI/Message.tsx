@@ -186,7 +186,7 @@ export function Message({
             if (p.kind === 'code') {
               return (
                 <CodeBlock
-                  key={i}
+                  key={`${message.id}:${p.kind}:${i}`}
                   code={p.content}
                   language={p.language ?? 'plaintext'}
                   onApply={onApply}
@@ -197,7 +197,7 @@ export function Message({
             }
             return (
               <div
-                key={i}
+                key={`${message.id}:${p.kind}:${i}`}
                 className={`msg__text ${showCursor ? 'msg__text--streaming' : ''}`}
                 dangerouslySetInnerHTML={{
                   __html: renderMarkdown(p.content),

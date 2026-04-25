@@ -44,6 +44,14 @@ export function AIPanel() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // Mirror of `attachments` state — read by sendCommand via ref so a
+  // regenerate call that just set attachments via setAttachments() sees
+  // the new value on the next tick (closure would otherwise hold the
+  // previous array).
+  const attachmentsRef = useRef(attachments);
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
   // Grow the composer with the typed content, capped so it never eats
   // the whole panel.
@@ -158,10 +166,18 @@ export function AIPanel() {
   const onMessagesScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
+    // Don't even consider "sticky" logic until the area actually
+    // overflows. Prevents showJump flickering on the empty state.
+    const overflows = el.scrollHeight > el.clientHeight + 40;
+    if (!overflows) {
+      stickyRef.current = true;
+      setShowJump(false);
+      return;
+    }
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     const atBottom = distanceFromBottom < 60;
     stickyRef.current = atBottom;
-    setShowJump(!atBottom && el.scrollHeight > el.clientHeight + 40);
+    setShowJump(!atBottom);
   }, []);
 
   useEffect(() => {
@@ -242,9 +258,12 @@ export function AIPanel() {
       // Merge explicit attachments (paperclip button) with @-mention
       // attachments — de-dup by path. Computed BEFORE the message is
       // pushed so we can stash the full prompt on the message itself.
-      const seen = new Set(attachments.map((a) => a.path));
+      // Read via ref so Regenerate (which fires inside a setTimeout
+      // after setAttachments) actually sees the restored list.
+      const currentAttachments = attachmentsRef.current;
+      const seen = new Set(currentAttachments.map((a) => a.path));
       const merged = [
-        ...attachments.map((a) => ({ path: a.path, content: a.content, name: a.name })),
+        ...currentAttachments.map((a) => ({ path: a.path, content: a.content, name: a.name })),
         ...resolvedMentions.filter((a) => !seen.has(a.path)).map((a) => ({
           path: a.path,
           content: a.content,
@@ -374,7 +393,8 @@ export function AIPanel() {
       );
       abortRef.current = cancel;
     },
-    [token, input, selection, activeFile, modelId, extractMentions, attachments, messages],
+    // attachments dropped from deps — we read it via attachmentsRef above.
+    [token, input, selection, activeFile, modelId, extractMentions, messages],
   );
 
   const stop = () => {

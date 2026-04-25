@@ -5,7 +5,7 @@ import { streamAi, buildCommandPrompt, type AiCommand } from '../../api/quatarly
 import { AI_MODELS, DEFAULT_MODEL_ID } from '../../config';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
-import { Message, type ChatMessage } from './Message';
+import { Message, type ChatMessage, type ToolCallSnapshot } from './Message';
 import { ModelSelector } from './ModelSelector';
 import { ConversationSwitcher } from './ConversationSwitcher';
 import { onAiCommand } from '../../lib/commands';
@@ -16,6 +16,8 @@ import {
   saveConversations,
   type Conversation,
 } from '../../lib/conversations';
+import { AGENT_TOOLS, executeTool, type ToolCall } from '../../lib/agent';
+import type { AgentMessage, AgentContentBlock } from '../../api/quatarly';
 import { useToast } from '../ui/Toast';
 import './AIPanel.css';
 
@@ -26,6 +28,242 @@ const MAX_PERSISTED_MESSAGES = 200;
 function extractFirstCodeBlock(text: string): string | null {
   const m = text.match(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/);
   return m ? m[1] : null;
+}
+
+function modelProviderForId(id: string): 'anthropic' | 'openai' | undefined {
+  return AI_MODELS.find((m) => m.id === id)?.provider;
+}
+
+const MAX_AGENT_ITERATIONS = 10;
+
+/**
+ * Convert the panel's ChatMessage list into Anthropic agent-shaped
+ * messages: assistant turns become block arrays of text + tool_use,
+ * tool calls with results spawn synthetic user turns of tool_result
+ * blocks. Untouched chat messages stay flat strings.
+ */
+function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
+  const out: AgentMessage[] = [];
+  for (const m of messages) {
+    if (m.role === 'user') {
+      out.push({ role: 'user', content: m.historyContent ?? m.content });
+      continue;
+    }
+    // assistant
+    const blocks: AgentContentBlock[] = [];
+    if (m.content && m.content.trim()) {
+      blocks.push({ type: 'text', text: m.content });
+    }
+    if (m.toolCalls) {
+      for (const tc of m.toolCalls) {
+        blocks.push({
+          type: 'tool_use',
+          id: tc.id,
+          name: tc.name,
+          input: tc.input,
+        });
+      }
+    }
+    if (blocks.length > 0) {
+      out.push({ role: 'assistant', content: blocks });
+    }
+    // tool results (if any) become a follow-up user turn
+    const completedResults = (m.toolCalls ?? []).filter(
+      (tc) => tc.result !== undefined,
+    );
+    if (completedResults.length > 0) {
+      out.push({
+        role: 'user',
+        content: completedResults.map((tc) => ({
+          type: 'tool_result',
+          tool_use_id: tc.id,
+          content: tc.result!,
+          is_error: tc.status === 'error',
+        })),
+      });
+    }
+  }
+  return out;
+}
+
+interface AgentLoopArgs {
+  token: string;
+  modelId: string;
+  firstUserMsg: ChatMessage;
+  firstAssistantMsg: ChatMessage;
+  /** Snapshot of all messages including the first user + first assistant. */
+  conversationMessages: ChatMessage[];
+  setMessages: (
+    updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
+  ) => void;
+  setStreaming: (v: boolean) => void;
+  abortRef: React.MutableRefObject<(() => void) | null>;
+  toast: { info: (t: string, d?: string) => void; error: (t: string, d?: string) => void };
+}
+
+async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
+  const { token, modelId, firstAssistantMsg, conversationMessages, setMessages, setStreaming, abortRef, toast } = args;
+
+  let currentAssistantId = firstAssistantMsg.id;
+  // Working copy of the conversation messages — mirrors what we'll push
+  // to the panel's state. Built from the initial snapshot, then we
+  // reflect every state mutation locally so chatToAgentMessages always
+  // sees the freshest payload.
+  let working = conversationMessages.slice();
+
+  for (let iter = 0; iter < MAX_AGENT_ITERATIONS; iter++) {
+    // The streaming assistant message is the one we don't want to send
+    // back as part of the prompt — we exclude it from the agent
+    // messages we forward to the model.
+    const sent = working.filter((m) => m.id !== currentAssistantId);
+    const agentMessages = chatToAgentMessages(sent);
+
+    let stopReason = '';
+    const collectedTools: ToolCall[] = [];
+
+    await new Promise<void>((resolve, reject) => {
+      const cancel = streamAi(
+        token,
+        {
+          modelId,
+          command: 'chat',
+          prompt: '',
+          tools: AGENT_TOOLS,
+          agentMessages,
+        },
+        {
+          onToken: (chunk) => {
+            setMessages((m) => {
+              const next = m.map((msg) =>
+                msg.id === currentAssistantId
+                  ? { ...msg, content: msg.content + chunk }
+                  : msg,
+              );
+              working = next;
+              return next;
+            });
+          },
+          onToolUse: (call) => {
+            collectedTools.push(call);
+            const snapshot: ToolCallSnapshot = {
+              id: call.id,
+              name: call.name,
+              input: call.input,
+              status: 'pending',
+            };
+            setMessages((m) => {
+              const next = m.map((msg) =>
+                msg.id === currentAssistantId
+                  ? { ...msg, toolCalls: [...(msg.toolCalls ?? []), snapshot] }
+                  : msg,
+              );
+              working = next;
+              return next;
+            });
+          },
+          onStop: (reason) => {
+            stopReason = reason;
+          },
+          onDone: () => {
+            setMessages((m) => {
+              const next = m.map((msg) =>
+                msg.id === currentAssistantId ? { ...msg, streaming: false } : msg,
+              );
+              working = next;
+              return next;
+            });
+            resolve();
+          },
+          onError: (err) => reject(err),
+        },
+      );
+      abortRef.current = cancel;
+    });
+
+    if (collectedTools.length === 0 || stopReason !== 'tool_use') {
+      // Conversation ended naturally.
+      break;
+    }
+
+    // Execute each tool call with status updates.
+    for (const call of collectedTools) {
+      setMessages((m) => {
+        const next = m.map((msg) =>
+          msg.id === currentAssistantId
+            ? {
+                ...msg,
+                toolCalls: msg.toolCalls?.map((tc) =>
+                  tc.id === call.id ? { ...tc, status: 'running' as const } : tc,
+                ),
+              }
+            : msg,
+        );
+        working = next;
+        return next;
+      });
+
+      const result = await executeTool(call, {
+        approve: async (c, preview) => {
+          if (!preview) return true;
+          const summary = c.name === 'edit_file'
+            ? `Apply this edit?\n\n${preview.path}\n\n— ${
+                String((c.input as { search?: string })?.search ?? '').slice(0, 200)
+              }\n+ ${String((c.input as { replace?: string })?.replace ?? '').slice(0, 200)}`
+            : `Write to ${preview.path}?\n\nProposed (${preview.proposed.length} bytes):\n${preview.proposed.slice(0, 400)}${
+                preview.proposed.length > 400 ? '\n…' : ''
+              }`;
+          return window.confirm(summary);
+        },
+      });
+
+      const finalStatus: ToolCallSnapshot['status'] = result.is_error
+        ? 'error'
+        : (typeof result.content === 'string' && result.content.startsWith('User rejected'))
+        ? 'rejected'
+        : 'done';
+
+      setMessages((m) => {
+        const next = m.map((msg) =>
+          msg.id === currentAssistantId
+            ? {
+                ...msg,
+                toolCalls: msg.toolCalls?.map((tc) =>
+                  tc.id === call.id
+                    ? { ...tc, status: finalStatus, result: result.content }
+                    : tc,
+                ),
+              }
+            : msg,
+        );
+        working = next;
+        return next;
+      });
+    }
+
+    // Spawn a fresh assistant message for the next iteration.
+    const next: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      modelId,
+    };
+    setMessages((m) => {
+      const updated = [...m, next];
+      working = updated;
+      return updated;
+    });
+    currentAssistantId = next.id;
+  }
+
+  // If we exited because of MAX_AGENT_ITERATIONS, ensure the streaming
+  // flag clears.
+  setMessages((m) =>
+    m.map((msg) => (msg.streaming ? { ...msg, streaming: false } : msg)),
+  );
+  setStreaming(false);
+  abortRef.current = null;
+  toast.info('Agent finished');
 }
 
 export function AIPanel() {
@@ -334,6 +572,42 @@ export function AIPanel() {
               : m.content,
         }));
 
+      // ── Agent mode branch ──────────────────────────────────────────
+      // Anthropic-only for now. The model gets the AGENT_TOOLS schema
+      // and decides when to call read_file / list_dir / edit_file etc.
+      // Each tool call runs locally (with user approval for writes),
+      // its result is fed back as a user/tool_result message, and we
+      // loop until the model emits stop_reason='end_turn'.
+      if (
+        activeConv?.agentMode &&
+        modelProviderForId(modelId) === 'anthropic' &&
+        token
+      ) {
+        runAgentLoop({
+          token,
+          modelId,
+          firstUserMsg: userMsg,
+          firstAssistantMsg: assistantMsg,
+          conversationMessages: [...messages, userMsg, assistantMsg],
+          setMessages,
+          setStreaming,
+          abortRef,
+          toast,
+        }).catch((err) => {
+          console.error('[agent] loop failed:', err);
+          setMessages((m) =>
+            m.map((msg) =>
+              msg.id === assistantMsg.id
+                ? { ...msg, streaming: false, error: (err as Error).message }
+                : msg,
+            ),
+          );
+          setStreaming(false);
+          abortRef.current = null;
+        });
+        return;
+      }
+
       const cancel = streamAi(
         token,
         {
@@ -394,7 +668,7 @@ export function AIPanel() {
       abortRef.current = cancel;
     },
     // attachments dropped from deps — we read it via attachmentsRef above.
-    [token, input, selection, activeFile, modelId, extractMentions, messages],
+    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast],
   );
 
   const stop = () => {
@@ -523,6 +797,36 @@ export function AIPanel() {
             onRename={renameConversation}
           />
           <ModelSelector value={modelId} onChange={setModelId} />
+          <button
+            type="button"
+            className={`ai__agent-toggle ${activeConv?.agentMode ? 'ai__agent-toggle--on' : ''}`}
+            onClick={() => {
+              if (!activeConvId) return;
+              if (modelProviderForId(modelId) !== 'anthropic') {
+                toast.info(
+                  'Agent mode needs Claude',
+                  'Pick an Anthropic model — agent tools are wired through Claude only for now.',
+                );
+                return;
+              }
+              setConversations((list) =>
+                list.map((c) =>
+                  c.id === activeConvId ? { ...c, agentMode: !c.agentMode } : c,
+                ),
+              );
+            }}
+            title="Agent mode lets the AI read and edit files itself, with your approval"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M12 2v4m0 12v4M4 12H2m20 0h-2M5 5l3 3m8 8 3 3M5 19l3-3m8-8 3-3"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+              />
+            </svg>
+            Agent {activeConv?.agentMode ? 'on' : 'off'}
+          </button>
         </div>
         <button
           className="ai__clear"

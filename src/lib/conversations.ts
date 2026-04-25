@@ -6,6 +6,8 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
+  /** When true, send tools with each request and run the agent loop. */
+  agentMode?: boolean;
 }
 
 interface PersistedV2 {

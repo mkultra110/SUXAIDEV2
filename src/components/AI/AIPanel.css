@@ -325,3 +325,41 @@
   resize: none;
   overflow-y: auto;
 }
+
+/* Agent mode toggle pill in the header. */
+.ai__agent-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+.ai__agent-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+}
+.ai__agent-toggle--on {
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(84, 87, 216, 0.12));
+  border-color: rgba(125, 130, 248, 0.5);
+  color: #d8dbff;
+}
+.ai__agent-toggle--on:hover { filter: brightness(1.1); }
+
+.msg__tools {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}

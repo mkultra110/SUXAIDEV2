@@ -69,6 +69,8 @@ router.post(
 
     await streamCompletion(req.body, {
       onDelta: (delta) => writeEvent({ delta }),
+      onToolUse: (call) => writeEvent({ tool_use: call }),
+      onStop: (reason) => writeEvent({ stop_reason: reason }),
       onDone: () => writeDone(),
       onError: (err) => {
         writeEvent({ error: err.message });

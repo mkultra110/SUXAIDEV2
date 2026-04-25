@@ -24,6 +24,30 @@ export function findModel(id: string): SupportedModel | undefined {
   return SUPPORTED_MODELS.find((m) => m.id === id);
 }
 
+// Agent-mode content blocks. When `agentMessages` / `tools` are present,
+// the request takes precedence over `prompt` + `history` and we hand the
+// Anthropic API the rich block-shaped messages directly.
+const textBlock = z.object({ type: z.literal('text'), text: z.string() });
+const toolUseBlock = z.object({
+  type: z.literal('tool_use'),
+  id: z.string(),
+  name: z.string(),
+  input: z.unknown(),
+});
+const toolResultBlock = z.object({
+  type: z.literal('tool_result'),
+  tool_use_id: z.string(),
+  content: z.string(),
+  is_error: z.boolean().optional(),
+});
+const contentBlock = z.union([textBlock, toolUseBlock, toolResultBlock]);
+
+const toolDefinition = z.object({
+  name: z.string().min(1).max(80),
+  description: z.string().max(4000),
+  input_schema: z.record(z.string(), z.unknown()),
+});
+
 export const aiRequestSchema = z.object({
   modelId: z.string().refine((v) => SUPPORTED_MODELS.some((m) => m.id === v), {
     message: 'Unsupported model',
@@ -46,6 +70,17 @@ export const aiRequestSchema = z.object({
       fileContent: z.string().max(1_000_000).optional(),
       selection: z.string().max(200_000).optional(),
     })
+    .optional(),
+  // --- Agent-mode extensions ---
+  tools: z.array(toolDefinition).max(20).optional(),
+  agentMessages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.union([z.string(), z.array(contentBlock).max(40)]),
+      }),
+    )
+    .max(60)
     .optional(),
 });
 

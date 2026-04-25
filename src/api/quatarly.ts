@@ -8,6 +8,20 @@ export interface AiHistoryTurn {
   content: string;
 }
 
+export interface AgentTextBlock { type: 'text'; text: string }
+export interface AgentToolUseBlock { type: 'tool_use'; id: string; name: string; input: unknown }
+export interface AgentToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+export type AgentContentBlock = AgentTextBlock | AgentToolUseBlock | AgentToolResultBlock;
+export interface AgentMessage {
+  role: 'user' | 'assistant';
+  content: string | AgentContentBlock[];
+}
+
 export interface AiRequest {
   modelId: string;
   command: AiCommand;
@@ -21,10 +35,15 @@ export interface AiRequest {
     fileContent?: string;
     selection?: string;
   };
+  // Agent-mode extensions. Set both to enable tool-using agent loop.
+  tools?: { name: string; description: string; input_schema: unknown }[];
+  agentMessages?: AgentMessage[];
 }
 
 export interface AiStreamHandlers {
   onToken?: (chunk: string) => void;
+  onToolUse?: (call: { id: string; name: string; input: unknown }) => void;
+  onStop?: (reason: string) => void;
   onDone?: (full: string) => void;
   onError?: (err: Error) => void;
 }
@@ -90,7 +109,13 @@ export function streamAi(
             handlers.onDone?.(full);
             return;
           }
-          let obj: { delta?: string; error?: string } | null = null;
+          interface SseEvent {
+            delta?: string;
+            tool_use?: { id: string; name: string; input: unknown };
+            stop_reason?: string;
+            error?: string;
+          }
+          let obj: SseEvent | null = null;
           try {
             obj = JSON.parse(payload);
           } catch {
@@ -100,6 +125,12 @@ export function streamAi(
           if (obj?.delta) {
             full += obj.delta;
             handlers.onToken?.(obj.delta);
+          }
+          if (obj?.tool_use) {
+            handlers.onToolUse?.(obj.tool_use);
+          }
+          if (obj?.stop_reason) {
+            handlers.onStop?.(obj.stop_reason);
           }
         }
       }

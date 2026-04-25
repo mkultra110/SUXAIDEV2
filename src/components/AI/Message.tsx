@@ -1,8 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Spinner } from '../ui/Spinner';
 import { CodeBlock } from './CodeBlock';
+import { ToolCall } from './ToolCall';
 import { renderMarkdown } from '../../lib/markdown';
 import './Message.css';
+
+export interface ToolCallSnapshot {
+  id: string;
+  name: string;
+  input: unknown;
+  status: 'pending' | 'running' | 'done' | 'error' | 'rejected';
+  /** Stringified result (or error message) once the tool has run. */
+  result?: string;
+}
 
 export interface ChatMessage {
   id: string;
@@ -21,6 +31,8 @@ export interface ChatMessage {
   /** Files this user message attached. Used to re-attach context when
    *  the user regenerates a reply. */
   attachments?: { path: string; name: string; content: string }[];
+  /** Agent-mode tool calls emitted by this assistant turn. */
+  toolCalls?: ToolCallSnapshot[];
 }
 
 interface Props {
@@ -206,6 +218,13 @@ export function Message({
             );
           })}
         </div>
+        {message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="msg__tools">
+            {message.toolCalls.map((tc) => (
+              <ToolCall key={tc.id} call={tc} />
+            ))}
+          </div>
+        )}
         {message.error && <div className="msg__error">⚠ {message.error}</div>}
       </div>
     </div>

@@ -19,6 +19,7 @@ import {
 } from '../../lib/conversations';
 import { executeTool, toolsForMode, type ToolCall } from '../../lib/agent';
 import { buildAdditionalDataXml } from '../../lib/additional-data';
+import { buildRepoMap, formatRepoMapBlock } from '../../lib/repo-map';
 import { TokenUsageBar } from './TokenUsageBar';
 import type { AgentMessage, AgentContentBlock } from '../../api/quatarly';
 import { useToast } from '../ui/Toast';
@@ -1384,11 +1385,28 @@ export function AIPanel() {
         // Load AGENTS.md/CLAUDE.md once per workspace and reuse the
         // string across iterations — avoids repeated FS reads and
         // keeps the prompt prefix stable for Anthropic caching.
+        // Append a repo-map block (Aider PageRank ranking) so the
+        // model has a structural overview of the codebase from
+        // turn 1 — saves expensive list_dir / read_file roundtrips.
         let preamble = '';
         if (preambleRef.current?.root === workspaceRoot) {
           preamble = preambleRef.current.preamble;
         } else {
-          preamble = await loadProjectPreamble(workspaceRoot);
+          const guidance = await loadProjectPreamble(workspaceRoot);
+          let repoMap = '';
+          try {
+            const text = await buildRepoMap({
+              workspaceRoot,
+              activeFilePath: activeFile?.path ?? null,
+              openPaths: openFiles.map((f) => f.path),
+              recentPaths: editorContext.recentlyViewedFiles,
+              budgetTokens: 1024,
+            });
+            repoMap = formatRepoMapBlock(text);
+          } catch (err) {
+            console.warn('[repo-map] build failed:', err);
+          }
+          preamble = [guidance, repoMap].filter(Boolean).join('\n\n---\n\n');
           preambleRef.current = { root: workspaceRoot, preamble };
         }
         if (preambleCancelled) {

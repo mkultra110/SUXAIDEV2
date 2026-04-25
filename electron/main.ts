@@ -89,6 +89,10 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    // Prevent the force-show fallback from firing after the window is
+    // gone — otherwise quitting during the 3-second startup window
+    // logs a spurious warning and leaves a dangling timer.
+    clearTimeout(forceShowTimer);
     mainWindow = null;
   });
 

@@ -90,6 +90,9 @@ export class UpdateManager {
       const actual = await sha256OfFile(destPath);
       if (actual.toLowerCase() !== sha256.toLowerCase()) {
         this.emitStatus('failed');
+        // Delete the corrupt download so the next attempt starts
+        // clean and we don't accumulate junk in the temp dir.
+        fs.unlink(destPath, () => { /* best-effort */ });
         throw new Error(`Checksum mismatch: expected ${sha256}, got ${actual}`);
       }
     }

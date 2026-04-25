@@ -96,6 +96,11 @@ function langFromPath(p: string): string {
   // Filename-based fallbacks (no extension or special names).
   const name = p.split(/[\\/]/).pop()?.toLowerCase() ?? '';
   if (name === 'dockerfile' || name.startsWith('dockerfile.')) return 'dockerfile';
+  if (name === 'makefile' || name.endsWith('.mk') || name.endsWith('.mak')) return 'shell';
+  if (name === '.gitignore' || name === '.dockerignore' || name === '.npmignore') return 'plaintext';
+  if (name === '.editorconfig' || name.startsWith('.env')) return 'ini';
+  if (name === 'cmakelists.txt' || name.endsWith('.cmake')) return 'cmake';
+  if (name === '.bashrc' || name === '.zshrc' || name === '.profile') return 'shell';
 
   return map[ext] ?? 'plaintext';
 }

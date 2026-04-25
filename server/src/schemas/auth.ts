@@ -35,8 +35,19 @@ export const refreshSchema = z.object({
 
 export type RefreshInput = z.infer<typeof refreshSchema>;
 
+// SUXAI license format: SUXAI-XXXX-XXXX-XXXX where each block is
+// uppercase alphanumerics matching the generator in store/licenses.ts.
+// Strict validation here so a malformed input gets a helpful error
+// instead of a silent "key not found".
 export const redeemLicenseSchema = z.object({
-  key: z.string().trim().min(8).max(64),
+  key: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(
+      /^SUXAI-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/,
+      'License keys look like SUXAI-XXXX-XXXX-XXXX (uppercase letters and digits).',
+    ),
 });
 
 export type RedeemLicenseInput = z.infer<typeof redeemLicenseSchema>;

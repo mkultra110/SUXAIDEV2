@@ -31,6 +31,7 @@ export function EditorPanel() {
     setSelection,
     pendingDiff,
     newUntitled,
+    saveActiveFile,
   } = useWorkspace();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -86,6 +87,24 @@ export function EditorPanel() {
 
       if (e.shiftKey) return;
       const k = e.key.toLowerCase();
+
+      if (k === 's') {
+        // Universal save shortcut. Works on every file in the editor —
+        // dirty or not — so the user has a one-handed way to flush
+        // changes to disk. Untitled files trigger Save As via
+        // saveActiveFile's internal fallback.
+        if (!activeFileRef.current) return;
+        e.preventDefault();
+        saveActiveFile()
+          .then((res) => {
+            if (res === 'saved') toast.info('Saved', activeFileRef.current?.name);
+            else if (res === 'unchanged') {
+              /* no-op — silently ignore */
+            }
+          })
+          .catch((err) => toast.error('Save failed', (err as Error).message));
+        return;
+      }
 
       if (k === 'n') {
         e.preventDefault();
@@ -154,6 +173,15 @@ export function EditorPanel() {
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+
+      // Dispose this editor's TextModel when the host React component
+      // unmounts. Without this, Monaco keeps every TextModel ever
+      // created in its global registry — opening/closing 200 tabs in
+      // a session leaks 200 backing buffers (each up to MAX_FILE_BYTES).
+      editor.onDidDispose(() => {
+        const m = editor.getModel();
+        try { m?.dispose(); } catch { /* already disposed */ }
+      });
 
       // Subtle custom theme matching our palette.
       monaco.editor.defineTheme('suxai-dark', {

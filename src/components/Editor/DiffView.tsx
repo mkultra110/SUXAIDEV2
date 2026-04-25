@@ -129,18 +129,24 @@ export function DiffView({ diff }: { diff: PendingDiff }) {
   const rejectAll = () =>
     setHunks((hs) => hs.map((h) => ({ ...h, decision: 'reject' })));
 
+  const [busy, setBusy] = useState(false);
   const apply = () => {
-    const merged = materialize(changes, hunks);
-    // Use the workspace state directly to apply the merged content.
-    // Not every file in pendingDiff is guaranteed to be the active file
-    // any more (e.g. user switched tabs while diffing). If the file is
-    // still open, update its content; otherwise surface an open call.
-    const target = openFiles.find((f) => f.path === diff.path) ?? activeFile;
-    if (target) {
-      // Spread-update through openFile which handles the "already open" case.
-      openFile({ ...target, content: merged, dirty: true });
+    if (busy) return; // double-click guard
+    setBusy(true);
+    try {
+      const merged = materialize(changes, hunks);
+      // Use the workspace state directly to apply the merged content.
+      // Not every file in pendingDiff is guaranteed to be the active file
+      // any more (e.g. user switched tabs while diffing). If the file is
+      // still open, update its content; otherwise surface an open call.
+      const target = openFiles.find((f) => f.path === diff.path) ?? activeFile;
+      if (target) {
+        openFile({ ...target, content: merged, dirty: true });
+      }
+      workspace.closeDiff();
+    } finally {
+      setBusy(false);
     }
-    workspace.closeDiff();
   };
 
   const decidedCount = hunks.filter((h) => h.decision !== null).length;
@@ -169,8 +175,8 @@ export function DiffView({ diff }: { diff: PendingDiff }) {
           <Button variant="secondary" size="sm" onClick={closeDiff}>
             Cancel
           </Button>
-          <Button variant="primary" size="sm" onClick={apply}>
-            Apply
+          <Button variant="primary" size="sm" onClick={apply} disabled={busy}>
+            {busy ? 'Applying…' : 'Apply'}
           </Button>
         </div>
       </div>

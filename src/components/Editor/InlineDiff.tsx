@@ -86,6 +86,26 @@ export function InlineDiff({ diff }: { diff: PendingDiff }) {
       // get their content swapped.
       const isUntitled = diff.path.startsWith('untitled://');
       if (!isUntitled) {
+        // Refuse to apply if the file changed on disk after the diff
+        // was opened — silently overwriting the user's manual edits
+        // would be a data-loss bug. Compare against the original we
+        // captured when the diff was launched.
+        try {
+          const onDiskNow = await window.suxai.fs.readFile(diff.path);
+          if (onDiskNow.content !== diff.original) {
+            const stale = new Error(
+              'File changed on disk since this diff was opened. Reject and re-run to refresh.',
+            );
+            throw stale;
+          }
+        } catch (readErr) {
+          // ENOENT or read error — bubble up so the user knows the
+          // proposed apply is unsafe.
+          if ((readErr as Error).message?.includes('changed on disk')) throw readErr;
+          throw new Error(
+            `Could not verify file before save: ${(readErr as Error).message ?? readErr}`,
+          );
+        }
         await window.suxai.fs.writeFile(diff.path, diff.proposed);
       }
       const target = openFiles.find((f) => f.path === diff.path);

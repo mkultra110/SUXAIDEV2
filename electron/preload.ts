@@ -35,10 +35,16 @@ const api = {
     openFile: (): Promise<OpenFileResult> => ipcRenderer.invoke('fs:open-file'),
     openFolder: (): Promise<string | null> => ipcRenderer.invoke('fs:open-folder'),
     readDir: (p: string): Promise<FileEntry[]> => ipcRenderer.invoke('fs:read-dir', p),
-    readFile: (p: string): Promise<{ path: string; content: string }> =>
+    readFile: (p: string): Promise<{ path: string; content: string; mtimeMs: number }> =>
       ipcRenderer.invoke('fs:read-file', p),
-    writeFile: (p: string, content: string): Promise<boolean> =>
-      ipcRenderer.invoke('fs:write-file', p, content),
+    writeFile: (
+      p: string,
+      content: string,
+      opts?: { skipMtimeCheck?: boolean },
+    ): Promise<boolean> =>
+      ipcRenderer.invoke('fs:write-file', p, content, opts),
+    forgetMtime: (p: string): Promise<boolean> =>
+      ipcRenderer.invoke('fs:forget-mtime', p),
     saveAs: (content: string, suggestedName?: string): Promise<string | null> =>
       ipcRenderer.invoke('fs:save-as', content, suggestedName),
     createFile: (parent: string, name: string): Promise<string> =>

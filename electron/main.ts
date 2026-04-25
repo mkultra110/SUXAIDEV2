@@ -590,10 +590,44 @@ function registerIpc() {
     return normalized;
   }
 
+  // mtime tracking (v0.11.4): every fs:read-file stamps a sourceOfTruth
+  // entry so subsequent fs:write-file (whether agent-driven via
+  // edit_file or user-driven via Save/InlineDiff Accept) can detect
+  // a concurrent external edit and refuse to clobber. Cleared on
+  // explicit "I know what I'm doing" reload (fs:reload-mtime). Cap
+  // 5K entries to avoid unbounded growth on a really long session.
+  const lastSeenMtime = new Map<string, number>();
+  const MTIME_CACHE_CAP = 5000;
+  function rememberMtime(safePath: string, ms: number): void {
+    if (lastSeenMtime.size >= MTIME_CACHE_CAP) {
+      // FIFO eviction: drop oldest insertion — Map preserves insertion order.
+      const first = lastSeenMtime.keys().next().value;
+      if (first !== undefined) lastSeenMtime.delete(first);
+    }
+    lastSeenMtime.set(safePath, ms);
+  }
+
   ipcMain.handle('fs:read-file', async (_e, filePath: string) => {
     const safe = sanitizeFsPath(filePath, { mustExist: true });
+    const stat = await fs.stat(safe);
+    rememberMtime(safe, stat.mtimeMs);
     const content = await fs.readFile(safe, 'utf8');
-    return { path: safe, content };
+    return { path: safe, content, mtimeMs: stat.mtimeMs };
+  });
+
+  /**
+   * Forget the cached mtime for a path. Called by the renderer when
+   * the user explicitly accepts a "file changed externally" prompt
+   * to keep their pending edit, OR after a Save-As that landed at a
+   * brand-new path. Without this, a stale mtime entry from a prior
+   * session would cause every write to fail with STALE_FILE.
+   */
+  ipcMain.handle('fs:forget-mtime', async (_e, filePath: string) => {
+    try {
+      const safe = sanitizeFsPath(filePath);
+      lastSeenMtime.delete(safe);
+    } catch { /* path invalid — drop silently */ }
+    return true;
   });
 
   // Shared helper: atomic write (tmp + fsync + rename) with EXDEV
@@ -626,10 +660,49 @@ function registerIpc() {
     }
   }
 
-  ipcMain.handle('fs:write-file', async (_e, filePath: string, content: string) => {
+  ipcMain.handle('fs:write-file', async (
+    _e,
+    filePath: string,
+    content: string,
+    opts?: { skipMtimeCheck?: boolean },
+  ) => {
     const safe = sanitizeFsPath(filePath);
     if (typeof content !== 'string') throw new Error('Content must be a string');
+    // Concurrent-edit guard (v0.11.4): if we previously read this
+    // file and the on-disk mtime has moved since, refuse to clobber.
+    // Caller can opt out via { skipMtimeCheck: true } when the user
+    // already acknowledged the warning in a "keep my version" modal.
+    // Brand-new files (no entry in the map) always succeed — that's
+    // a creation, not a clobber.
+    const expected = lastSeenMtime.get(safe);
+    if (expected !== undefined && !opts?.skipMtimeCheck) {
+      try {
+        const current = await fs.stat(safe);
+        if (Math.abs(current.mtimeMs - expected) > 1) {
+          // 1 ms tolerance — some FS round mtime to integer ms.
+          const err = new Error(
+            `${safe} was modified externally since SUXAI last read it. ` +
+              `Reload the file or pass skipMtimeCheck:true to overwrite.`,
+          );
+          (err as Error & { code?: string }).code = 'STALE_FILE';
+          throw err;
+        }
+      } catch (err) {
+        // ENOENT means the file no longer exists — let the write
+        // recreate it. Other stat errors propagate.
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          if ((err as Error & { code?: string }).code === 'STALE_FILE') throw err;
+          // permission etc — let the write try and fail naturally.
+        }
+      }
+    }
     await atomicWrite(safe, content);
+    // Refresh the cached mtime so subsequent reads/writes see the
+    // post-write timestamp.
+    try {
+      const after = await fs.stat(safe);
+      rememberMtime(safe, after.mtimeMs);
+    } catch { /* */ }
     return true;
   });
 

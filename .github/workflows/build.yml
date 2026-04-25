@@ -51,7 +51,12 @@ jobs:
           name: SUXAI-Windows
           path: release/*.exe
           if-no-files-found: error
-          retention-days: 30
+          # 1 day is plenty: the artifact only needs to survive long
+          # enough for the `deploy` job downstream to download it.
+          # Anything older was eating up the 0.5 GB Actions storage
+          # quota for nothing — the real binary lives on the VPS at
+          # /opt/suxai/releases/ once `deploy` finishes.
+          retention-days: 1
 
   deploy:
     needs: build-windows

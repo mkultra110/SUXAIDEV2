@@ -60,6 +60,17 @@ const api = {
     write: (workspaceRoot: string, slug: string, content: string): Promise<{ path: string }> =>
       ipcRenderer.invoke('plan:write', workspaceRoot, slug, content),
   },
+  commands: {
+    list: (workspaceRoot: string): Promise<
+      Array<{
+        name: string;
+        path: string;
+        description?: string;
+        mode?: 'composer' | 'ask';
+        body: string;
+      }>
+    > => ipcRenderer.invoke('commands:list', workspaceRoot),
+  },
   search: {
     grep: (input: {
       pattern: string;

@@ -508,6 +508,29 @@ export function AIPanel() {
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  // Custom slash commands loaded from <workspace>/.suxai/commands/.
+  // Refreshed on workspace change. Empty when no workspace open or
+  // no command files present (the directory is optional).
+  const [customCommands, setCustomCommands] = useState<
+    Array<{ name: string; description?: string; mode?: 'composer' | 'ask'; body: string }>
+  >([]);
+  useEffect(() => {
+    if (!workspaceRoot || !window.suxai.commands?.list) {
+      setCustomCommands([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await window.suxai.commands.list(workspaceRoot);
+        if (cancelled) return;
+        setCustomCommands(list);
+      } catch (err) {
+        console.warn('[commands] list failed', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [workspaceRoot]);
 
   // Approval flow:
   //   • edit_file / write_file with a preview → open the InlineDiff
@@ -759,6 +782,17 @@ export function AIPanel() {
           return true;
         }
         case 'help': {
+          const customSection =
+            customCommands.length > 0
+              ? '\n\n**Custom commands** (from `.suxai/commands/*.md`):\n\n' +
+                customCommands
+                  .map(
+                    (c) =>
+                      `- \`/${c.name}\`${c.description ? ' — ' + c.description : ''}` +
+                      (c.mode === 'ask' ? ' _(plan mode)_' : ''),
+                  )
+                  .join('\n')
+              : '';
           const helpMsg: ChatMessage = {
             id: crypto.randomUUID(),
             role: 'assistant',
@@ -784,7 +818,8 @@ export function AIPanel() {
               '- `Shift+Alt+⌫` — reject current hunk\n' +
               '- `Alt+J` / `Alt+K` — next / previous hunk\n' +
               '- `Cmd/Ctrl+↵` — accept all changes\n' +
-              '- `Esc` — close the diff (= reject all)',
+              '- `Esc` — close the diff (= reject all)' +
+              customSection,
           };
           setMessages((m) => [...m, helpMsg]);
           setInput('');
@@ -848,6 +883,31 @@ export function AIPanel() {
           return true;
         }
       }
+      // Custom commands from <workspace>/.suxai/commands/<name>.md.
+      // Variables substituted: {{selection}}, {{file}}, {{arg}}.
+      // The body becomes the user's next prompt verbatim — no LLM
+      // round-trip yet, the user still presses send.
+      const custom = customCommands.find((c) => c.name === cmd);
+      if (custom) {
+        let body = custom.body;
+        body = body.replace(/\{\{\s*selection\s*\}\}/g, selection || '');
+        body = body.replace(/\{\{\s*file\s*\}\}/g, activeFile?.path ?? '');
+        body = body.replace(/\{\{\s*arg\s*\}\}/g, arg);
+        setInput(body);
+        // Optional: switch mode if the command asked for it.
+        if (custom.mode && activeConvId) {
+          setConversations((list) =>
+            list.map((c) =>
+              c.id === activeConvId ? { ...c, mode: custom.mode!, agentMode: true } : c,
+            ),
+          );
+        }
+        toast.info(
+          `/${cmd}${custom.description ? ' — ' + custom.description : ''}`,
+          'Body loaded into composer. Press send to run.',
+        );
+        return true;
+      }
       // Argument-bearing fall-through (`/something foo bar`) → not a
       // built-in. Swallow only if cmd looks like a no-arg builtin we
       // know about. Otherwise return false so the AI command parser
@@ -857,7 +917,8 @@ export function AIPanel() {
     },
     [
       activeConvId, activeConv?.mode, activeConv?.agentMode,
-      modelId, setMessages, toast,
+      modelId, setMessages, toast, customCommands,
+      selection, activeFile?.path,
     ],
   );
 

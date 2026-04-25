@@ -260,6 +260,70 @@ function registerIpc() {
   // execution. workspaceRoot is passed by the renderer because the
   // main process doesn't track it directly (the renderer is the
   // single source of truth for "current workspace").
+  // ---- Custom slash commands ----------------------------------------
+  // Markdown files dropped in <workspace>/.suxai/commands/<name>.md
+  // become user-defined slash commands. Front-matter is optional but
+  // when present (between --- fences) we parse `description` and
+  // `mode` (composer | ask). The body is injected as the user's
+  // next message verbatim. Variables {{selection}}, {{file}},
+  // {{branch}} are substituted at invocation time by the renderer.
+  ipcMain.handle(
+    'commands:list',
+    async (_e, workspaceRoot: string) => {
+      if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) return [];
+      let safeRoot: string;
+      try { safeRoot = sanitizeFsPath(workspaceRoot, { mustExist: true }); }
+      catch { return []; }
+      const dir = path.join(safeRoot, '.suxai', 'commands');
+      let entries: string[];
+      try { entries = await fs.readdir(dir); }
+      catch { return []; /* directory just doesn't exist — fine */ }
+      const out: Array<{
+        name: string;
+        path: string;
+        description?: string;
+        mode?: 'composer' | 'ask';
+        body: string;
+      }> = [];
+      for (const entry of entries) {
+        if (!entry.endsWith('.md')) continue;
+        const name = entry.slice(0, -3).toLowerCase();
+        if (!/^[a-z0-9_-]+$/.test(name)) continue; // ignore weird filenames
+        let raw: string;
+        try { raw = await fs.readFile(path.join(dir, entry), 'utf8'); }
+        catch { continue; }
+        // Optional YAML-like front-matter parser. Permissive: only
+        // recognises `description:` and `mode:` keys; everything else
+        // is forwarded as part of the body.
+        let description: string | undefined;
+        let mode: 'composer' | 'ask' | undefined;
+        let body = raw;
+        const fm = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/);
+        if (fm) {
+          const lines = fm[1].split('\n');
+          for (const line of lines) {
+            const m = line.match(/^\s*(\w+)\s*:\s*"?([^"]*)"?\s*$/);
+            if (!m) continue;
+            const key = m[1].toLowerCase();
+            const value = m[2].trim();
+            if (key === 'description') description = value;
+            if (key === 'mode' && (value === 'composer' || value === 'ask')) mode = value;
+          }
+          body = raw.slice(fm[0].length);
+        }
+        out.push({
+          name,
+          path: path.join(dir, entry),
+          description,
+          mode,
+          body: body.trim(),
+        });
+      }
+      out.sort((a, b) => a.name.localeCompare(b.name));
+      return out;
+    },
+  );
+
   ipcMain.handle(
     'plan:write',
     async (_e, workspaceRoot: string, slug: string, content: string) => {

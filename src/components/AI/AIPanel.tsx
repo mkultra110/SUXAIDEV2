@@ -777,6 +777,14 @@ export function AIPanel() {
         modelProviderForId(modelId) === 'anthropic' &&
         token
       ) {
+        // Install a no-op abort handler immediately so the user's
+        // Stop button isn't a dead button between setStreaming(true)
+        // and the first streamAi() call inside runAgentLoop. The
+        // real cancel handler replaces this within milliseconds.
+        let preambleCancelled = false;
+        abortRef.current = () => {
+          preambleCancelled = true;
+        };
         // Load AGENTS.md/CLAUDE.md once per workspace and reuse the
         // string across iterations — avoids repeated FS reads and
         // keeps the prompt prefix stable for Anthropic caching.
@@ -786,6 +794,16 @@ export function AIPanel() {
         } else {
           preamble = await loadProjectPreamble(workspaceRoot);
           preambleRef.current = { root: workspaceRoot, preamble };
+        }
+        if (preambleCancelled) {
+          // User hit Stop while preamble was loading. Bail before we
+          // even open a stream.
+          setMessages((m) =>
+            m.map((msg) => (msg.streaming ? { ...msg, streaming: false } : msg)),
+          );
+          setStreaming(false);
+          abortRef.current = null;
+          return;
         }
         runAgentLoop({
           token,

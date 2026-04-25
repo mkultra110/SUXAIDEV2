@@ -75,14 +75,37 @@ export function ApprovalDialog({ request }: Props) {
       className="approval__overlay"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="approval-title"
       onClick={() => settle(false)}
     >
-      <div className="approval__card glass-strong" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="approval__card glass-strong"
+        onClick={(e) => e.stopPropagation()}
+        // Trap Tab inside the card so keyboard users can't escape to
+        // the page behind the modal.
+        onKeyDown={(e) => {
+          if (e.key !== 'Tab') return;
+          const root = e.currentTarget;
+          const focusables = root.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+          );
+          if (focusables.length === 0) return;
+          const first = focusables[0];
+          const last = focusables[focusables.length - 1];
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }}
+      >
         <div className="approval__head">
           <span className={`approval__badge approval__badge--${dangerous ? 'danger' : call.name}`}>
             {dangerous ? '⚠ danger' : call.name}
           </span>
-          <span className="approval__title">
+          <span className="approval__title" id="approval-title">
             {labelFor(call.name)}
           </span>
         </div>

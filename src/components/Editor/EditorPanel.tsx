@@ -166,9 +166,13 @@ export function EditorPanel() {
         return;
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [newUntitled, toast]);
+    // Capture phase: intercept before Monaco's internal command
+    // dispatcher claims the keystroke (Monaco listens at the editor
+    // DOM in bubble phase). Without this, Cmd-S / Ctrl-S would
+    // sometimes still be eaten by Monaco even though we preventDefault.
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [newUntitled, saveActiveFile, toast]);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -232,6 +236,13 @@ export function EditorPanel() {
         },
       });
       monaco.editor.setTheme('suxai-dark');
+
+      // Cmd+S inside Monaco is unbound by default but some bundles
+      // claim it for "format". We register a no-op so Monaco never
+      // intercepts it — our window-level handler does the actual save.
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+        /* save handled by EditorPanel's window keydown listener */
+      });
 
       // Ctrl+K is Monaco's chord leader for "delete line" etc. Override it
       // so our inline AI edit gets the keystroke cleanly. Dispatches the

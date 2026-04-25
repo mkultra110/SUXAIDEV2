@@ -607,11 +607,49 @@ function registerIpc() {
     lastSeenMtime.set(safePath, ms);
   }
 
+  // v0.11.12: file format quirks (BOM + EOL) are tracked alongside
+  // mtime so atomicWrite can round-trip a CRLF .bat or a UTF-8-BOM
+  // JSON file unchanged. Without this, every agent edit silently
+  // converted the file to LF + no-BOM — a noisy diff in git for the
+  // user even when the actual code didn't change.
+  interface FileQuirks {
+    eol: '\r\n' | '\n';
+    bom: boolean;
+  }
+  const lastSeenQuirks = new Map<string, FileQuirks>();
+  function detectQuirks(raw: Buffer): FileQuirks {
+    // BOM = first 3 bytes are EF BB BF (UTF-8 BOM). UTF-16 BOMs are
+    // rarer and Monaco/Node read them as text differently — skip
+    // for now, treat as no-BOM.
+    const bom = raw.length >= 3 && raw[0] === 0xef && raw[1] === 0xbb && raw[2] === 0xbf;
+    // Sniff EOL on the first 64 KB. CRLF if any \r\n found.
+    const sample = raw.subarray(bom ? 3 : 0, Math.min(raw.length, 64 * 1024));
+    let crlfCount = 0;
+    let lfCount = 0;
+    for (let i = 0; i < sample.length; i++) {
+      if (sample[i] === 0x0a) {
+        if (i > 0 && sample[i - 1] === 0x0d) crlfCount++;
+        else lfCount++;
+      }
+    }
+    return {
+      eol: crlfCount > lfCount ? '\r\n' : '\n',
+      bom,
+    };
+  }
+
   ipcMain.handle('fs:read-file', async (_e, filePath: string) => {
     const safe = sanitizeFsPath(filePath, { mustExist: true });
     const stat = await fs.stat(safe);
     rememberMtime(safe, stat.mtimeMs);
-    const content = await fs.readFile(safe, 'utf8');
+    const raw = await fs.readFile(safe);
+    const quirks = detectQuirks(raw);
+    lastSeenQuirks.set(safe, quirks);
+    // Strip the BOM from the returned content (Monaco doesn't want
+    // it inline) and normalise CRLF→LF so the renderer sees a
+    // clean string. We restore both at write time.
+    let content = quirks.bom ? raw.subarray(3).toString('utf8') : raw.toString('utf8');
+    if (quirks.eol === '\r\n') content = content.replace(/\r\n/g, '\n');
     return { path: safe, content, mtimeMs: stat.mtimeMs };
   });
 
@@ -633,12 +671,30 @@ function registerIpc() {
   // Shared helper: atomic write (tmp + fsync + rename) with EXDEV
   // fallback. Reused by fs:write-file and fs:save-as so user-initiated
   // saves and agent-initiated saves get the same durability guarantees.
+  // v0.11.12: also reapplies the BOM + CRLF quirks captured at the
+  // last read of this file. The renderer never sees those bytes; the
+  // file on disk gets them back exactly as it had them.
+  function applyQuirks(safe: string, content: string): string {
+    const q = lastSeenQuirks.get(safe);
+    if (!q) return content;
+    let out = content;
+    if (q.eol === '\r\n') {
+      // Renderer normalised \r\n → \n at read time; restore here.
+      out = out.replace(/\r?\n/g, '\r\n');
+    }
+    if (q.bom) out = '﻿' + out;
+    return out;
+  }
   async function atomicWrite(safe: string, content: string): Promise<void> {
+    // v0.11.12: round-trip the file's original BOM + CRLF marks
+    // before the actual write. Renderer always passes a clean LF
+    // string; we put the bytes back exactly as the file had them.
+    const onDiskContent = applyQuirks(safe, content);
     const tmp = `${safe}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.tmp`;
     try {
       const fh = await fs.open(tmp, 'w');
       try {
-        await fh.writeFile(content, 'utf8');
+        await fh.writeFile(onDiskContent, 'utf8');
         await fh.sync(); // flush page cache to disk before rename
       } finally {
         await fh.close();
@@ -649,7 +705,7 @@ function registerIpc() {
       if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
         const fh = await fs.open(safe, 'w');
         try {
-          await fh.writeFile(content, 'utf8');
+          await fh.writeFile(onDiskContent, 'utf8');
           await fh.sync();
         } finally {
           await fh.close();

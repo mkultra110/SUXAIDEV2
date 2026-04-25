@@ -154,34 +154,70 @@ function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
 }
 
 // Cap the agent transcript at MAX_AGENT_MESSAGES while preserving
-// tool_use/tool_result pairs. Anthropic rejects a transcript that ends
-// (or starts) with a tool_use missing its tool_result, or vice versa.
-// We always keep:
-//   1. The very first user message (kicks the conversation off; if we
-//      drop it, the model loses task framing).
-//   2. The last MAX_AGENT_MESSAGES messages — but if the slice would
-//      cut between a tool_use turn and the tool_result turn that
-//      follows, we shift the cut earlier.
+// tool_use ↔ tool_result pair invariants. Anthropic rejects (400)
+// any transcript where:
+//   - an assistant turn emits tool_use_id `X` but no subsequent
+//     user turn contains a tool_result with that id, OR
+//   - a user turn emits tool_result for an id that has no preceding
+//     tool_use in the assistant transcript.
+//
+// v0.11.5 fix: previously the trimmer only walked forward past
+// tool_result-only USER messages. If the naive cut landed on an
+// ASSISTANT message containing a tool_use whose tool_result lived
+// in messages[cut-1] (already dropped), the transcript ended up
+// with an orphan tool_use → guaranteed 400 next request.
+//
+// New strategy: find the latest "safe" cut by walking forward from
+// the naive cut to the next user message that is NOT a tool_result-
+// only synthetic turn (i.e. a real user query OR an assistant turn
+// whose tool history ends cleanly inside the kept window).
+//
+// Safe boundaries:
+//   - cut === messages.length (nothing to keep — give up trimming;
+//     /compact will handle it on the next turn)
+//   - messages[cut] is a user turn with string content
+//   - messages[cut] is a user turn whose content array contains at
+//     least one non-tool_result block (regular user query)
+//   - messages[cut] is an assistant turn (tool_use ids in
+//     messages[<cut] are dropped along with their results — clean cut)
 const MAX_AGENT_MESSAGES = 40;
 function trimAgentMessages(messages: AgentMessage[]): AgentMessage[] {
   if (messages.length <= MAX_AGENT_MESSAGES) return messages;
   const first = messages[0];
   let cut = messages.length - MAX_AGENT_MESSAGES;
-  // If the first kept message is a "user" turn whose content is purely
-  // tool_result blocks, that orphans the previous tool_use. Walk forward
-  // until we land on a regular user/assistant boundary.
-  while (cut < messages.length) {
-    const m = messages[cut];
-    const isToolResultOnly =
-      m.role === 'user' &&
-      Array.isArray(m.content) &&
-      m.content.every((b) => (b as { type?: string }).type === 'tool_result');
-    if (!isToolResultOnly) break;
+
+  const isSafeCut = (m: AgentMessage): boolean => {
+    // String content user message → safe (a user query).
+    if (m.role === 'user' && typeof m.content === 'string') return true;
+    if (m.role === 'user' && Array.isArray(m.content)) {
+      // Tool_result-only user turn = synthetic response to a prior
+      // assistant's tool_use → NOT safe (cutting here orphans the
+      // previous assistant's tool_use).
+      const hasNonToolResult = m.content.some(
+        (b) => (b as { type?: string }).type !== 'tool_result',
+      );
+      return hasNonToolResult;
+    }
+    // Assistant message → safe to start fresh from here. Anything
+    // before is dropped wholesale, including unmatched tool_uses.
+    return m.role === 'assistant';
+  };
+
+  while (cut < messages.length && !isSafeCut(messages[cut])) {
     cut++;
   }
+
+  if (cut >= messages.length) {
+    // No safe cut found within the trim window. Refuse to trim this
+    // turn — better to send a slightly oversized transcript than a
+    // 400-prone one. /compact (auto-triggered at 70 % context) will
+    // reset the conversation cleanly next time.
+    return messages;
+  }
+
   const tail = messages.slice(cut);
-  // Re-prepend the original opening message so the model still sees the
-  // task framing. If the head is identical to tail[0], skip the dup.
+  // Re-prepend the original opening message so the model still sees
+  // task framing. Skip the dup if the cut landed exactly on first.
   if (tail.length > 0 && first === tail[0]) return tail;
   return [first, ...tail];
 }

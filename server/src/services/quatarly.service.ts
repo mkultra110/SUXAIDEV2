@@ -359,83 +359,173 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
     }
     const reader = res.body.getReader();
-    const decoder = new TextDecoder();
+    // fatal:false so a truncated multi-byte UTF-8 char at a chunk
+    // boundary becomes U+FFFD instead of throwing — the next chunk's
+    // continuation bytes will still complete the codepoint.
+    const decoder = new TextDecoder('utf-8', { fatal: false });
     let buf = '';
     // Track in-progress content blocks. Anthropic streams a tool_use
     // as: content_block_start (with id+name+empty input) → many
     // input_json_delta events → content_block_stop. We accumulate the
-    // partial JSON and emit a single onToolUse when it closes.
+    // partial JSON and emit a single onToolUse when it closes UNLESS
+    // the stream was truncated by max_tokens — in that case the
+    // partial is malformed and we drop it (retrying upstream is the
+    // caller's job).
     type PendingBlock =
       | { kind: 'text' }
       | { kind: 'tool_use'; id: string; name: string; partial: string };
     const blocks: Map<number, PendingBlock> = new Map();
+    let lastStopReason: string | null = null;
+    let sawMessageStop = false;
+
+    /**
+     * Pull the next complete SSE frame out of `buf`. SSE separates
+     * events with a blank line — RFC 8895 §9.2 specifies it as
+     * `\n\n`, but proxies in the wild (Caddy, nginx) sometimes
+     * inject CRLF. Handle both. Returns `null` when the buffer
+     * doesn't yet contain a full frame.
+     */
+    const takeFrame = (): string | null => {
+      const lf = buf.indexOf('\n\n');
+      const crlf = buf.indexOf('\r\n\r\n');
+      let end: number;
+      let sepLen: number;
+      if (lf < 0 && crlf < 0) return null;
+      if (crlf < 0 || (lf >= 0 && lf < crlf)) {
+        end = lf;
+        sepLen = 2;
+      } else {
+        end = crlf;
+        sepLen = 4;
+      }
+      const frame = buf.slice(0, end);
+      buf = buf.slice(end + sepLen);
+      return frame;
+    };
 
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, idx).trim();
-        buf = buf.slice(idx + 1);
-        if (!line || !line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
+
+      let frame: string | null;
+      while ((frame = takeFrame()) !== null) {
+        // A frame can contain multiple lines; join them as the SSE
+        // spec dictates (concatenate all `data:` lines with '\n').
+        // Anthropic in practice emits single-line `data:` payloads
+        // but we honour the spec for robustness against proxies.
+        let payload = '';
+        for (const rawLine of frame.split(/\r?\n/)) {
+          const line = rawLine.trim();
+          if (!line.startsWith('data:')) continue;
+          if (payload) payload += '\n';
+          payload += line.slice(5).trimStart();
+        }
         if (!payload) continue;
-        let obj: any;
+        let obj: Record<string, unknown> & { type?: string; delta?: Record<string, unknown>; index?: number; content_block?: Record<string, unknown>; error?: Record<string, unknown> };
         try {
           obj = JSON.parse(payload);
         } catch {
+          // Malformed JSON in a data: payload should NEVER happen
+          // from Anthropic. Log silently and keep going — continuing
+          // is safer than tearing the whole stream down.
           continue;
         }
 
         if (obj.type === 'content_block_start') {
-          const i = obj.index;
+          const i = obj.index ?? 0;
           const cb = obj.content_block;
-          if (cb?.type === 'tool_use') {
+          if (cb && (cb as { type?: string }).type === 'tool_use') {
             blocks.set(i, {
               kind: 'tool_use',
-              id: cb.id,
-              name: cb.name,
+              id: (cb as { id: string }).id,
+              name: (cb as { name: string }).name,
               partial: '',
             });
           } else {
             blocks.set(i, { kind: 'text' });
           }
         } else if (obj.type === 'content_block_delta') {
-          const i = obj.index;
+          const i = obj.index ?? 0;
           const block = blocks.get(i);
-          if (obj.delta?.type === 'text_delta' && typeof obj.delta.text === 'string') {
-            if (obj.delta.text.length > 0) h.onDelta(obj.delta.text);
+          const delta = obj.delta as { type?: string; text?: string; partial_json?: string } | undefined;
+          if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+            if (delta.text.length > 0) h.onDelta(delta.text);
           } else if (
-            obj.delta?.type === 'input_json_delta' &&
+            delta?.type === 'input_json_delta' &&
             block?.kind === 'tool_use' &&
-            typeof obj.delta.partial_json === 'string'
+            typeof delta.partial_json === 'string'
           ) {
-            block.partial += obj.delta.partial_json;
+            block.partial += delta.partial_json;
           }
+          // thinking_delta / signature_delta / citations_delta are
+          // currently dropped — they'll be wired up in v0.12 when the
+          // proxy switches to raw byte-for-byte forwarding.
         } else if (obj.type === 'content_block_stop') {
-          const i = obj.index;
+          const i = obj.index ?? 0;
           const block = blocks.get(i);
           if (block?.kind === 'tool_use') {
-            let input: unknown = {};
-            try {
-              input = block.partial ? JSON.parse(block.partial) : {};
-            } catch {
-              input = { _raw: block.partial };
+            // Don't try to emit a tool_use when the stream was
+            // truncated mid-input-json by max_tokens — the partial
+            // is guaranteed-malformed and dispatching it would
+            // execute a tool with garbage args.
+            if (lastStopReason === 'max_tokens') {
+              // Skip emission. The route already received the
+              // stop_reason event and will report max_tokens to the
+              // caller; the caller retries with max_tokens × 2.
+            } else {
+              let input: unknown = {};
+              let inputOk = true;
+              try {
+                input = block.partial ? JSON.parse(block.partial) : {};
+              } catch {
+                inputOk = false;
+              }
+              if (inputOk) {
+                h.onToolUse?.({ id: block.id, name: block.name, input });
+              } else {
+                // Parsed-failure with NO max_tokens marker: rare,
+                // typically a network corruption. Don't dispatch a
+                // garbage tool — surface as an error to the caller.
+                throw new Error(
+                  `tool_use input_json was malformed JSON (block.id=${block.id}, ` +
+                    `${block.partial.length} chars accumulated)`,
+                );
+              }
             }
-            h.onToolUse?.({ id: block.id, name: block.name, input });
           }
           blocks.delete(i);
         } else if (obj.type === 'message_delta') {
-          const reason = obj.delta?.stop_reason;
-          if (typeof reason === 'string') h.onStop?.(reason);
+          const delta = obj.delta as { stop_reason?: string } | undefined;
+          if (typeof delta?.stop_reason === 'string') {
+            lastStopReason = delta.stop_reason;
+            h.onStop?.(delta.stop_reason);
+          }
         } else if (obj.type === 'message_stop') {
+          sawMessageStop = true;
           h.onDone();
           return;
+        } else if (obj.type === 'ping') {
+          // SSE keepalive — ignore. Useful only as a liveness signal.
         } else if (obj.type === 'error') {
-          throw new Error(obj.error?.message ?? 'Anthropic stream error');
+          const errBody = obj.error as { type?: string; message?: string } | undefined;
+          throw new Error(
+            `${errBody?.type ?? 'anthropic_error'}: ${errBody?.message ?? 'unknown'}`,
+          );
         }
       }
+    }
+    if (!sawMessageStop) {
+      // Stream EOF without a message_stop event = truncation
+      // (network drop, upstream proxy idle timeout, Anthropic 529).
+      // anthropic-sdk-typescript #842 documents this exact failure
+      // mode. Throw a structured error so the caller doesn't treat
+      // a partial response as end_turn.
+      const err = new Error(
+        'Stream ended without message_stop event (upstream truncated)',
+      );
+      (err as Error & { code?: string }).code = 'STREAM_TRUNCATED';
+      throw err;
     }
     h.onDone();
   } catch (err) {

@@ -258,13 +258,15 @@ function registerIpc() {
   });
 
   ipcMain.handle('fs:read-dir', async (_e, dirPath: string) => {
-    if (typeof dirPath !== 'string' || dirPath.length === 0 || dirPath.includes('\0')) {
-      throw new Error('Invalid path');
-    }
-    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    // Run the path through the same allowlist as fs:read-file so a
+    // rogue caller can't enumerate /etc, /root/.ssh, or any other
+    // FS_DENY-listed directory. mustExist:true guarantees we don't
+    // 404-leak by reflecting the input path on a non-existent target.
+    const safe = sanitizeFsPath(dirPath, { mustExist: true });
+    const entries = await fs.readdir(safe, { withFileTypes: true });
     return entries.map((e) => ({
       name: e.name,
-      path: path.join(dirPath, e.name),
+      path: path.join(safe, e.name),
       isDirectory: e.isDirectory(),
     }));
   });

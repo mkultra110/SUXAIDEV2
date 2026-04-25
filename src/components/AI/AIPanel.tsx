@@ -43,6 +43,22 @@ export function AIPanel() {
   const abortRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Grow the composer with the typed content, capped so it never eats
+  // the whole panel.
+  const autoResize = useCallback((el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    const next = Math.min(el.scrollHeight, 240);
+    el.style.height = `${Math.max(40, next)}px`;
+  }, []);
+
+  useEffect(() => {
+    // Reset height when the input is cleared programmatically (after send).
+    if (textareaRef.current && input === '') {
+      textareaRef.current.style.height = '';
+    }
+  }, [input]);
   const toast = useToast();
 
   const activeConv = useMemo(
@@ -133,11 +149,39 @@ export function AIPanel() {
     };
   }, [conversations, activeConvId, historyLoaded]);
 
+  // Stick-to-bottom: only auto-scroll when the user is already near the
+  // bottom. If they've scrolled up to read, leave them alone (Cursor
+  // does this; pulling the user back to the latest token is jarring).
+  const stickyRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
+
+  const onMessagesScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distanceFromBottom < 60;
+    stickyRef.current = atBottom;
+    setShowJump(!atBottom && el.scrollHeight > el.clientHeight + 40);
+  }, []);
+
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    if (stickyRef.current) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      // Re-evaluate the jump button visibility when content grows.
+      onMessagesScroll();
     }
-  }, [messages]);
+  }, [messages, onMessagesScroll]);
+
+  const jumpToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    stickyRef.current = true;
+    setShowJump(false);
+  }, []);
 
   const parseSlashCommand = useCallback((raw: string): { cmd: AiCommand; rest: string } | null => {
     const m = raw.match(/^\/(explain|refactor|fix|optimize)\b\s*(.*)/is);
@@ -195,14 +239,45 @@ export function AIPanel() {
       // the raw @-token polluting the user prompt.
       const { cleaned, attachments: resolvedMentions } = await extractMentions(text);
 
+      // Merge explicit attachments (paperclip button) with @-mention
+      // attachments — de-dup by path. Computed BEFORE the message is
+      // pushed so we can stash the full prompt on the message itself.
+      const seen = new Set(attachments.map((a) => a.path));
+      const merged = [
+        ...attachments.map((a) => ({ path: a.path, content: a.content, name: a.name })),
+        ...resolvedMentions.filter((a) => !seen.has(a.path)).map((a) => ({
+          path: a.path,
+          content: a.content,
+          name: a.path.split(/[\\/]/).pop() ?? a.path,
+        })),
+      ];
+
+      const attachmentBlock =
+        merged.length > 0
+          ? merged
+              .map((a) => `\n\n<<< FILE: ${a.path} >>>\n${a.content}\n<<< END >>>`)
+              .join('')
+          : '';
+
+      const visibleContent =
+        command === 'chat'
+          ? cleaned || text
+          : `${command.toUpperCase()}${cleaned ? `: ${cleaned}` : ''}`;
+      const fullPromptForHistory =
+        buildCommandPrompt(command, cleaned || selection || activeFile?.content || '') +
+        attachmentBlock;
+
       const userMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'user',
         command,
-        content:
-          command === 'chat'
-            ? cleaned || text
-            : `${command.toUpperCase()}${cleaned ? `: ${cleaned}` : ''}`,
+        content: visibleContent,
+        // Stash the full prompt (with attachments + the active file
+        // snippet) so subsequent turns can replay this context to the
+        // model. Without this the AI loses the file the conversation
+        // started about as soon as we move past turn 1.
+        historyContent: fullPromptForHistory,
+        attachments: merged.length > 0 ? merged : undefined,
       };
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
@@ -216,24 +291,7 @@ export function AIPanel() {
       setAttachments([]);
       setStreaming(true);
 
-      // Merge explicit attachments (paperclip button) with @-mention
-      // attachments — de-dup by path.
-      const seen = new Set(attachments.map((a) => a.path));
-      const merged = [
-        ...attachments.map((a) => ({ path: a.path, content: a.content })),
-        ...resolvedMentions.filter((a) => !seen.has(a.path)),
-      ];
-
-      const attachmentBlock =
-        merged.length > 0
-          ? merged
-              .map((a) => `\n\n<<< FILE: ${a.path} >>>\n${a.content}\n<<< END >>>`)
-              .join('')
-          : '';
-
-      const prompt =
-        buildCommandPrompt(command, cleaned || selection || activeFile?.content || '') +
-        attachmentBlock;
+      const prompt = fullPromptForHistory;
 
       // Snapshot the target file at send-time — if the user switches tabs
       // mid-stream, we still diff against the file they asked about.
@@ -242,13 +300,20 @@ export function AIPanel() {
           ? activeFile
           : null;
 
-      // Include the prior turns of THIS conversation so the model stays
-      // coherent across follow-ups. We strip streaming/error metadata
-      // and cap to the last 20 turns to keep the request manageable.
+      // Prior turns sent to the model. Each user turn replays its full
+      // historyContent (so file dumps stay in scope), each assistant
+      // turn replays its visible content. Cap at 20 turns to keep
+      // requests manageable.
       const history = messages
         .filter((m) => !m.streaming && !m.error && m.content.trim().length > 0)
         .slice(-20)
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => ({
+          role: m.role,
+          content:
+            m.role === 'user'
+              ? m.historyContent ?? m.content
+              : m.content,
+        }));
 
       const cancel = streamAi(
         token,
@@ -465,22 +530,108 @@ export function AIPanel() {
         </button>
       </div>
 
-      <div className="ai__messages" ref={scrollRef}>
+      <div
+        className="ai__messages"
+        ref={scrollRef}
+        onScroll={onMessagesScroll}
+      >
         {messages.length === 0 ? (
           <div className="ai__empty">
+            <div className="ai__empty-icon" aria-hidden>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 2 L14 9 L21 11 L14 13 L12 21 L10 13 L3 11 L10 9 Z"
+                  fill="url(#g1)"
+                  stroke="currentColor"
+                  strokeWidth="0.6"
+                  strokeLinejoin="round"
+                />
+                <defs>
+                  <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#7d82f8" />
+                    <stop offset="100%" stopColor="#5457d8" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
             <div className="ai__empty-badge">{selectedModel.label}</div>
             <h3>Ready when you are</h3>
             <p>
-              Ask a question, or use a command above. The AI sees your active file and any selected code —
-              never your entire project.
+              Ask a question, attach a file, or pick one of the prompts below.
+              The AI sees your active file and any code you select — never your
+              whole project.
             </p>
+            <div className="ai__empty-chips">
+              {[
+                'Explain the active file',
+                'Find a bug in the selection',
+                'Refactor for readability',
+                'Write a unit test for this',
+                'Convert this to TypeScript',
+              ].map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className="ai__empty-chip"
+                  onClick={() => {
+                    setInput(p);
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           messages.map((m) => (
-            <Message key={m.id} message={m} onApply={onApplyCode} onDiff={onDiffCode} />
+            <Message
+              key={m.id}
+              message={m}
+              onApply={onApplyCode}
+              onDiff={onDiffCode}
+              onDelete={(target) =>
+                setMessages((list) => list.filter((x) => x.id !== target.id))
+              }
+              onRegenerate={(target) => {
+                if (target.role !== 'assistant') return;
+                // Find the user message that prompted this reply, drop
+                // both, and re-send with the user's original prompt.
+                const idx = messages.findIndex((x) => x.id === target.id);
+                if (idx <= 0) return;
+                const userTurn = messages[idx - 1];
+                if (userTurn.role !== 'user') return;
+                setMessages((list) =>
+                  list.filter((x) => x.id !== target.id && x.id !== userTurn.id),
+                );
+                setInput(userTurn.content);
+                setAttachments(userTurn.attachments ?? []);
+                // Defer so state settles before re-sending.
+                setTimeout(() => sendCommand(userTurn.command ?? 'chat', userTurn.content), 0);
+              }}
+            />
           ))
         )}
       </div>
+
+      {showJump && (
+        <button
+          type="button"
+          className="ai__jump"
+          onClick={jumpToBottom}
+          aria-label="Jump to latest"
+          title="Jump to latest"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
 
       <form
         className="ai__composer"
@@ -524,17 +675,29 @@ export function AIPanel() {
           </div>
         )}
         <textarea
+          ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            autoResize(e.currentTarget);
+          }}
           placeholder={
             token
               ? 'Ask anything — slash commands (/explain, /refactor, /fix, /optimize) and @file mentions work here'
               : 'Sign in to use AI'
           }
-          rows={3}
+          rows={1}
           disabled={!token || streaming}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+              // Plain Enter sends; Shift+Enter inserts a newline.
+              e.preventDefault();
+              const slash = parseSlashCommand(input);
+              if (slash) sendCommand(slash.cmd, slash.rest);
+              else sendCommand('chat');
+            } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              // Cmd/Ctrl+Enter still works as the explicit "send" combo
+              // for users used to it.
               e.preventDefault();
               const slash = parseSlashCommand(input);
               if (slash) sendCommand(slash.cmd, slash.rest);

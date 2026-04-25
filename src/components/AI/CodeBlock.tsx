@@ -6,9 +6,12 @@ interface Props {
   language: string;
   onApply?: (code: string) => void;
   onDiff?: (code: string) => void;
+  /** Show a blinking caret at the end while the model is still
+   *  streaming this block. */
+  streaming?: boolean;
 }
 
-export function CodeBlock({ code, language, onApply, onDiff }: Props) {
+export function CodeBlock({ code, language, onApply, onDiff, streaming }: Props) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
@@ -41,7 +44,12 @@ export function CodeBlock({ code, language, onApply, onDiff }: Props) {
           )}
         </div>
       </div>
-      <pre className="codeblk__pre"><code>{code}</code></pre>
+      <pre className="codeblk__pre">
+        <code>
+          {code}
+          {streaming && <span className="codeblk__caret" aria-hidden />}
+        </code>
+      </pre>
     </div>
   );
 }

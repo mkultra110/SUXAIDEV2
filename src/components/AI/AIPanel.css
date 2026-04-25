@@ -250,3 +250,78 @@
   border-color: var(--color-border-strong);
 }
 .ai__attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Empty-state polish. */
+.ai__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 36px 20px;
+  gap: 10px;
+}
+.ai__empty-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(125, 130, 248, 0.08);
+  border: 1px solid var(--color-border-accent);
+  color: var(--color-accent);
+  margin-bottom: 4px;
+}
+.ai__empty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 12px;
+}
+.ai__empty-chip {
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.ai__empty-chip:hover {
+  background: rgba(125, 130, 248, 0.1);
+  color: var(--color-text);
+  border-color: var(--color-border-accent);
+}
+
+/* Floating "jump to latest" button shown when the user has scrolled
+   away from the bottom and new tokens are still arriving. */
+.ai__jump {
+  position: absolute;
+  right: 16px;
+  bottom: 130px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(14, 20, 34, 0.95);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-accent);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  z-index: 5;
+  animation: suxai-fade-in 200ms var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.ai__jump:hover { background: rgba(20, 26, 42, 0.98); }
+
+/* Composer textarea now grows with content (managed via JS). */
+.ai__composer textarea {
+  min-height: 40px;
+  max-height: 240px;
+  resize: none;
+  overflow-y: auto;
+}

@@ -2,8 +2,8 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
-import { aiRequestSchema, SUPPORTED_MODELS } from '../schemas/ai.js';
-import { streamCompletion } from '../services/quatarly.service.js';
+import { aiRequestSchema, aiCompleteSchema, SUPPORTED_MODELS } from '../schemas/ai.js';
+import { streamCompletion, completeFIM } from '../services/quatarly.service.js';
 import { userStore } from '../store/users.js';
 import { env } from '../config/env.js';
 
@@ -83,6 +83,44 @@ router.post(
     userStore.trackUsage(userId, elapsed).catch((err) => {
       console.error('[ai] failed to track usage:', err);
     });
+  },
+);
+
+// Tab autocomplete: separate rate limiter (much higher cap because
+// every keystroke can trigger a request, debounced client-side).
+// Free-tier daily quota still applies via the /ai/chat path which
+// is where the real money goes.
+const completeLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 240, // 4/sec sustained — debounce 100ms client-side caps it well below
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Tab completion rate limit exceeded', code: 'RATE_LIMIT' },
+});
+
+router.post(
+  '/complete',
+  requireAuth,
+  completeLimiter,
+  validateBody(aiCompleteSchema),
+  async (req, res) => {
+    // Free-tier sanity check: if the user has already burned their
+    // daily quota, skip silently. We don't want autocomplete to
+    // surface 402s on every keystroke.
+    const userId = req.user!.sub;
+    const usage = await userStore.getDailyUsage(userId);
+    if (usage.tier === 'free' && usage.usedMs >= env.FREE_DAILY_LIMIT_MS) {
+      res.json({ completion: '' });
+      return;
+    }
+    try {
+      const completion = await completeFIM(req.body);
+      res.json({ completion: completion ?? '' });
+    } catch {
+      // Never surface autocomplete failures to the client — they'd
+      // pop up as a generic error toast every few seconds.
+      res.json({ completion: '' });
+    }
   },
 );
 

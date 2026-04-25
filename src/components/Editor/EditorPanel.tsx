@@ -8,6 +8,8 @@ import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { emitAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
 import { useEditorContextTracker } from '../../lib/editor-context-tracker';
+import { registerTabCompletion } from '../../lib/tab-completion';
+import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
 
@@ -45,6 +47,22 @@ export function EditorPanel() {
   const [actionBar, setActionBar] = useState<ActionBarPos | null>(null);
   const [settings] = useSettings();
   const toast = useToast();
+  const { token } = useAuth();
+
+  // Register Monaco's InlineCompletionsProvider once per session.
+  // Stable refs are read on demand via the closure — re-registering
+  // would tear down active ghost text on every settings tweak.
+  const settingsRef = useRef(settings);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => {
+    const dispose = registerTabCompletion({
+      getToken: () => tokenRef.current ?? null,
+      isEnabled: () => settingsRef.current.tabCompletion !== false,
+    });
+    return () => { try { dispose.dispose(); } catch { /* */ } };
+  }, []);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [zoomOffset, setZoomOffset] = useState(0);
@@ -522,6 +540,14 @@ export function EditorPanel() {
               tabSize: settings.tabSize,
               wordWrap: settings.wordWrap ? 'on' : 'off',
               guides: { indentation: true, bracketPairs: true },
+              // Tab autocomplete (ghost text). Even when the toggle
+              // is off in settings, leaving this enabled is fine —
+              // the provider returns no items, so no ghost text shows.
+              inlineSuggest: {
+                enabled: true,
+                mode: 'subwordSmart',
+                showToolbar: 'onHover',
+              },
             }}
           />
         ) : (

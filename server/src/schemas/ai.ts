@@ -123,3 +123,26 @@ export const aiRequestSchema = z
   );
 
 export type AiRequestInput = z.infer<typeof aiRequestSchema>;
+
+/**
+ * Inline completion (Tab autocomplete) request schema. Powers
+ * /ai/complete which forwards to a fast model (Haiku 4.5) with an
+ * FIM-style prompt. Kept lean: 8 KB prefix / 8 KB suffix max so the
+ * model latency stays under ~300 ms target.
+ */
+export const aiCompleteSchema = z.object({
+  /** Code immediately before the caret (most recent at end). */
+  prefix: z.string().max(8000),
+  /** Code immediately after the caret. */
+  suffix: z.string().max(8000),
+  /** File language id (typescript, cpp, python, …). Helps the model
+   *  pick the right syntax. */
+  language: z.string().max(32).optional(),
+  /** Optional bag of nearby snippets the client wants to bias the
+   *  completion towards (recently edited code, related symbols, etc.). */
+  related_context: z.string().max(16000).optional(),
+  /** Cap on output tokens. Default 200; max 1024. */
+  max_tokens: z.number().int().min(16).max(1024).optional(),
+});
+
+export type AiCompleteInput = z.infer<typeof aiCompleteSchema>;

@@ -429,3 +429,76 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
     h.onError(err as Error);
   }
 }
+
+/**
+ * Non-streaming, fast-model completion used by Tab autocomplete.
+ * Calls Haiku 4.5 with a FIM-style prompt and returns just the
+ * inserted code. No system prompt cache breakpoints because the
+ * call is single-shot — caching would cost more than it saves.
+ *
+ * Returns `null` on any error so callers can no-op silently —
+ * autocomplete failure must NEVER surface to the user as a popup
+ * (it would interrupt their typing).
+ */
+export async function completeFIM(input: import('../schemas/ai.js').AiCompleteInput): Promise<string | null> {
+  if (!env.QUATARLY_API_KEY) return null;
+  const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/messages`;
+  const language = input.language ?? 'plaintext';
+  // FIM prompt. Anthropic doesn't have a dedicated FIM mode, so we
+  // emulate it with a single user message. The system prompt is
+  // intentionally terse — Haiku is fast and follows tight
+  // instructions well.
+  const userText =
+    (input.related_context
+      ? `<related_context>\n${input.related_context}\n</related_context>\n\n`
+      : '') +
+    `<code_before lang="${language}">\n${input.prefix}</code_before>\n` +
+    `<code_after>\n${input.suffix}</code_after>\n` +
+    `Continue the code that goes between <code_before> and <code_after>. ` +
+    `Output ONLY the inserted code, no explanation, no fences. Stop at a ` +
+    `natural completion boundary (end of statement, end of expression).`;
+  const body = {
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: input.max_tokens ?? 200,
+    stream: false,
+    system: [
+      {
+        type: 'text',
+        text:
+          'You are an inline code completion model. Output ONLY the code ' +
+          'that fills in between the <code_before> and <code_after> tags. ' +
+          'No prose, no fences, no <code_before>/<code_after> tags in your ' +
+          'output. Match the language and indentation style of the prefix.',
+      },
+    ],
+    messages: [
+      {
+        role: 'user',
+        content: [{ type: 'text', text: userText }],
+      },
+    ],
+  };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        authorization: `Bearer ${env.QUATARLY_API_KEY}`,
+        'x-api-key': env.QUATARLY_API_KEY,
+        apiKey: env.QUATARLY_API_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const obj = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    if (!obj.content || obj.content.length === 0) return null;
+    const piece = obj.content.find((b) => b.type === 'text');
+    if (!piece || typeof piece.text !== 'string') return null;
+    // Strip stray code fences in case the model ignored the
+    // instruction — happens occasionally even with Haiku.
+    return piece.text.replace(/^```[\w-]*\n?/, '').replace(/\n?```\s*$/, '');
+  } catch {
+    return null;
+  }
+}

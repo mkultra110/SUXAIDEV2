@@ -91,6 +91,12 @@ export function SettingsDialog() {
                 onChange={(v) => update({ minimap: v })}
               />
             </Row>
+            <Row label="Tab autocomplete">
+              <Toggle
+                value={settings.tabCompletion}
+                onChange={(v) => update({ tabCompletion: v })}
+              />
+            </Row>
           </Section>
 
           <Section title="AI">

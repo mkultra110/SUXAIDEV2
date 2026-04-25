@@ -6,6 +6,10 @@ export interface Settings {
   wordWrap: boolean;
   minimap: boolean;
   defaultModelId: string;
+  /** Tab autocomplete (Cursor-style ghost text via Haiku 4.5).
+   *  Disable if you don't want every keystroke to round-trip the
+   *  VPS — saves quota on free tier. */
+  tabCompletion: boolean;
 }
 
 const KEY = 'suxai.settings.v1';
@@ -16,6 +20,7 @@ const DEFAULTS: Settings = {
   wordWrap: true,
   minimap: false,
   defaultModelId: 'claude-sonnet-4-6-thinking',
+  tabCompletion: true,
 };
 
 function load(): Settings {

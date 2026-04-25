@@ -25,7 +25,15 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
  * fails, resolve to null — the caller will bubble up the 401 and the
  * AuthContext will log the user out.
  */
-type TokenRefresher = () => Promise<string | null>;
+/**
+ * Token refresh hook. Receives an AbortSignal that flips when the
+ * caller's 10-second wall-clock timeout expires. Hooks SHOULD honour
+ * the signal — at minimum they must not write a fresh token to
+ * persistent storage after `signal.aborted` becomes true, otherwise a
+ * slow server can race a newer refresh and overwrite a current token
+ * with a stale one.
+ */
+type TokenRefresher = (signal: AbortSignal) => Promise<string | null>;
 let refreshHook: TokenRefresher | null = null;
 export function setTokenRefresher(hook: TokenRefresher | null): void {
   refreshHook = hook;
@@ -55,19 +63,24 @@ export async function tryRefreshToken(): Promise<string | null> {
   if (!refreshHook) return null;
   if (inFlightRefresh) return inFlightRefresh;
   const hook = refreshHook;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), REFRESH_TIMEOUT_MS);
   inFlightRefresh = (async () => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
     try {
-      return await Promise.race<string | null>([
-        hook(),
+      // Race the hook against the timeout. If the hook hasn't returned
+      // by REFRESH_TIMEOUT_MS, ac.abort() flips the signal and the
+      // hook should bail before persisting any token. We then resolve
+      // null to unblock the caller. The hook itself may continue
+      // running for cleanup, but it must not write through stale data.
+      const result = await Promise.race<string | null>([
+        hook(ac.signal).catch(() => null),
         new Promise<null>((resolve) => {
-          timer = setTimeout(() => resolve(null), REFRESH_TIMEOUT_MS);
+          ac.signal.addEventListener('abort', () => resolve(null), { once: true });
         }),
       ]);
-    } catch {
-      return null;
+      return ac.signal.aborted ? null : result;
     } finally {
-      if (timer) clearTimeout(timer);
+      clearTimeout(timer);
       // Clear AFTER the promise settles so concurrent awaiters share
       // the same result — don't clear preemptively.
       setTimeout(() => { inFlightRefresh = null; }, 0);

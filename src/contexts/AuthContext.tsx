@@ -81,11 +81,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Install the refresh hook so api/client can retry 401s automatically.
   useEffect(() => {
-    setTokenRefresher(async () => {
+    setTokenRefresher(async (signal) => {
       try {
         const refreshToken = await window.suxai.auth.getRefreshToken();
         if (!refreshToken) return null;
+        if (signal.aborted) return null;
         const res = await authApi.refresh(refreshToken);
+        // After the network round-trip, the timeout may have fired —
+        // bail before writing through to safeStorage so we don't
+        // overwrite a newer token written by a concurrent refresh.
+        if (signal.aborted) return null;
         await window.suxai.auth.setToken(res.token);
         if (res.refreshToken) {
           await window.suxai.auth.setRefreshToken(res.refreshToken);

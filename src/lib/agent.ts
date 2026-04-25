@@ -193,13 +193,30 @@ function looksBinary(content: string): boolean {
 
 /**
  * Approval callback the executor invokes before any file-modifying tool.
- * Should resolve to `true` to proceed, `false` to cancel.
+ * Resolves with:
+ *   - `ok=false` → tool aborted, return rejected message to the model
+ *   - `ok=true,  written=false` → executor performs its own write
+ *   - `ok=true,  written=true`  → the approval UI already wrote the
+ *     file (e.g. an inline diff that the user accepted hunk-by-hunk
+ *     and persisted itself). Skip the executor's write so we don't
+ *     double-write or stomp the user's hunk-level decisions.
  */
+export interface ApproveResult {
+  ok: boolean;
+  /** True if the approval UI already persisted to disk. */
+  written?: boolean;
+  /** Final content actually written, when `written=true`. */
+  finalContent?: string;
+}
 export type ApproveFn = (
   call: ToolCall,
   /** Extra UX hint — for edit_file we pass the proposed diff. */
   preview?: { path: string; original: string; proposed: string },
-) => Promise<boolean>;
+) => Promise<ApproveResult | boolean>;
+
+function normalizeApprove(r: ApproveResult | boolean): ApproveResult {
+  return typeof r === 'boolean' ? { ok: r } : r;
+}
 
 export class ToolExecutionError extends Error {
   constructor(public toolName: string, message: string) {
@@ -307,17 +324,30 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
         );
       }
       const proposed = f.content.replace(search, replace);
-      const ok = await opts.approve(call, {
-        path,
-        original: f.content,
-        proposed,
-      });
-      if (!ok) {
+      const approval = normalizeApprove(
+        await opts.approve(call, {
+          path,
+          original: f.content,
+          proposed,
+        }),
+      );
+      if (!approval.ok) {
         return `User rejected the edit to ${path}.`;
       }
-      await window.suxai.fs.writeFile(path, proposed);
-      const lines = proposed.split('\n').length - f.content.split('\n').length;
-      return `Edit applied to ${path}. Net line delta: ${lines >= 0 ? `+${lines}` : lines}.`;
+      // If the approval UI (inline diff) already wrote the user's
+      // hunk-by-hunk decisions to disk, don't re-write — the user may
+      // have intentionally rejected some hunks. Otherwise, fall back
+      // to writing the model's full proposed text.
+      const finalText = approval.finalContent ?? proposed;
+      if (!approval.written) {
+        await window.suxai.fs.writeFile(path, finalText);
+      }
+      const lines = finalText.split('\n').length - f.content.split('\n').length;
+      const partial =
+        approval.finalContent && approval.finalContent !== proposed
+          ? ' (some hunks were rejected by the user)'
+          : '';
+      return `Edit applied to ${path}. Net line delta: ${lines >= 0 ? `+${lines}` : lines}.${partial}`;
     }
     case 'write_file': {
       const path = expectString(args, 'path');
@@ -328,14 +358,19 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       } catch {
         // file doesn't exist — that's fine for a create
       }
-      const ok = await opts.approve(call, {
-        path,
-        original,
-        proposed: content,
-      });
-      if (!ok) return `User rejected the write to ${path}.`;
-      await window.suxai.fs.writeFile(path, content);
-      return `Wrote ${content.length} bytes to ${path}.`;
+      const approval = normalizeApprove(
+        await opts.approve(call, {
+          path,
+          original,
+          proposed: content,
+        }),
+      );
+      if (!approval.ok) return `User rejected the write to ${path}.`;
+      const finalText = approval.finalContent ?? content;
+      if (!approval.written) {
+        await window.suxai.fs.writeFile(path, finalText);
+      }
+      return `Wrote ${finalText.length} bytes to ${path}.`;
     }
     case 'run_command': {
       const command = expectString(args, 'command');

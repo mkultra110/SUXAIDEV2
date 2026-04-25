@@ -9,37 +9,143 @@
 
 .indiff > :first-child { flex: 1; min-height: 0; }
 
-/* Floating overlay anchored bottom-center. */
-.indiff__overlay {
+/* ---- Per-line decorations (Monaco model decorations) ----------------
+   Cursor-style: removed lines red with strikethrough, added lines green.
+   "kept" / "gone" variants visualise the user's accept/reject choice
+   without re-rendering the whole editor. */
+.indiff-line--del {
+  background: rgba(239, 68, 68, 0.13) !important;
+}
+.indiff-line--del::after {
+  /* Light strikethrough overlay on the removed line. */
+  content: '';
+}
+.indiff-line--add {
+  background: rgba(110, 228, 151, 0.14) !important;
+}
+.indiff-line--gone {
+  opacity: 0.45;
+  filter: grayscale(0.4);
+}
+.indiff-line--kept {
+  /* Slightly stronger highlight when the hunk is committed in this
+     direction so the user sees their choice. */
+  box-shadow: inset 2px 0 0 currentColor;
+}
+
+.indiff-gutter {
+  width: 4px;
+  margin-left: 2px;
+}
+.indiff-gutter--del { background: rgba(239, 68, 68, 0.6); }
+.indiff-gutter--add { background: rgba(110, 228, 151, 0.6); }
+.indiff-gutter--gone { opacity: 0.3; }
+
+.indiff-margin--gone { opacity: 0.3; }
+
+/* ---- Floating per-hunk action chip ---------------------------------
+   Anchored on the right edge of the active hunk. */
+.indiff__hunkbar {
   position: absolute;
-  bottom: 16px;
+  right: 18px;
+  display: flex;
+  gap: 6px;
+  z-index: 25;
+  pointer-events: auto;
+  animation: indiff-chip-in 140ms var(--ease-out);
+}
+@keyframes indiff-chip-in {
+  from { opacity: 0; transform: translateX(6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.indiff__hunkbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: rgba(8, 12, 22, 0.92);
+  color: var(--color-text);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.indiff__hunkbtn:hover { transform: translateY(-1px); }
+
+.indiff__hunkbtn--accept {
+  border-color: rgba(110, 228, 151, 0.45);
+  color: #d4fbe2;
+}
+.indiff__hunkbtn--accept:hover {
+  background: rgba(110, 228, 151, 0.12);
+  border-color: rgba(110, 228, 151, 0.7);
+}
+.indiff__hunkbtn--reject {
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #ffd9d9;
+}
+.indiff__hunkbtn--reject:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.7);
+}
+.indiff__hunkbtn kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--color-border);
+  opacity: 0.85;
+}
+
+/* ---- Bottom command bar -------------------------------------------- */
+.indiff__bar {
+  position: absolute;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 14px;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  min-width: 520px;
+  max-width: min(820px, 96%);
   border-radius: var(--radius-lg);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(125, 130, 248, 0.12);
   animation: indiff-in 200ms var(--ease-out);
-  min-width: 360px;
-  max-width: min(640px, 92%);
   z-index: 30;
 }
-
 @keyframes indiff-in {
   from { opacity: 0; transform: translate(-50%, 12px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
-.indiff__title {
+.indiff__bar-left {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--color-text-muted);
   flex-wrap: wrap;
+}
+.indiff__bar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .indiff__badge {
@@ -53,7 +159,6 @@
   color: #c9cdff;
   border: 1px solid rgba(125, 130, 248, 0.3);
 }
-
 .indiff__file {
   color: var(--color-text);
   font-weight: 500;
@@ -62,7 +167,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .indiff__label {
   font-size: 10.5px;
   color: var(--color-text-dim);
@@ -71,35 +175,72 @@
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
 }
-
 .indiff__stats {
-  margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
 }
 .indiff__plus  { color: #6ee497; font-weight: 600; }
 .indiff__minus { color: #ff8e8e; font-weight: 600; }
-.indiff__nochg {
+.indiff__nochg { color: var(--color-text-dim); font-style: italic; }
+.indiff__progress {
+  font-size: 10.5px;
   color: var(--color-text-dim);
-  font-style: italic;
+  border-left: 1px solid var(--color-border);
+  padding-left: 10px;
+}
+
+.indiff__navbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.indiff__navbtn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--color-text);
+}
+.indiff__navbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.indiff__navbtn kbd {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  padding: 0 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border);
+  opacity: 0.8;
+}
+
+.indiff__sep {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
 }
 
 .indiff__error {
-  padding: 6px 10px;
-  background: rgba(239, 68, 68, 0.10);
-  border: 1px solid rgba(239, 68, 68, 0.30);
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
   border-radius: var(--radius-sm);
   color: #fca5a5;
   font-size: 11.5px;
-}
-
-.indiff__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  z-index: 31;
+  max-width: 80%;
 }
 
 .indiff__kbd {

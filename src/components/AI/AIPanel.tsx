@@ -167,7 +167,7 @@ interface AgentLoopArgs {
   requestApproval: (
     call: ToolCall,
     preview?: { path: string; original: string; proposed: string },
-  ) => Promise<boolean>;
+  ) => Promise<import('../../lib/agent').ApproveResult>;
 }
 
 async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
@@ -456,21 +456,59 @@ export function AIPanel() {
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
+  // Approval flow:
+  //   • edit_file / write_file with a preview → open the InlineDiff
+  //     directly in the editor so the user can accept/reject hunks
+  //     individually (Cursor-style). The diff persists the file and
+  //     reports `written: true` back to the agent so we don't double-
+  //     write the model's full proposed text.
+  //   • Everything else (run_command, no-preview cases) → fall back
+  //     to the legacy ApprovalDialog modal.
   const requestApproval = useCallback(
     (
       call: ToolCall,
       preview?: { path: string; original: string; proposed: string },
-    ): Promise<boolean> =>
-      new Promise<boolean>((resolve) => {
+    ): Promise<import('../../lib/agent').ApproveResult> =>
+      new Promise((resolve) => {
+        const isFileWrite = call.name === 'edit_file' || call.name === 'write_file';
+        if (isFileWrite && preview) {
+          let settled = false;
+          const settle = (
+            ok: boolean,
+            written: boolean,
+            finalContent?: string,
+          ) => {
+            if (settled) return;
+            settled = true;
+            resolve({ ok, written, finalContent });
+          };
+          openDiff({
+            path: preview.path,
+            original: preview.original,
+            proposed: preview.proposed,
+            label: call.name === 'edit_file' ? 'edit · agent' : 'write · agent',
+            // InlineDiff calls onResolve(true, finalText) on Accept
+            // (after writing to disk itself) or (false) on Reject.
+            onResolve: (accepted, finalContent) => {
+              if (accepted) settle(true, true, finalContent ?? preview.proposed);
+              else settle(false, false);
+            },
+          });
+          return;
+        }
+        // Modal approval for run_command and any other tool that
+        // can't be visualised as a file diff.
         setApproval({
           call,
           preview,
           resolve: (approved) => {
             setApproval(null);
-            resolve(approved);
+            resolve({ ok: approved });
           },
         });
       }),
+    // openDiff is a stable callback from WorkspaceContext.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
   const abortRef = useRef<(() => void) | null>(null);
@@ -767,8 +805,20 @@ export function AIPanel() {
 
       // Snapshot the target file at send-time — if the user switches tabs
       // mid-stream, we still diff against the file they asked about.
+      // We open a diff for: explicit edit commands (fix/refactor/optimize)
+      // OR plain chat where the user's wording suggests they want the
+      // model to rewrite the active file ("modifie", "change", "réécris",
+      // "rewrite", etc.). Without this heuristic the user just sees a
+      // wall of code in the chat instead of an inline diff on their file.
+      const editIntentRe =
+        /\b(modif(y|ie|y|ier)|change(s)?|update|rewrite|r[eé][ée]cri[st]?|fix|patch|apply|implement|implémente)\b/i;
+      const looksLikeEditRequest =
+        command === 'chat' && !!activeFile && editIntentRe.test(text);
       const diffTarget =
-        command === 'fix' || command === 'refactor' || command === 'optimize'
+        command === 'fix' ||
+        command === 'refactor' ||
+        command === 'optimize' ||
+        looksLikeEditRequest
           ? activeFile
           : null;
 

@@ -21,6 +21,15 @@ export interface PendingDiff {
   proposed: string;
   /** Short label shown in the diff toolbar (e.g. the model id or command). */
   label?: string;
+  /**
+   * Optional callback fired when the user resolves the diff (accept or
+   * reject). Used by the agent loop to translate a hunk-by-hunk diff
+   * decision back into a Promise<boolean> for executeTool's approve()
+   * contract — when set, InlineDiff calls this with the materialised
+   * final content on accept (or undefined on reject) so the caller
+   * can persist (or skip) the change without going through openFile().
+   */
+  onResolve?: (accepted: boolean, finalContent?: string) => void;
 }
 
 interface WorkspaceState {

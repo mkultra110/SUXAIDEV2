@@ -146,3 +146,29 @@ export const aiCompleteSchema = z.object({
 });
 
 export type AiCompleteInput = z.infer<typeof aiCompleteSchema>;
+
+/**
+ * Apply-model request schema. Powers /ai/apply — a fast Haiku 4.5
+ * call that merges a "lazy edit" (the kind that contains
+ * `// ... existing code ...` markers) into the full original
+ * content. Lets the planner model (Sonnet/Opus) emit short
+ * edit blocks instead of rewriting the whole file, while still
+ * producing the final complete file the diff view needs.
+ */
+export const aiApplySchema = z.object({
+  /** Original file content (server treats it opaquely; sandboxed client
+   *  side already capped to ATTACHMENT_HARD_CAP). 4 MB hard cap here. */
+  original: z.string().max(4_000_000),
+  /** The lazy edit emitted by the planner. Contains
+   *  `// ... existing code ...` markers between the parts the model
+   *  actually wants to change. */
+  lazy_edit: z.string().max(2_000_000),
+  /** Short user-facing instruction the planner used. Helps the apply
+   *  model resolve ambiguity in the lazy edit. Optional. */
+  instruction: z.string().max(2000).optional(),
+  /** Path of the file being edited — used as a hint in the apply
+   *  prompt (language detection, not a write target). Optional. */
+  path: z.string().max(1024).optional(),
+});
+
+export type AiApplyInput = z.infer<typeof aiApplySchema>;

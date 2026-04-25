@@ -145,6 +145,31 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'apply_lazy_edit',
+    description:
+      "Apply a 'lazy edit' to a large existing file. Use this INSTEAD of edit_file when you want to change MULTIPLE non-contiguous regions of a big file (>200 lines) without rewriting everything. Emit a `lazy_edit` body that contains the new code plus `// ... existing code ...` (or the language-equivalent: `# ... existing code ...` for Python, `<!-- ... existing code ... -->` for HTML/Markdown) marker comments around the unchanged regions. A fast apply model (Haiku 4.5) merges your lazy edit into the original file, then the user reviews the resulting diff hunk-by-hunk in the inline diff. Cheaper than emitting the full file yourself; faster than chaining many edit_file calls.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: 'Absolute path to the file to edit. Must already exist.',
+        },
+        instruction: {
+          type: 'string',
+          description:
+            'Short user-facing description of what this edit does. Helps the apply model resolve marker ambiguity. e.g. "Add a streamproof check to renderEntity and rename initOnce to setupRenderer".',
+        },
+        lazy_edit: {
+          type: 'string',
+          description:
+            'The new code with `// ... existing code ...` markers around unchanged regions. Markers MUST be on lines by themselves (no inline). Match the comment style of the file\'s language.',
+        },
+      },
+      required: ['path', 'lazy_edit', 'instruction'],
+    },
+  },
+  {
     name: 'codebase_search',
     description:
       "Semantic-ish search across the user's workspace. Takes a NATURAL LANGUAGE query (e.g. 'where is auth handled', 'find the renderer entry point', 'what manages stream proof'), tokenises it into keywords, runs multiple greps in parallel, and ranks the matching files using the repo's PageRank. Returns up to 8 file:line:snippet hits ordered by relevance. Use this BEFORE listing many files or reading speculatively — it's the cheapest way to discover where a concept lives.",
@@ -212,7 +237,7 @@ export function toolsForMode(mode: 'composer' | 'ask' = 'composer'): ToolDefinit
     );
   }
   // Composer drops create_plan (plan-mode-only); everything else
-  // including codebase_search is exposed.
+  // including codebase_search and apply_lazy_edit is exposed.
   return AGENT_TOOLS.filter((t) => t.name !== 'create_plan');
 }
 
@@ -351,6 +376,15 @@ export interface ExecuteOptions {
    *  create_plan). Tools that don't need it (read_file, edit_file)
    *  just ignore this. */
   workspaceRoot?: string | null;
+  /** Apply-model bridge for the apply_lazy_edit tool. Resolves to
+   *  the merged file content (or null on failure). Provided by
+   *  AIPanel which knows the JWT and the VPS endpoint. */
+  applyLazyEdit?: (input: {
+    path: string;
+    original: string;
+    lazy_edit: string;
+    instruction?: string;
+  }) => Promise<string | null>;
 }
 
 export async function executeTool(
@@ -537,6 +571,66 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
         lines.join('\n') +
         `\n<<<end>>>`
       );
+    }
+    case 'apply_lazy_edit': {
+      const path = expectString(args, 'path');
+      const lazy_edit = expectString(args, 'lazy_edit');
+      const instruction = typeof args.instruction === 'string' ? (args.instruction as string) : '';
+      // Read the original file. Bail loudly if it doesn't exist —
+      // apply_lazy_edit is for EXISTING files; new files should use
+      // write_file directly.
+      let original: string;
+      try {
+        const r = await window.suxai.fs.readFile(path);
+        original = r.content;
+      } catch (err) {
+        throw new ToolExecutionError(
+          'apply_lazy_edit',
+          `Could not read ${path}: ${(err as Error).message}. ` +
+            `Use write_file to create new files.`,
+        );
+      }
+      if (!opts.applyLazyEdit) {
+        throw new ToolExecutionError(
+          'apply_lazy_edit',
+          'Apply IPC unavailable. Update SUXAI to a build with v0.11+.',
+        );
+      }
+      const merged = await opts.applyLazyEdit({
+        path,
+        original,
+        lazy_edit,
+        instruction,
+      });
+      if (merged == null) {
+        throw new ToolExecutionError(
+          'apply_lazy_edit',
+          'Apply model returned no result. Falling back: try edit_file with explicit search/replace blocks instead.',
+        );
+      }
+      // Hand the merged content to the same approval flow as edit_file:
+      // routes through the InlineDiff so the user accepts/rejects hunk-
+      // by-hunk before disk write.
+      const approval = normalizeApprove(
+        await opts.approve(call, {
+          path,
+          original,
+          proposed: merged,
+        }),
+      );
+      if (!approval.ok) {
+        return `User rejected the lazy edit on ${path}.`;
+      }
+      const finalText = approval.finalContent ?? merged;
+      if (!approval.written) {
+        await window.suxai.fs.writeFile(path, finalText);
+      }
+      const lineDelta = finalText.split('\n').length - original.split('\n').length;
+      const partial =
+        approval.finalContent && approval.finalContent !== merged
+          ? ' (some hunks were rejected by the user)'
+          : '';
+      return `Lazy edit applied to ${path}. Net line delta: ${lineDelta >= 0 ? `+${lineDelta}` : lineDelta}.${partial}`;
     }
     case 'codebase_search': {
       const query = expectString(args, 'query');

@@ -26,10 +26,14 @@ function buildSystemPrompt(
       'Use them to understand the project before making changes. Always read a ' +
       'file before editing it.\n\n' +
       'CRITICAL — how to apply changes:\n' +
-      '  • To MODIFY an existing file, ALWAYS use the `edit_file` tool with a ' +
-      'small, surgical search/replace that touches only the lines you need to ' +
-      'change. Do NOT rewrite the whole file.\n' +
-      '  • To CREATE a new file, use `write_file`.\n' +
+      '  • For SMALL surgical edits (1-3 contiguous regions of a file), use ' +
+      '`edit_file` with an exact search/replace pair. Cheapest option.\n' +
+      '  • For LARGE refactors that touch many non-contiguous regions of a ' +
+      'big file (>200 lines), use `apply_lazy_edit`: emit ONLY the changed ' +
+      'code with `// ... existing code ...` markers around unchanged regions. ' +
+      'A fast apply model (Haiku) merges your lazy edit into the original ' +
+      'file. Saves 5-10× on output tokens vs rewriting the whole file.\n' +
+      '  • To CREATE a new file (or fully replace one), use `write_file`.\n' +
       '  • NEVER paste the modified file (or large code blocks of it) back into ' +
       'the chat as your "answer" — the user will not see it as a diff and you ' +
       'will burn tokens for nothing. Tool calls trigger an inline diff in the ' +
@@ -497,6 +501,90 @@ export async function completeFIM(input: import('../schemas/ai.js').AiCompleteIn
     if (!piece || typeof piece.text !== 'string') return null;
     // Strip stray code fences in case the model ignored the
     // instruction — happens occasionally even with Haiku.
+    return piece.text.replace(/^```[\w-]*\n?/, '').replace(/\n?```\s*$/, '');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Apply-model fast-path. The planner (Sonnet/Opus) emits a "lazy
+ * edit" with `// ... existing code ...` markers around the parts it
+ * actually wants to change ; this helper asks Haiku 4.5 to merge
+ * the lazy edit into the original file, producing the complete
+ * rewritten file the diff view needs.
+ *
+ * Tokens saved: instead of having the expensive planner regenerate
+ * a 2000-line file, it only has to emit the changed snippets +
+ * markers. Haiku is ~10× cheaper per output token, so even when
+ * Haiku does end up regenerating most of the file, the bill is
+ * dramatically lower.
+ *
+ * Returns `null` on any error (network, 5xx, malformed response).
+ * Caller then falls back to using the lazy_edit verbatim (the diff
+ * view shows it as-is and the user can manually rework).
+ */
+export async function applyLazyEdit(input: import('../schemas/ai.js').AiApplyInput): Promise<string | null> {
+  if (!env.QUATARLY_API_KEY) return null;
+  const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/messages`;
+  const langHint = input.path ? ` (file: ${input.path})` : '';
+
+  const userText =
+    `You will merge a lazy edit into the original file${langHint}.\n` +
+    `The lazy edit contains marker comments like \`// ... existing code ...\` ` +
+    `(or the language-appropriate variant: \`# ... existing code ...\` for ` +
+    `Python, \`/* ... existing code ... */\` for CSS/JS, etc.) — those ` +
+    `markers stand in for unchanged regions of the original file. Replace ` +
+    `each marker with the corresponding original lines verbatim. The non-` +
+    `marker portions of the lazy edit are the new code that should land in ` +
+    `the file.\n\n` +
+    (input.instruction ? `User instruction: ${input.instruction}\n\n` : '') +
+    `<original_file>\n${input.original}\n</original_file>\n\n` +
+    `<lazy_edit>\n${input.lazy_edit}\n</lazy_edit>\n\n` +
+    `Output the COMPLETE final file content, no fences, no explanation, ` +
+    `nothing else. Preserve every line of the original that wasn't touched ` +
+    `by the lazy edit. Preserve the original file's indentation style and ` +
+    `line endings.`;
+
+  const body = {
+    model: 'claude-haiku-4-5-20251001',
+    // Big enough to rewrite a 2000-line file. Sonnet/Opus would
+    // burn 100K+ tokens emitting the same content directly.
+    max_tokens: 32000,
+    stream: false,
+    system: [
+      {
+        type: 'text',
+        text:
+          'You are an apply model. Your sole job is to merge a "lazy edit" ' +
+          'into an original file and output the resulting complete file. ' +
+          'You preserve every unchanged line verbatim. You never explain. ' +
+          'You never wrap output in code fences. You output ONLY the merged ' +
+          'file content.',
+      },
+    ],
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: userText }] },
+    ],
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        authorization: `Bearer ${env.QUATARLY_API_KEY}`,
+        'x-api-key': env.QUATARLY_API_KEY,
+        apiKey: env.QUATARLY_API_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const obj = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+    if (!obj.content || obj.content.length === 0) return null;
+    const piece = obj.content.find((b) => b.type === 'text');
+    if (!piece || typeof piece.text !== 'string') return null;
     return piece.text.replace(/^```[\w-]*\n?/, '').replace(/\n?```\s*$/, '');
   } catch {
     return null;

@@ -2,8 +2,8 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
-import { aiRequestSchema, aiCompleteSchema, SUPPORTED_MODELS } from '../schemas/ai.js';
-import { streamCompletion, completeFIM } from '../services/quatarly.service.js';
+import { aiRequestSchema, aiCompleteSchema, aiApplySchema, SUPPORTED_MODELS } from '../schemas/ai.js';
+import { streamCompletion, completeFIM, applyLazyEdit } from '../services/quatarly.service.js';
 import { userStore } from '../store/users.js';
 import { env } from '../config/env.js';
 
@@ -121,6 +121,50 @@ router.post(
       // pop up as a generic error toast every few seconds.
       res.json({ completion: '' });
     }
+  },
+);
+
+// Apply model: merges a lazy edit (with `// ... existing code ...`
+// markers) into the original file via Haiku 4.5. Same rate limit as
+// /chat — apply calls are heavy (rewrite the whole file) so we don't
+// want to flood. Free-tier quota check applies.
+const applyLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Apply rate limit exceeded', code: 'RATE_LIMIT' },
+});
+
+router.post(
+  '/apply',
+  requireAuth,
+  applyLimiter,
+  validateBody(aiApplySchema),
+  async (req, res) => {
+    const userId = req.user!.sub;
+    const usage = await userStore.getDailyUsage(userId);
+    if (usage.tier === 'free' && usage.usedMs >= env.FREE_DAILY_LIMIT_MS) {
+      res.status(402).json({
+        message: 'Free daily limit reached.',
+        code: 'QUOTA_EXCEEDED',
+      });
+      return;
+    }
+    const startedAt = Date.now();
+    const result = await applyLazyEdit(req.body);
+    // Track elapsed against the daily budget — apply calls are cheap
+    // but they still cost real money on Quatarly.
+    const elapsed = Date.now() - startedAt;
+    userStore.trackUsage(userId, elapsed).catch(() => { /* */ });
+    if (result == null) {
+      res.status(502).json({
+        message: 'Apply model failed; falling back to the raw lazy edit.',
+        code: 'APPLY_FAILED',
+      });
+      return;
+    }
+    res.json({ result });
   },
 );
 

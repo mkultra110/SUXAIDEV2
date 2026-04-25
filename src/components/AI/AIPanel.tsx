@@ -216,6 +216,14 @@ interface AgentLoopArgs {
     call: ToolCall,
     preview?: { path: string; original: string; proposed: string },
   ) => Promise<import('../../lib/agent').ApproveResult>;
+  /** Bridge for the apply_lazy_edit tool — POSTs to /ai/apply on the
+   *  VPS, returns the merged file content or null on failure. */
+  applyLazyEdit?: (input: {
+    path: string;
+    original: string;
+    lazy_edit: string;
+    instruction?: string;
+  }) => Promise<string | null>;
 }
 
 async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
@@ -384,6 +392,7 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
           const result = await executeTool(call, {
             approve: (c, preview) => args.requestApproval(c, preview),
             workspaceRoot: args.workspaceRoot ?? null,
+            applyLazyEdit: args.applyLazyEdit,
           });
           const status: ToolCallSnapshot['status'] = result.is_error
             ? 'error'
@@ -1570,6 +1579,42 @@ export function AIPanel() {
           abortRef.current = null;
           return;
         }
+        // POST /ai/apply bridge for the apply_lazy_edit tool. Local
+        // closure so we can reuse the current JWT — falls back to
+        // null on any failure (network, 401, 5xx, malformed).
+        const applyLazyEditBridge = async (input: {
+          path: string;
+          original: string;
+          lazy_edit: string;
+          instruction?: string;
+        }): Promise<string | null> => {
+          if (!token) return null;
+          try {
+            const { API_BASE_URL } = await import('../../config');
+            const { tryRefreshToken } = await import('../../api/client');
+            const doFetch = async (jwt: string) =>
+              fetch(`${API_BASE_URL}/ai/apply`, {
+                method: 'POST',
+                headers: {
+                  'content-type': 'application/json',
+                  authorization: `Bearer ${jwt}`,
+                },
+                body: JSON.stringify(input),
+              });
+            let res = await doFetch(token);
+            if (res.status === 401) {
+              try { await res.text(); } catch { /* drain */ }
+              const fresh = await tryRefreshToken();
+              if (fresh) res = await doFetch(fresh);
+            }
+            if (!res.ok) return null;
+            const obj = (await res.json()) as { result?: string };
+            return obj.result ?? null;
+          } catch {
+            return null;
+          }
+        };
+
         runAgentLoop({
           token,
           modelId,
@@ -1584,6 +1629,7 @@ export function AIPanel() {
           abortRef,
           toast,
           requestApproval,
+          applyLazyEdit: applyLazyEditBridge,
         }).catch((err) => {
           console.error('[agent] loop failed:', err);
           setMessages((m) =>

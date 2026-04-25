@@ -998,8 +998,19 @@ function registerIpc() {
             NODE_DISABLE_COLORS: '1',
           },
         });
-        const CAP = 200_000;
-        let buf = '';
+        // v0.11.14: middle-truncation. The old strategy only kept
+        // the head, so a failing test run with 10K stdout lines
+        // dropped the actual error message buried at the end. We
+        // now keep the first HEAD_CAP and the last TAIL_CAP chars
+        // joined by a '... [N bytes truncated] ...' marker. Both
+        // ends matter: the head usually carries setup/banner, the
+        // tail carries the error / exit reason.
+        const HEAD_CAP = 100_000;
+        const TAIL_CAP = 100_000;
+        const HARD_LIMIT = 5_000_000; // refuse to buffer more than 5 MB total
+        let head = '';
+        let tail = '';
+        let truncatedBytes = 0;
         let timedOut = false;
         const rawTimeout =
           typeof input.timeout_ms === 'number' && Number.isFinite(input.timeout_ms)
@@ -1013,23 +1024,56 @@ function registerIpc() {
         }, timeoutMs);
         timeout.unref();
         const append = (s: string) => {
-          if (buf.length >= CAP) return;
-          buf += s;
-          if (buf.length > CAP) buf = buf.slice(0, CAP) + `\n[truncated — output exceeded ${CAP} chars]`;
+          // Phase 1: fill the head up to HEAD_CAP. Anything beyond
+          // goes into the rolling tail.
+          if (head.length < HEAD_CAP) {
+            const need = HEAD_CAP - head.length;
+            if (s.length <= need) {
+              head += s;
+              return;
+            }
+            head += s.slice(0, need);
+            s = s.slice(need);
+          }
+          // Phase 2: append to tail; let it grow up to TAIL_CAP * 2
+          // then drop the oldest half. This keeps the LAST TAIL_CAP
+          // bytes always available with O(1) amortised cost.
+          tail += s;
+          if (tail.length > TAIL_CAP * 2) {
+            const dropped = tail.length - TAIL_CAP;
+            tail = tail.slice(dropped);
+            truncatedBytes += dropped;
+          }
+          // Hard limit to prevent OOM on a runaway process emitting
+          // gigabytes of output.
+          if (head.length + tail.length + truncatedBytes > HARD_LIMIT) {
+            try { child.kill('SIGTERM'); } catch { /* */ }
+          }
+        };
+        const finalBuffer = (): string => {
+          if (head.length < HEAD_CAP && tail.length === 0) return head;
+          if (truncatedBytes === 0 && head.length + tail.length <= HEAD_CAP) {
+            // Everything fit in the head — no marker needed.
+            return head + tail;
+          }
+          const droppedNote = truncatedBytes > 0
+            ? `\n... [${truncatedBytes.toLocaleString()} bytes truncated in the middle] ...\n`
+            : '\n... [output split: head + tail kept] ...\n';
+          return head + droppedNote + tail;
         };
         child.stdout.on('data', (c) => append(c.toString()));
         child.stderr.on('data', (c) => append(c.toString()));
         child.on('close', (code) => {
           clearTimeout(timeout);
           resolve({
-            stdout: buf,
+            stdout: finalBuffer(),
             exit_code: typeof code === 'number' ? code : -1,
             timed_out: timedOut,
           });
         });
         child.on('error', (err) => {
           clearTimeout(timeout);
-          resolve({ stdout: buf, exit_code: -1, error: err.message });
+          resolve({ stdout: finalBuffer(), exit_code: -1, error: err.message });
         });
       });
     },

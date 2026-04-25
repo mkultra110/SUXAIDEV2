@@ -188,14 +188,19 @@ function registerIpc() {
   ipcMain.handle('conv:read', async () => {
     try {
       const raw = await fs.readFile(CONVERSATIONS_FILE(), 'utf8');
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      // Forward the raw parsed value — caller decides legacy vs current
+      // shape.
+      return JSON.parse(raw);
     } catch {
-      return [];
+      return null;
     }
   });
-  ipcMain.handle('conv:write', async (_e, data: unknown[]) => {
-    if (!Array.isArray(data)) throw new Error('Conversations must be an array');
+  ipcMain.handle('conv:write', async (_e, data: unknown) => {
+    // Accept any JSON-serialisable payload — the old contract was
+    // \"array of messages\", the new one is { version, active, list }.
+    if (data === null || data === undefined) {
+      throw new Error('Conversations payload required');
+    }
     await fs.mkdir(USER_DATA(), { recursive: true });
     const tmp = `${CONVERSATIONS_FILE()}.${process.pid}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(data), { mode: 0o600 });

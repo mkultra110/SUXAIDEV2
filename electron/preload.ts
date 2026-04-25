@@ -52,8 +52,8 @@ const api = {
       ipcRenderer.invoke('fs:reveal', p),
   },
   conversations: {
-    read: (): Promise<unknown[]> => ipcRenderer.invoke('conv:read'),
-    write: (data: unknown[]): Promise<boolean> => ipcRenderer.invoke('conv:write', data),
+    read: (): Promise<unknown> => ipcRenderer.invoke('conv:read'),
+    write: (data: unknown): Promise<boolean> => ipcRenderer.invoke('conv:write', data),
     clear: (): Promise<boolean> => ipcRenderer.invoke('conv:clear'),
   },
   update: {

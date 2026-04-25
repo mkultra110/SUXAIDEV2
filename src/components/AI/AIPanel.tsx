@@ -7,17 +7,26 @@ import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
 import { Message, type ChatMessage } from './Message';
 import { ModelSelector } from './ModelSelector';
+import { ConversationSwitcher } from './ConversationSwitcher';
 import { onAiCommand } from '../../lib/commands';
+import {
+  emptyConversation,
+  deriveTitle,
+  loadConversations,
+  saveConversations,
+  type Conversation,
+} from '../../lib/conversations';
+import { useToast } from '../ui/Toast';
 import './AIPanel.css';
 
 const STORAGE_MODEL_KEY = 'suxai.model';
+const MAX_PERSISTED_MESSAGES = 200;
 
 /** Pull the first fenced code block out of a streamed response. */
 function extractFirstCodeBlock(text: string): string | null {
   const m = text.match(/```[a-zA-Z0-9_-]*\n([\s\S]*?)```/);
   return m ? m[1] : null;
 }
-const MAX_PERSISTED_MESSAGES = 200;
 
 export function AIPanel() {
   const { token } = useAuth();
@@ -26,16 +35,50 @@ export function AIPanel() {
     return localStorage.getItem(STORAGE_MODEL_KEY) || DEFAULT_MODEL_ID;
   });
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
-  // Files the user has explicitly attached via the paperclip. These
-  // travel alongside the prompt as context, on top of the active file
-  // and any @file mentions.
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
   const abortRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toast = useToast();
+
+  const activeConv = useMemo(
+    () => conversations.find((c) => c.id === activeConvId) ?? null,
+    [conversations, activeConvId],
+  );
+  const messages = activeConv?.messages ?? [];
+
+  // Mutate the active conversation's messages array.
+  const setMessages = useCallback(
+    (
+      updater:
+        | ChatMessage[]
+        | ((prev: ChatMessage[]) => ChatMessage[]),
+    ) => {
+      setConversations((list) =>
+        list.map((c) => {
+          if (c.id !== activeConvId) return c;
+          const next = typeof updater === 'function' ? updater(c.messages) : updater;
+          if (next === c.messages) return c;
+          return {
+            ...c,
+            messages: next,
+            updatedAt: new Date().toISOString(),
+            // Auto-rename to the first user message if still on the
+            // default placeholder.
+            title:
+              c.title === 'New conversation' || c.title === ''
+                ? deriveTitle(next)
+                : c.title,
+          };
+        }),
+      );
+    },
+    [activeConvId],
+  );
 
   const selectedModel = useMemo(
     () => AI_MODELS.find((m) => m.id === modelId) ?? AI_MODELS[0],
@@ -46,44 +89,49 @@ export function AIPanel() {
     localStorage.setItem(STORAGE_MODEL_KEY, modelId);
   }, [modelId]);
 
-  // Load persisted conversation once at mount.
+  // Load persisted conversation list once at mount.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const stored = (await window.suxai.conversations.read()) as ChatMessage[];
-        if (!cancelled && Array.isArray(stored) && stored.length > 0) {
-          // Drop any lingering streaming flag from the previous session.
-          setMessages(stored.map((m) => ({ ...m, streaming: false })));
-        }
-      } catch (err) {
-        console.warn('[conv] load failed:', err);
-      } finally {
-        if (!cancelled) setHistoryLoaded(true);
+      const loaded = await loadConversations();
+      if (cancelled) return;
+      // Drop any lingering streaming flag from the previous session.
+      const cleaned = loaded.list.map((c) => ({
+        ...c,
+        messages: c.messages.map((m) => ({ ...m, streaming: false })),
+      }));
+      if (cleaned.length === 0) {
+        const fresh = emptyConversation();
+        setConversations([fresh]);
+        setActiveConvId(fresh.id);
+      } else {
+        setConversations(cleaned);
+        setActiveConvId(loaded.active ?? cleaned[0].id);
       }
+      setHistoryLoaded(true);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Persist on change (debounced). Keep last N messages only to cap disk growth.
+  // Persist on change (debounced). Cap each conversation's messages.
   useEffect(() => {
     if (!historyLoaded) return;
     if (persistTimer.current) clearTimeout(persistTimer.current);
     persistTimer.current = setTimeout(() => {
-      const trimmed = messages.slice(-MAX_PERSISTED_MESSAGES).map((m) => ({
-        ...m,
-        streaming: false,
+      const trimmed = conversations.map((c) => ({
+        ...c,
+        messages: c.messages
+          .slice(-MAX_PERSISTED_MESSAGES)
+          .map((m) => ({ ...m, streaming: false })),
       }));
-      window.suxai.conversations.write(trimmed).catch((err) => {
-        console.warn('[conv] save failed:', err);
-      });
+      void saveConversations({ version: 2, active: activeConvId, list: trimmed });
     }, 400);
     return () => {
       if (persistTimer.current) clearTimeout(persistTimer.current);
     };
-  }, [messages, historyLoaded]);
+  }, [conversations, activeConvId, historyLoaded]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -296,11 +344,65 @@ export function AIPanel() {
     return () => window.removeEventListener('suxai:add-to-chat', handler);
   }, []);
 
-  const clear = () => {
+  const newConversation = useCallback(() => {
     abortRef.current?.();
-    setMessages([]);
-    window.suxai.conversations.clear().catch(() => {});
-  };
+    setStreaming(false);
+    const fresh = emptyConversation();
+    setConversations((list) => [...list, fresh]);
+    setActiveConvId(fresh.id);
+    setInput('');
+    setAttachments([]);
+  }, []);
+
+  const switchConversation = useCallback(
+    (id: string) => {
+      if (id === activeConvId) return;
+      abortRef.current?.();
+      setStreaming(false);
+      setActiveConvId(id);
+      setInput('');
+      setAttachments([]);
+    },
+    [activeConvId],
+  );
+
+  const deleteConversation = useCallback(
+    (id: string) => {
+      if (
+        !window.confirm(
+          'Delete this conversation? Its history will be removed and the AI will not remember it.',
+        )
+      ) {
+        return;
+      }
+      setConversations((list) => {
+        const next = list.filter((c) => c.id !== id);
+        if (id === activeConvId) {
+          abortRef.current?.();
+          setStreaming(false);
+          // Switch to next available conversation, or create a fresh one.
+          if (next.length > 0) {
+            setActiveConvId(next[next.length - 1].id);
+          } else {
+            const fresh = emptyConversation();
+            setActiveConvId(fresh.id);
+            return [fresh];
+          }
+        }
+        return next;
+      });
+      toast.info('Conversation deleted');
+    },
+    [activeConvId, toast],
+  );
+
+  const renameConversation = useCallback((id: string, title: string) => {
+    setConversations((list) =>
+      list.map((c) =>
+        c.id === id ? { ...c, title: title.trim() || 'Untitled', updatedAt: new Date().toISOString() } : c,
+      ),
+    );
+  }, []);
 
   const onApplyCode = useCallback(
     (code: string) => {
@@ -327,13 +429,21 @@ export function AIPanel() {
     <aside className="ai">
       <div className="ai__header">
         <div className="ai__header-main">
-          <div className="ai__title">
-            <span className="ai__title-dot" />
-            AI Assistant
-          </div>
+          <ConversationSwitcher
+            conversations={conversations}
+            activeId={activeConvId}
+            onSwitch={switchConversation}
+            onNew={newConversation}
+            onDelete={deleteConversation}
+            onRename={renameConversation}
+          />
           <ModelSelector value={modelId} onChange={setModelId} />
         </div>
-        <button className="ai__clear" onClick={clear} disabled={messages.length === 0} title="New conversation">
+        <button
+          className="ai__clear"
+          onClick={newConversation}
+          title="New conversation"
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
             <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>

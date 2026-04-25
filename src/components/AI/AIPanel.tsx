@@ -33,6 +33,44 @@ function extractFirstCodeBlock(text: string): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Hard cap for inlined attachments (paperclip / drag-drop). The
+ * server's per-block schema cap is 4 MB; we leave headroom for the
+ * message envelope and other context. Anything bigger gets sliced
+ * with a "[truncated — N more bytes]" footer so the model sees the
+ * boundary explicitly. Mirrors the read_file truncation policy.
+ */
+const ATTACHMENT_HARD_CAP = 3_500_000; // 3.5 MB
+const ATTACHMENT_WARN_THRESHOLD = 1_000_000; // 1 MB
+
+function adjustOversizedAttachment(
+  content: string,
+  name: string,
+  toast: { info: (t: string, d?: string) => void },
+): string {
+  if (content.length <= ATTACHMENT_HARD_CAP) {
+    if (content.length >= ATTACHMENT_WARN_THRESHOLD) {
+      const mb = (content.length / 1_000_000).toFixed(2);
+      toast.info(
+        `${name} attached (${mb} MB)`,
+        'Big files cost more tokens — the AI will see the whole content.',
+      );
+    }
+    return content;
+  }
+  const kept = content.slice(0, ATTACHMENT_HARD_CAP);
+  const dropped = content.length - ATTACHMENT_HARD_CAP;
+  toast.info(
+    `${name} truncated`,
+    `${(content.length / 1_000_000).toFixed(2)} MB → kept first ${(ATTACHMENT_HARD_CAP / 1_000_000).toFixed(1)} MB. ` +
+      `Use the read_file tool from the agent to inspect specific ranges if needed.`,
+  );
+  return (
+    kept +
+    `\n\n[truncated — ${dropped} more bytes (${(dropped / 1_000_000).toFixed(2)} MB) not shown]`
+  );
+}
+
 function modelProviderForId(id: string): 'anthropic' | 'openai' | undefined {
   return AI_MODELS.find((m) => m.id === id)?.provider;
 }
@@ -1720,10 +1758,11 @@ export function AIPanel() {
             try {
               const f = await window.suxai.fs.readFile(path);
               const name = f.path.split(/[\\/]/).pop() ?? f.path;
+              const adjusted = adjustOversizedAttachment(f.content, name, toast);
               setAttachments((list) =>
                 list.some((a) => a.path === f.path)
                   ? list
-                  : [...list, { path: f.path, content: f.content, name }],
+                  : [...list, { path: f.path, content: adjusted, name }],
               );
             } catch (err) {
               toast.error('Could not attach file', (err as Error).message);
@@ -1824,10 +1863,11 @@ export function AIPanel() {
               const f = await window.suxai.fs.openFile();
               if (!f) return;
               const name = f.path.split(/[\\/]/).pop() ?? f.path;
+              const adjusted = adjustOversizedAttachment(f.content, name, toast);
               setAttachments((list) =>
                 list.some((a) => a.path === f.path)
                   ? list
-                  : [...list, { path: f.path, content: f.content, name }],
+                  : [...list, { path: f.path, content: adjusted, name }],
               );
             }}
             disabled={!token || streaming}

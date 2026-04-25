@@ -182,8 +182,14 @@ export function detectDangerousCommand(cmd: string): boolean {
   return DANGER_PATTERNS.some((re) => re.test(cmd));
 }
 
-const MAX_FILE_BYTES = 200_000;
-const MAX_DIR_ENTRIES = 200;
+// Reading caps: allow large files in one tool call so the agent can
+// inspect entire codebases without slicing them into chunks. The
+// effective ceiling is bounded by the server's per-block cap (4 MB,
+// see server/src/schemas/ai.ts). Anything bigger is auto-truncated
+// with a "[TRUNCATED — file is X bytes]" footer so the model knows
+// it's not seeing the full thing and can ask for a tighter slice.
+const MAX_FILE_BYTES = 1_500_000; // ~1.5 MB
+const MAX_DIR_ENTRIES = 400;
 
 /**
  * Directories the agent should never list — they're huge, almost

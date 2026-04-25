@@ -35,11 +35,13 @@ export function findModel(id: string): SupportedModel | undefined {
 const cacheControl = z
   .object({ type: z.literal('ephemeral') })
   .optional();
-// Per-block byte caps stop a malicious or runaway client from posting
-// a single 50 MB text block that DOMPurify and the upstream provider
-// would both choke on. The Express body cap is 10 MB; this is the
-// per-field equivalent so individual blocks stay manageable.
-const MAX_BLOCK_TEXT = 1_000_000; // 1 MB per text/tool_result block
+// Per-block byte caps. The Express body cap is 32 MB (see
+// server/src/index.ts); this per-field cap stays under a third of
+// that so a single huge block can't be the whole payload. 4 MB
+// covers very large files (entire codebases of small projects) in
+// one block while still leaving headroom for the rest of the
+// agentMessages array.
+const MAX_BLOCK_TEXT = 4_000_000; // 4 MB per text/tool_result block
 const textBlock = z.object({
   type: z.literal('text'),
   text: z.string().max(MAX_BLOCK_TEXT),
@@ -79,34 +81,40 @@ export const aiRequestSchema = z
      *  a markdown plan via create_plan only. Defaults to 'composer'
      *  for back-compat when older clients don't send the field. */
     mode: z.enum(['composer', 'ask']).default('composer'),
-    prompt: z.string().max(2_000_000, 'Prompt too large'),
+    prompt: z.string().max(8_000_000, 'Prompt too large'),
+    /** Optional override for the upstream max_tokens output cap.
+     *  Defaults: 16K in agent mode, 8K in plain chat. Capped at
+     *  64K (Anthropic's hard limit on Sonnet/Opus 4.x). Send a
+     *  bigger value when the user explicitly asks the model to
+     *  rewrite a large file in one turn. */
+    max_output_tokens: z.number().int().min(1024).max(64000).optional(),
     history: z
       .array(
         z.object({
           role: z.enum(['user', 'assistant']),
-          content: z.string().min(1).max(200_000),
+          content: z.string().min(1).max(2_000_000),
         }),
       )
-      .max(40)
+      .max(60)
       .optional(),
     context: z
       .object({
         filePath: z.string().optional(),
         language: z.string().optional(),
-        fileContent: z.string().max(1_000_000).optional(),
-        selection: z.string().max(200_000).optional(),
+        fileContent: z.string().max(8_000_000).optional(),
+        selection: z.string().max(1_000_000).optional(),
       })
       .optional(),
     // --- Agent-mode extensions ---
-    tools: z.array(toolDefinition).max(20).optional(),
+    tools: z.array(toolDefinition).max(30).optional(),
     agentMessages: z
       .array(
         z.object({
           role: z.enum(['user', 'assistant']),
-          content: z.union([z.string(), z.array(contentBlock).max(80)]),
+          content: z.union([z.string(), z.array(contentBlock).max(200)]),
         }),
       )
-      .max(120)
+      .max(200)
       .optional(),
   })
   .refine(

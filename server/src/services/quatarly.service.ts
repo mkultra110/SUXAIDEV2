@@ -274,11 +274,24 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
     ];
   }
 
+  // Output capacity. Tuned for the typical agent workload (single
+  // edit_file or write_file in one turn, sometimes with thinking).
+  // Anthropic Sonnet/Opus 4.x officially go up to 64K output tokens
+  // when streaming; 16K is a comfortable default that lets the
+  // model rewrite a ~2000-line file in one tool call without hitting
+  // stop_reason='max_tokens' mid-edit. Plain chat stays smaller —
+  // explanations rarely need more than 8K. Override via per-request
+  // body field `max_output_tokens` if the caller needs more.
+  const requestedMax =
+    typeof (req as Record<string, unknown>).max_output_tokens === 'number'
+      ? Math.max(1024, Math.min(64000, Number((req as Record<string, unknown>).max_output_tokens)))
+      : null;
+
   let body: Record<string, unknown>;
   if (isAgent) {
     body = {
       model: modelId,
-      max_tokens: 4096,
+      max_tokens: requestedMax ?? 16000,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command, true, req.mode)),
       messages: markRollingCache(req.agentMessages ?? []),
@@ -304,7 +317,7 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
     }
     body = {
       model: modelId,
-      max_tokens: 2048,
+      max_tokens: requestedMax ?? 8000,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command)),
       messages: markRollingCache(cleaned),

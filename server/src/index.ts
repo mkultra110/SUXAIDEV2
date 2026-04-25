@@ -50,10 +50,13 @@ app.use(
   }),
 );
 
-// 10 MB is plenty for even a fat attachment + full file context. Upstream
-// providers reject sooner than this anyway. The prompt schema's per-field
-// caps are the real safety net.
-app.use(express.json({ limit: '10mb' }));
+// 32 MB is the upper end of "reasonable" for a single agent turn:
+// it covers a large attached file (4 MB max per block × a handful
+// of files) plus rolling tool history. The per-field zod caps in
+// server/src/schemas/ai.ts are the real safety net; this value is
+// just the outer wall so the JSON parser doesn't blow up before
+// schema validation has a chance to give a precise error.
+app.use(express.json({ limit: '32mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true, version: env.UPDATE_VERSION }));
 

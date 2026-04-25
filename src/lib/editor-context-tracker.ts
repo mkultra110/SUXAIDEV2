@@ -61,7 +61,11 @@ export function useEditorContextTracker(
               startColumn: sel.startColumn,
               endLine: sel.endLineNumber,
               endColumn: sel.endColumn,
-              text: model.getValueInRange(sel).slice(0, 4096),
+              // 64 KB selection slice — covers most "select this
+              // big block of code" cases. Heavy selections are
+              // truncated and the model sees the boundary in the
+              // <additional_data> XML.
+              text: model.getValueInRange(sel).slice(0, 65536),
             }
           : null;
       scheduleFlush({

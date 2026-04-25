@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import * as monaco from 'monaco-editor';
 import { useWorkspace } from '../contexts/WorkspaceContext';
 
@@ -23,7 +23,18 @@ import { useWorkspace } from '../contexts/WorkspaceContext';
 export function useEditorContextTracker(
   editor: monaco.editor.IStandaloneCodeEditor | null,
 ): void {
-  const { updateEditorContext, recordEdit } = useWorkspace();
+  const { updateEditorContext, recordEdit, activeFile } = useWorkspace();
+  // Mirror the canonical workspace path so the Monaco event
+  // handlers can resolve their model URI to a real disk path.
+  // Monaco standalone uses `inmemory:` URIs whose fsPath is empty,
+  // so model.uri.fsPath alone gives garbage. The WorkspaceContext
+  // knows the absolute path of the file currently being shown, so
+  // we use that as the canonical answer for any "what file is this?"
+  // question downstream.
+  const activeFilePathRef = useRef<string | null>(null);
+  useEffect(() => {
+    activeFilePathRef.current = activeFile?.path ?? null;
+  }, [activeFile?.path]);
 
   useEffect(() => {
     if (!editor) return;
@@ -49,11 +60,15 @@ export function useEditorContextTracker(
       const pos = editor.getPosition();
       const visibleRanges = editor.getVisibleRanges();
       const visible = visibleRanges[0];
-      const path = model && model.uri.scheme === 'file'
-        ? model.uri.fsPath
-        : model
-        ? model.uri.path
-        : null;
+      // Prefer the canonical workspace path. Falls back to the
+      // model URI only when no file is open (e.g. an untitled
+      // buffer the user just created).
+      const path = activeFilePathRef.current
+        ?? (model && model.uri.scheme === 'file'
+          ? model.uri.fsPath
+          : model
+          ? model.uri.path
+          : null);
       const selectionPayload =
         sel && model && !sel.isEmpty()
           ? {
@@ -92,10 +107,13 @@ export function useEditorContextTracker(
     // executeEdits but still fires this event — we accept the noise).
     disposables.push(
       editor.onDidChangeModelContent((e) => {
-        const model = editor.getModel();
-        if (!model) return;
-        const path =
-          model.uri.scheme === 'file' ? model.uri.fsPath : model.uri.path;
+        // Same resolution rule as collectAll: trust the workspace
+        // path over the model URI. Without this, recentEdits is
+        // populated with `/0`-style fake paths that look opaque to
+        // the model and make follow-ups like "the file I just
+        // edited" useless.
+        const path = activeFilePathRef.current;
+        if (!path) return;
         const firstChange = e.changes[0];
         if (!firstChange) return;
         recordEdit(path, firstChange.range.startLineNumber);
@@ -112,8 +130,10 @@ export function useEditorContextTracker(
         return;
       }
       const markers = monaco.editor.getModelMarkers({ resource: model.uri });
-      const path =
-        model.uri.scheme === 'file' ? model.uri.fsPath : model.uri.path;
+      // Use the canonical workspace path so the model can correlate
+      // diagnostics with the same path it'd pass to read_file.
+      const path = activeFilePathRef.current
+        ?? (model.uri.scheme === 'file' ? model.uri.fsPath : model.uri.path);
       scheduleFlush({
         diagnostics: markers.slice(0, 20).map((m) => ({
           path,

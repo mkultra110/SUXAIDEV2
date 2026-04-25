@@ -1418,6 +1418,15 @@ export function AIPanel() {
         activeConv?.agentMode
           ? buildAdditionalDataXml({
               editorContext,
+              // Override the tracker's URI-derived path with the
+              // canonical workspace path. Monaco standalone (via
+              // @monaco-editor/react) uses `inmemory:` URIs for its
+              // models, so model.uri.fsPath is empty and the
+              // tracker would otherwise hand the model a fake
+              // `<current_file path="/0">`. The WorkspaceContext is
+              // the only source of truth for "the absolute path of
+              // the file the user is looking at".
+              activeFilePathOverride: activeFile?.path ?? null,
               activeFileLanguage: activeFile?.language,
               workspaceRoot,
               userAlreadyAttached: merged.some((a) => a.path === activeFile?.path),

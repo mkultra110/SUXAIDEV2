@@ -28,6 +28,11 @@ import type { EditorContext } from '../contexts/WorkspaceContext';
  */
 export interface BuildAdditionalDataInput {
   editorContext: EditorContext;
+  /** When set, overrides `editorContext.activeFilePath` with a
+   *  caller-supplied absolute path. Required because Monaco
+   *  standalone uses `inmemory:` URIs that give the tracker a fake
+   *  path; the WorkspaceContext is the canonical source. */
+  activeFilePathOverride?: string | null;
   activeFileLanguage?: string;
   workspaceRoot: string | null;
   /** True when the user already attached the active file via @-mention
@@ -58,9 +63,15 @@ function shortPath(p: string, root: string | null): string {
 
 export function buildAdditionalDataXml(input: BuildAdditionalDataInput): string {
   const { editorContext: ctx, activeFileLanguage, workspaceRoot, userAlreadyAttached } = input;
+  // Prefer the caller-provided path. The tracker's URI-derived path
+  // is unreliable on Monaco standalone (inmemory:// scheme).
+  const activePath =
+    typeof input.activeFilePathOverride === 'string' && input.activeFilePathOverride.length > 0
+      ? input.activeFilePathOverride
+      : ctx.activeFilePath;
   const lines: string[] = [];
   const hasAnyState =
-    !!ctx.activeFilePath ||
+    !!activePath ||
     ctx.recentEdits.length > 0 ||
     ctx.recentlyViewedFiles.length > 0 ||
     ctx.diagnostics.length > 0;
@@ -72,13 +83,13 @@ export function buildAdditionalDataXml(input: BuildAdditionalDataInput): string 
     lines.push(`  <workspace path="${xmlEscape(workspaceRoot)}" />`);
   }
 
-  if (ctx.activeFilePath) {
+  if (activePath) {
     const langAttr = activeFileLanguage ? ` lang="${xmlEscape(activeFileLanguage)}"` : '';
     const cursorAttr = ctx.cursorPosition
       ? ` cursor_line="${ctx.cursorPosition.line}" cursor_col="${ctx.cursorPosition.column}"`
       : '';
     lines.push(
-      `  <current_file path="${xmlEscape(ctx.activeFilePath)}"${langAttr}${cursorAttr} />`,
+      `  <current_file path="${xmlEscape(activePath)}"${langAttr}${cursorAttr} />`,
     );
     if (!userAlreadyAttached) {
       lines.push(

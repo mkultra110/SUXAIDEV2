@@ -354,8 +354,63 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
       abortRef.current = cancel;
     });
 
+    // v0.11.10: handle every Anthropic stop_reason explicitly.
+    //
+    // - 'end_turn'          → break (the natural completion path)
+    // - 'tool_use'          → execute tools then loop
+    // - 'max_tokens'        → mark assistant message with a "truncated"
+    //                          warning and break; the user can resend
+    //                          to ask the model to continue
+    // - 'pause_turn'        → continuing per Anthropic spec means
+    //                          we send the assistant content back
+    //                          verbatim; chatToAgentMessages already
+    //                          round-trips it. Skip the tool-result
+    //                          branch and keep the loop going.
+    // - 'refusal'           → discard the offending turn; halt the
+    //                          loop. The user sees the chat content
+    //                          but the message is flagged so it
+    //                          doesn't poison the next request.
+    // - 'stop_sequence'     → like end_turn (we don't set custom
+    //                          stop sequences yet, but be tolerant)
+    // - any other string    → treat as end_turn for forward compat.
+    if (stopReason === 'refusal') {
+      // The model refused. Don't include the assistant message in
+      // any follow-up — Anthropic specifies refusals must be
+      // discarded before retry. We mark the bubble so the user sees
+      // why their request didn't proceed.
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === currentAssistantId
+            ? {
+                ...msg,
+                streaming: false,
+                error: 'Le modèle a refusé cette requête. Reformule ou abandonne.',
+              }
+            : msg,
+        ),
+      );
+      break;
+    }
+    if (stopReason === 'max_tokens') {
+      // Model hit max_tokens. Don't loop (we'd just hit the same
+      // wall on the next iteration). Surface the truncation so the
+      // user knows why the answer ends abruptly.
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === currentAssistantId
+            ? {
+                ...msg,
+                streaming: false,
+                error: 'Réponse tronquée (max_tokens atteint). Relance pour faire continuer.',
+              }
+            : msg,
+        ),
+      );
+      break;
+    }
     if (collectedTools.length === 0 || stopReason !== 'tool_use') {
-      // Conversation ended naturally.
+      // Conversation ended naturally (end_turn / pause_turn /
+      // stop_sequence / unknown future reason).
       break;
     }
 

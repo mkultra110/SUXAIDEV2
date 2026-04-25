@@ -111,6 +111,59 @@
 .msg__cmd--refactor { background: rgba(192, 132, 252, 0.22); color: #e9d5ff; }
 .msg__cmd--fix      { background: rgba(250, 204, 21, 0.22);  color: #fef08a; }
 
+/* "Wall-of-code redirected to inline diff" chip — shown in place of
+   the verbose code block the model would otherwise dump in the chat
+   when an edit was auto-routed into the editor's diff view. */
+.msg__diverted {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(110, 228, 151, 0.10), rgba(125, 130, 248, 0.10));
+  border: 1px solid rgba(110, 228, 151, 0.35);
+  cursor: default;
+  font-size: 12.5px;
+}
+.msg__diverted-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(8, 12, 22, 0.55);
+  color: #c9cdff;
+  flex-shrink: 0;
+}
+.msg__diverted-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.msg__diverted-title {
+  color: var(--color-text);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+.msg__diverted-path {
+  color: var(--color-text-dim);
+  font-size: 11px;
+  font-family: var(--font-mono, monospace);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg__diverted-hint {
+  font-size: 10.5px;
+  color: var(--color-text-dim);
+  font-family: var(--font-mono, monospace);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .msg__error {
   font-size: 12px;
   padding: 8px 10px;

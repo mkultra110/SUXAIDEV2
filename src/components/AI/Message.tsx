@@ -33,6 +33,12 @@ export interface ChatMessage {
   attachments?: { path: string; name: string; content: string }[];
   /** Agent-mode tool calls emitted by this assistant turn. */
   toolCalls?: ToolCallSnapshot[];
+  /** Set when an assistant code block has been auto-routed into the
+   *  inline diff view on a real file. The renderer hides the first
+   *  fenced code block and shows a "Open in editor" chip pointing at
+   *  this path instead — so the user doesn't see a wall of code AND
+   *  a diff for the same change. */
+  divertedToFile?: string;
 }
 
 interface Props {
@@ -192,31 +198,48 @@ export function Message({
               <span className="msg__thinking-dot" />
             </div>
           )}
-          {parts.map((p, i) => {
-            const isLast = i === lastPartIdx;
-            const showCursor = !!message.streaming && isLast;
-            if (p.kind === 'code') {
+          {(() => {
+            // When the message has been diverted to the inline diff,
+            // hide the FIRST code block (the model's wall-of-code
+            // proposal) behind a small "Open in editor" chip pointing
+            // at the file. Subsequent code blocks (small examples) and
+            // the surrounding prose still render normally.
+            let firstCodeReplaced = false;
+            return parts.map((p, i) => {
+              const isLast = i === lastPartIdx;
+              const showCursor = !!message.streaming && isLast;
+              if (p.kind === 'code') {
+                if (message.divertedToFile && !firstCodeReplaced) {
+                  firstCodeReplaced = true;
+                  return (
+                    <DivertedChip
+                      key={`${message.id}:diverted:${i}`}
+                      path={message.divertedToFile}
+                    />
+                  );
+                }
+                return (
+                  <CodeBlock
+                    key={`${message.id}:${p.kind}:${i}`}
+                    code={p.content}
+                    language={p.language ?? 'plaintext'}
+                    onApply={onApply}
+                    onDiff={onDiff}
+                    streaming={showCursor}
+                  />
+                );
+              }
               return (
-                <CodeBlock
+                <div
                   key={`${message.id}:${p.kind}:${i}`}
-                  code={p.content}
-                  language={p.language ?? 'plaintext'}
-                  onApply={onApply}
-                  onDiff={onDiff}
-                  streaming={showCursor}
+                  className={`msg__text ${showCursor ? 'msg__text--streaming' : ''}`}
+                  dangerouslySetInnerHTML={{
+                    __html: renderMarkdown(p.content),
+                  }}
                 />
               );
-            }
-            return (
-              <div
-                key={`${message.id}:${p.kind}:${i}`}
-                className={`msg__text ${showCursor ? 'msg__text--streaming' : ''}`}
-                dangerouslySetInnerHTML={{
-                  __html: renderMarkdown(p.content),
-                }}
-              />
-            );
-          })}
+            });
+          })()}
         </div>
         {message.toolCalls && message.toolCalls.length > 0 && (
           <div className="msg__tools">
@@ -227,6 +250,26 @@ export function Message({
         )}
         {message.error && <div className="msg__error">⚠ {message.error}</div>}
       </div>
+    </div>
+  );
+}
+
+
+function DivertedChip({ path }: { path: string }) {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  return (
+    <div className="msg__diverted" title={path}>
+      <span className="msg__diverted-icon" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          <path d="M16 16l3 3 5-5" stroke="#86efac" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
+      <div className="msg__diverted-body">
+        <div className="msg__diverted-title">Modifications proposées dans l'éditeur</div>
+        <div className="msg__diverted-path">{name}</div>
+      </div>
+      <span className="msg__diverted-hint">Accept Alt+↵ · Reject Shift+Alt+⌫</span>
     </div>
   );
 }

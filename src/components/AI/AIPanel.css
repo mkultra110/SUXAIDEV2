@@ -20,8 +20,16 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
+/* Force every direct child of header-main to shrink instead of pushing
+   the right-side action group (Agent / + new) off-screen. The model
+   pill in particular has a long label like "Claude Sonnet 4.6
+   (thinking)" that used to overlap the Agent button. */
+.ai__header-main > * { min-width: 0; }
+/* Right-side actions never shrink — they stay fully visible. */
+.ai__header-actions { flex-shrink: 0; }
 
 .ai__title {
   display: flex;

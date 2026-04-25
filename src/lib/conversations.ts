@@ -58,6 +58,13 @@ export function emptyConversation(): Conversation {
     createdAt: now,
     updatedAt: now,
     messages: [],
+    // Default to agent mode ON. The user expects targeted edits to
+    // their open files (Cursor-style edit_file with hunks the user
+    // accepts/rejects), not a wall of code dumped in the chat.
+    // Toggleable any time from the header. Only kicks in when the
+    // selected model is Anthropic-flavoured; the toggle no-ops on
+    // OpenAI-compatible models so existing chat-only flows still work.
+    agentMode: true,
   };
 }
 

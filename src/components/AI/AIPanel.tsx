@@ -926,15 +926,13 @@ export function AIPanel() {
             );
           },
           onDone: (full) => {
-            setMessages((m) =>
-              m.map((msg) => (msg.id === assistantMsg.id ? { ...msg, streaming: false } : msg)),
-            );
-            setStreaming(false);
-            abortRef.current = null;
-
-            // Auto-open diff for fix/refactor/optimize commands when the
-            // response contains at least one code block. User-friendly:
-            // same experience as Cursor's edit-and-accept flow.
+            // Auto-open the inline diff if the model returned a sizable
+            // code block AND we have a current file to compare against.
+            // We mark the message `divertedToFile` so the chat hides
+            // the wall-of-code chip in favour of an "Open in editor"
+            // pill — the user sees the change AS A DIFF on their file,
+            // not as a duplicate code dump in the conversation.
+            let divertedTo: string | null = null;
             if (diffTarget) {
               const proposed = extractFirstCodeBlock(full);
               if (proposed && proposed.trim() !== diffTarget.content.trim()) {
@@ -944,8 +942,22 @@ export function AIPanel() {
                   proposed,
                   label: `${command} · ${modelId}`,
                 });
+                divertedTo = diffTarget.path;
               }
             }
+            setMessages((m) =>
+              m.map((msg) =>
+                msg.id === assistantMsg.id
+                  ? {
+                      ...msg,
+                      streaming: false,
+                      ...(divertedTo ? { divertedToFile: divertedTo } : {}),
+                    }
+                  : msg,
+              ),
+            );
+            setStreaming(false);
+            abortRef.current = null;
           },
           onError: (err) => {
             setMessages((m) =>

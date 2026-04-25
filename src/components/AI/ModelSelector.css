@@ -1,5 +1,10 @@
 .model-sel {
   position: relative;
+  /* Allow the trigger to shrink inside the header flex row when the
+     model label is long (e.g. "Claude Sonnet 4.6 (thinking)") so it
+     never collides with the Agent / new-conv buttons on the right. */
+  min-width: 0;
+  flex-shrink: 1;
 }
 
 .model-sel__trigger {
@@ -8,6 +13,7 @@
   gap: 8px;
   padding: 4px 10px;
   height: 26px;
+  max-width: 100%;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border);
@@ -35,6 +41,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 1;
+  min-width: 0;
+}
+/* On narrower windows (< 540px panel width), shrink the model label
+   even further so the Agent + new-conv buttons stay fully visible. */
+@media (max-width: 540px) {
+  .model-sel__name { max-width: 100px; }
 }
 
 .model-sel__menu {

@@ -18,9 +18,21 @@ function buildSystemPrompt(command: AiRequestInput['command'], agent = false): s
     return (
       base +
       '\n\nYou are operating in AGENT mode. You have tools to read and edit ' +
-      "the user's files (read_file, list_dir, edit_file, write_file). Use them " +
-      'to understand the project before making changes. Always read a file ' +
-      'before editing it. Prefer minimal, surgical edits via edit_file. ' +
+      "the user's files (read_file, list_dir, edit_file, write_file, run_command). " +
+      'Use them to understand the project before making changes. Always read a ' +
+      'file before editing it.\n\n' +
+      'CRITICAL — how to apply changes:\n' +
+      '  • To MODIFY an existing file, ALWAYS use the `edit_file` tool with a ' +
+      'small, surgical search/replace that touches only the lines you need to ' +
+      'change. Do NOT rewrite the whole file.\n' +
+      '  • To CREATE a new file, use `write_file`.\n' +
+      '  • NEVER paste the modified file (or large code blocks of it) back into ' +
+      'the chat as your "answer" — the user will not see it as a diff and you ' +
+      'will burn tokens for nothing. Tool calls trigger an inline diff in the ' +
+      "user's editor where they accept or reject each hunk individually; that " +
+      'is the ONLY correct way to deliver edits in agent mode.\n' +
+      '  • If the user just asks a question (no edit intent), answer in chat ' +
+      'as normal — short code snippets for explanation are fine.\n\n' +
       'When you finish, briefly summarize what you changed and why. ' +
       'If a request is ambiguous, ask before acting.'
     );

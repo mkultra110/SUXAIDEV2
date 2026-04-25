@@ -4,6 +4,18 @@ import { findModel, type AiRequestInput } from '../schemas/ai.js';
 export interface StreamHandlers {
   onDelta: (chunk: string) => void;
   onToolUse?: (call: { id: string; name: string; input: unknown }) => void;
+  /** v0.12: thinking block emitted once content_block_stop arrives.
+   *  Carries the cryptographic `signature` Anthropic requires
+   *  byte-for-byte on the next turn whenever the model later chains
+   *  a tool_use; without round-tripping it the API returns 400
+   *  "Expected thinking or redacted_thinking block". */
+  onThinkingBlock?: (block: { thinking: string; signature: string }) => void;
+  /** v0.12: opaque blob returned by Anthropic when it strips a
+   *  thinking block. Must be returned verbatim on subsequent turns. */
+  onRedactedThinking?: (block: { data: string }) => void;
+  /** v0.12: server-side tool use (e.g. web_search). We don't dispatch
+   *  these — Anthropic ran them on its end. We just round-trip them. */
+  onServerToolUse?: (call: { id: string; name: string; input: unknown }) => void;
   onStop?: (reason: 'end_turn' | 'tool_use' | 'max_tokens' | string) => void;
   onDone: () => void;
   onError: (err: Error) => void;
@@ -302,20 +314,35 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       ? Math.max(1024, Math.min(64000, Number((req as Record<string, unknown>).max_output_tokens)))
       : null;
 
+  // v0.12: enable extended thinking for `*-thinking` model IDs.
+  // Anthropic requires `thinking.budget_tokens < max_tokens`, so we
+  // size the budget at half of max_tokens (capped at 16K, the spec's
+  // recommended ceiling for tool-using agents). Quatarly may already
+  // route `-thinking` IDs to a thinking-enabled deployment, but
+  // including this parameter explicitly is harmless on a non-thinking
+  // backend and required on the real Anthropic API.
+  const isThinking = modelId.endsWith('-thinking');
+  const thinkingParam = (max: number): { type: 'enabled'; budget_tokens: number } => ({
+    type: 'enabled',
+    budget_tokens: Math.min(16000, Math.max(1024, Math.floor(max / 2))),
+  });
+
   let body: Record<string, unknown>;
   if (isAgent) {
+    const max = requestedMax ?? 32000;
     body = {
       model: modelId,
       // v0.11.1: bumped 16K → 32K. The model was self-limiting at
       // ~300-line edits because it was anticipating a 16K cap; with
       // 32K it can confidently emit a full 2K-line refactor in one
       // turn (paired with apply_lazy_edit when even bigger).
-      max_tokens: requestedMax ?? 32000,
+      max_tokens: max,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command, true, req.mode)),
       messages: markRollingCache(req.agentMessages ?? []),
       tools: cachedTools(req.tools ?? []),
     };
+    if (isThinking) body.thinking = thinkingParam(max);
   } else {
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
     if (req.history && req.history.length > 0) {
@@ -334,15 +361,17 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         cleaned.push({ ...m });
       }
     }
+    const max = requestedMax ?? 16000;
     body = {
       model: modelId,
       // Plain chat: bumped 8K → 16K so explanations + long code
       // examples + walkthroughs can stream in one shot.
-      max_tokens: requestedMax ?? 16000,
+      max_tokens: max,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command)),
       messages: markRollingCache(cleaned),
     };
+    if (isThinking) body.thinking = thinkingParam(max);
   }
   try {
     const res = await fetch(url, {
@@ -387,9 +416,20 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
     // the stream was truncated by max_tokens — in that case the
     // partial is malformed and we drop it (retrying upstream is the
     // caller's job).
+    //
+    // v0.12: thinking blocks stream as content_block_start (type=
+    // 'thinking', empty thinking) → many thinking_delta events → one
+    // signature_delta event → content_block_stop. The signature is a
+    // cryptographic envelope that MUST round-trip byte-for-byte on
+    // subsequent turns or Anthropic returns 400. Same for
+    // redacted_thinking (data is set on content_block_start) and
+    // server_tool_use (same shape as tool_use).
     type PendingBlock =
       | { kind: 'text' }
-      | { kind: 'tool_use'; id: string; name: string; partial: string };
+      | { kind: 'tool_use'; id: string; name: string; partial: string }
+      | { kind: 'thinking'; thinking: string; signature: string }
+      | { kind: 'redacted_thinking'; data: string }
+      | { kind: 'server_tool_use'; id: string; name: string; partial: string };
     const blocks: Map<number, PendingBlock> = new Map();
     let lastStopReason: string | null = null;
     let sawMessageStop = false;
@@ -450,13 +490,38 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
 
         if (obj.type === 'content_block_start') {
           const i = obj.index ?? 0;
-          const cb = obj.content_block;
-          if (cb && (cb as { type?: string }).type === 'tool_use') {
+          const cb = obj.content_block as Record<string, unknown> | undefined;
+          const cbType = cb?.type as string | undefined;
+          if (cbType === 'tool_use') {
             blocks.set(i, {
               kind: 'tool_use',
-              id: (cb as { id: string }).id,
-              name: (cb as { name: string }).name,
+              id: cb!.id as string,
+              name: cb!.name as string,
               partial: '',
+            });
+          } else if (cbType === 'server_tool_use') {
+            blocks.set(i, {
+              kind: 'server_tool_use',
+              id: cb!.id as string,
+              name: cb!.name as string,
+              partial: '',
+            });
+          } else if (cbType === 'thinking') {
+            // Anthropic occasionally sends the entire thinking text on
+            // start (rare) — seed the pending block with whatever's
+            // already there and append deltas in content_block_delta.
+            blocks.set(i, {
+              kind: 'thinking',
+              thinking: typeof cb!.thinking === 'string' ? (cb!.thinking as string) : '',
+              signature: typeof cb!.signature === 'string' ? (cb!.signature as string) : '',
+            });
+          } else if (cbType === 'redacted_thinking') {
+            // Redacted blocks come whole — `data` is set on start and
+            // not modified by deltas. We still wait for content_block_stop
+            // before emitting so we don't race ahead of the stream.
+            blocks.set(i, {
+              kind: 'redacted_thinking',
+              data: typeof cb!.data === 'string' ? (cb!.data as string) : '',
             });
           } else {
             blocks.set(i, { kind: 'text' });
@@ -464,23 +529,43 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         } else if (obj.type === 'content_block_delta') {
           const i = obj.index ?? 0;
           const block = blocks.get(i);
-          const delta = obj.delta as { type?: string; text?: string; partial_json?: string } | undefined;
+          const delta = obj.delta as {
+            type?: string;
+            text?: string;
+            partial_json?: string;
+            thinking?: string;
+            signature?: string;
+          } | undefined;
           if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
             if (delta.text.length > 0) h.onDelta(delta.text);
           } else if (
             delta?.type === 'input_json_delta' &&
-            block?.kind === 'tool_use' &&
+            (block?.kind === 'tool_use' || block?.kind === 'server_tool_use') &&
             typeof delta.partial_json === 'string'
           ) {
             block.partial += delta.partial_json;
+          } else if (
+            delta?.type === 'thinking_delta' &&
+            block?.kind === 'thinking' &&
+            typeof delta.thinking === 'string'
+          ) {
+            block.thinking += delta.thinking;
+          } else if (
+            delta?.type === 'signature_delta' &&
+            block?.kind === 'thinking' &&
+            typeof delta.signature === 'string'
+          ) {
+            // Signature is a single-shot field — Anthropic emits one
+            // signature_delta per thinking block. We accept either
+            // exactly-once or accumulated form for safety.
+            block.signature = delta.signature;
           }
-          // thinking_delta / signature_delta / citations_delta are
-          // currently dropped — they'll be wired up in v0.12 when the
-          // proxy switches to raw byte-for-byte forwarding.
+          // citations_delta is still dropped — it's metadata-only and
+          // doesn't affect the round-trip invariant.
         } else if (obj.type === 'content_block_stop') {
           const i = obj.index ?? 0;
           const block = blocks.get(i);
-          if (block?.kind === 'tool_use') {
+          if (block?.kind === 'tool_use' || block?.kind === 'server_tool_use') {
             // Don't try to emit a tool_use when the stream was
             // truncated mid-input-json by max_tokens — the partial
             // is guaranteed-malformed and dispatching it would
@@ -498,17 +583,32 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
                 inputOk = false;
               }
               if (inputOk) {
-                h.onToolUse?.({ id: block.id, name: block.name, input });
+                if (block.kind === 'tool_use') {
+                  h.onToolUse?.({ id: block.id, name: block.name, input });
+                } else {
+                  h.onServerToolUse?.({ id: block.id, name: block.name, input });
+                }
               } else {
                 // Parsed-failure with NO max_tokens marker: rare,
                 // typically a network corruption. Don't dispatch a
                 // garbage tool — surface as an error to the caller.
                 throw new Error(
-                  `tool_use input_json was malformed JSON (block.id=${block.id}, ` +
+                  `${block.kind} input_json was malformed JSON (block.id=${block.id}, ` +
                     `${block.partial.length} chars accumulated)`,
                 );
               }
             }
+          } else if (block?.kind === 'thinking') {
+            // Round-trip the thinking block to the client even if
+            // signature is missing — better to send what we have than
+            // drop it; Anthropic only enforces signature on the
+            // next-turn request, not on the current response.
+            h.onThinkingBlock?.({
+              thinking: block.thinking,
+              signature: block.signature,
+            });
+          } else if (block?.kind === 'redacted_thinking') {
+            h.onRedactedThinking?.({ data: block.data });
           }
           blocks.delete(i);
         } else if (obj.type === 'message_delta') {
@@ -707,3 +807,4 @@ export async function applyLazyEdit(input: import('../schemas/ai.js').AiApplyInp
     return null;
   }
 }
+

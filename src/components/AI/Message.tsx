@@ -34,6 +34,18 @@ export interface ChatMessage {
   attachments?: { path: string; name: string; content: string }[];
   /** Agent-mode tool calls emitted by this assistant turn. */
   toolCalls?: ToolCallSnapshot[];
+  /** v0.12: extended-thinking and server-side blocks captured during
+   *  streaming. Stored in arrival order so we can prepend them to
+   *  `toolCalls` when reconstructing the assistant turn for the next
+   *  agent-mode request — the cryptographic `signature` on each
+   *  thinking block must round-trip byte-for-byte or Anthropic
+   *  returns 400 "Expected thinking or redacted_thinking block".
+   *  Non-thinking models never populate this array. */
+  assistantBlocks?: Array<
+    | { type: 'thinking'; thinking: string; signature: string }
+    | { type: 'redacted_thinking'; data: string }
+    | { type: 'server_tool_use'; id: string; name: string; input: unknown }
+  >;
   /** Set when an assistant code block has been auto-routed into the
    *  inline diff view on a real file. The renderer hides the first
    *  fenced code block and shows a "Open in editor" chip pointing at

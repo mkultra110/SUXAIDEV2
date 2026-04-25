@@ -16,7 +16,44 @@ export interface AgentToolResultBlock {
   content: string;
   is_error?: boolean;
 }
-export type AgentContentBlock = AgentTextBlock | AgentToolUseBlock | AgentToolResultBlock;
+/**
+ * Extended-thinking block (Sonnet/Opus 4.x with thinking).
+ * `signature` is a cryptographic envelope Anthropic computes — it
+ * MUST be round-tripped byte-for-byte on subsequent turns or the
+ * model rejects the request with 400.
+ */
+export interface AgentThinkingBlock {
+  type: 'thinking';
+  thinking: string;
+  signature: string;
+}
+/**
+ * Redacted thinking — Anthropic strips a thinking block it can't
+ * disclose but still requires the opaque `data` blob to be returned
+ * verbatim so the cryptographic chain stays intact.
+ */
+export interface AgentRedactedThinkingBlock {
+  type: 'redacted_thinking';
+  data: string;
+}
+/**
+ * Server-side tool use (e.g. web_search) executed by Anthropic
+ * directly. We don't dispatch these — we just round-trip them so
+ * the model's container/state is preserved across turns.
+ */
+export interface AgentServerToolUseBlock {
+  type: 'server_tool_use';
+  id: string;
+  name: string;
+  input: unknown;
+}
+export type AgentContentBlock =
+  | AgentTextBlock
+  | AgentToolUseBlock
+  | AgentToolResultBlock
+  | AgentThinkingBlock
+  | AgentRedactedThinkingBlock
+  | AgentServerToolUseBlock;
 export interface AgentMessage {
   role: 'user' | 'assistant';
   content: string | AgentContentBlock[];
@@ -47,6 +84,16 @@ export interface AiRequest {
 export interface AiStreamHandlers {
   onToken?: (chunk: string) => void;
   onToolUse?: (call: { id: string; name: string; input: unknown }) => void;
+  /** v0.12: extended-thinking block emitted at the end of its
+   *  content_block_stop. The signature must round-trip on the next
+   *  request — store it on the assistant message as an
+   *  AgentThinkingBlock so chatToAgentMessages includes it. */
+  onThinkingBlock?: (block: AgentThinkingBlock) => void;
+  /** v0.12: opaque redacted_thinking blob — same round-trip rule. */
+  onRedactedThinking?: (block: AgentRedactedThinkingBlock) => void;
+  /** v0.12: server-side tool use (e.g. web_search) — Anthropic ran it,
+   *  we just preserve the block on the next turn. */
+  onServerToolUse?: (call: AgentServerToolUseBlock) => void;
   onStop?: (reason: string) => void;
   onDone?: (full: string) => void;
   onError?: (err: Error) => void;
@@ -119,6 +166,11 @@ export function streamAi(
           interface SseEvent {
             delta?: string;
             tool_use?: { id: string; name: string; input: unknown };
+            /** v0.12: thinking block — the cryptographic `signature`
+             *  must be round-tripped verbatim on the next request. */
+            thinking_block?: { thinking: string; signature: string };
+            redacted_thinking?: { data: string };
+            server_tool_use?: { id: string; name: string; input: unknown };
             stop_reason?: string;
             error?: string;
             /** v0.11.7: server tags errors with a typed code so the
@@ -144,6 +196,27 @@ export function streamAi(
           }
           if (obj?.tool_use) {
             handlers.onToolUse?.(obj.tool_use);
+          }
+          if (obj?.thinking_block) {
+            handlers.onThinkingBlock?.({
+              type: 'thinking',
+              thinking: obj.thinking_block.thinking,
+              signature: obj.thinking_block.signature,
+            });
+          }
+          if (obj?.redacted_thinking) {
+            handlers.onRedactedThinking?.({
+              type: 'redacted_thinking',
+              data: obj.redacted_thinking.data,
+            });
+          }
+          if (obj?.server_tool_use) {
+            handlers.onServerToolUse?.({
+              type: 'server_tool_use',
+              id: obj.server_tool_use.id,
+              name: obj.server_tool_use.name,
+              input: obj.server_tool_use.input,
+            });
           }
           if (obj?.stop_reason) {
             handlers.onStop?.(obj.stop_reason);

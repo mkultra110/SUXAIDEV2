@@ -62,7 +62,37 @@ const toolResultBlock = z.object({
   is_error: z.boolean().optional(),
   cache_control: cacheControl,
 });
-const contentBlock = z.union([textBlock, toolUseBlock, toolResultBlock]);
+// v0.12: extended-thinking + server-side blocks. MUST be accepted
+// verbatim on agentMessages so the cryptographic `signature`
+// round-trips back to Anthropic. Without these, calling a
+// *-thinking model and chaining a tool_use the next turn produces
+// a 400 'Expected thinking or redacted_thinking block' error.
+const thinkingBlock = z.object({
+  type: z.literal('thinking'),
+  thinking: z.string().max(MAX_BLOCK_TEXT),
+  signature: z.string().max(8000),
+  cache_control: cacheControl,
+});
+const redactedThinkingBlock = z.object({
+  type: z.literal('redacted_thinking'),
+  data: z.string().max(MAX_BLOCK_TEXT),
+  cache_control: cacheControl,
+});
+const serverToolUseBlock = z.object({
+  type: z.literal('server_tool_use'),
+  id: z.string().max(200),
+  name: z.string().max(80),
+  input: z.unknown(),
+  cache_control: cacheControl,
+});
+const contentBlock = z.union([
+  textBlock,
+  toolUseBlock,
+  toolResultBlock,
+  thinkingBlock,
+  redactedThinkingBlock,
+  serverToolUseBlock,
+]);
 
 const toolDefinition = z.object({
   name: z.string().min(1).max(80),

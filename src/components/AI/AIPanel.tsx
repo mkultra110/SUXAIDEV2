@@ -124,6 +124,14 @@ function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
       (tc) => tc.result !== undefined && tc.status !== 'pending' && tc.status !== 'running',
     );
     const blocks: AgentContentBlock[] = [];
+    // v0.12: thinking / redacted_thinking / server_tool_use blocks
+    // come FIRST in the assistant message — this is required by
+    // Anthropic on *-thinking models. The cryptographic signature on
+    // each thinking block is part of the chain: drop or reorder it
+    // and the next request fails with 400.
+    if (m.assistantBlocks && m.assistantBlocks.length > 0) {
+      for (const b of m.assistantBlocks) blocks.push(b);
+    }
     if (m.content && m.content.trim()) {
       blocks.push({ type: 'text', text: m.content });
     }
@@ -329,6 +337,43 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
               const next = m.map((msg) =>
                 msg.id === currentAssistantId
                   ? { ...msg, toolCalls: [...(msg.toolCalls ?? []), snapshot] }
+                  : msg,
+              );
+              working = next;
+              return next;
+            });
+          },
+          // v0.12: stash thinking + redacted_thinking + server_tool_use
+          // blocks on the assistant message so chatToAgentMessages can
+          // round-trip them byte-for-byte on the next iteration.
+          // Required by Anthropic on *-thinking model variants.
+          onThinkingBlock: (block) => {
+            setMessages((m) => {
+              const next = m.map((msg) =>
+                msg.id === currentAssistantId
+                  ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
+                  : msg,
+              );
+              working = next;
+              return next;
+            });
+          },
+          onRedactedThinking: (block) => {
+            setMessages((m) => {
+              const next = m.map((msg) =>
+                msg.id === currentAssistantId
+                  ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
+                  : msg,
+              );
+              working = next;
+              return next;
+            });
+          },
+          onServerToolUse: (block) => {
+            setMessages((m) => {
+              const next = m.map((msg) =>
+                msg.id === currentAssistantId
+                  ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
                   : msg,
               );
               working = next;

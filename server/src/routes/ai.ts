@@ -101,6 +101,13 @@ router.post(
         {
           onDelta: (delta) => writeEvent({ delta }),
           onToolUse: (call) => writeEvent({ tool_use: call }),
+          // v0.12: forward extended-thinking content blocks so the
+          // client can store them alongside the assistant message and
+          // round-trip them on the next turn (mandatory on *-thinking
+          // models — see server/src/services/quatarly.service.ts).
+          onThinkingBlock: (block) => writeEvent({ thinking_block: block }),
+          onRedactedThinking: (block) => writeEvent({ redacted_thinking: block }),
+          onServerToolUse: (call) => writeEvent({ server_tool_use: call }),
           onStop: (reason) => writeEvent({ stop_reason: reason }),
           onDone: () => writeDone(),
           onError: (err) => {

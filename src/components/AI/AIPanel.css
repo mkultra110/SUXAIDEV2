@@ -129,6 +129,30 @@
   padding: 10px 12px 12px;
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-1);
+  position: relative;
+  transition: background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.ai__composer--dragover {
+  background: rgba(125, 130, 248, 0.10);
+  box-shadow: inset 0 0 0 1.5px rgba(125, 130, 248, 0.55);
+}
+.ai__composer--dragover::after {
+  content: 'Drop to attach as context';
+  position: absolute;
+  inset: 8px 12px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  border: 1.5px dashed rgba(125, 130, 248, 0.6);
+  border-radius: var(--radius-md);
+  color: #b8bcff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  background: rgba(8, 12, 22, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
 }
 
 .ai__composer textarea {
@@ -356,6 +380,35 @@
   color: #d8dbff;
 }
 .ai__agent-toggle--on:hover { filter: brightness(1.1); }
+
+/* Pulsing dot inside the Agent pill — clear visual cue for the on/off
+   state without leaning on the Cmd-K-style sparkle SVG that didn't
+   render reliably across font stacks. */
+.ai__agent-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-dim);
+  flex-shrink: 0;
+  transition: background var(--dur-base) var(--ease-out);
+}
+.ai__agent-toggle--on .ai__agent-dot {
+  background: #86efac;
+  box-shadow: 0 0 6px rgba(134, 239, 172, 0.6);
+  animation: suxai-agent-pulse 1.6s ease-in-out infinite;
+}
+@keyframes suxai-agent-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(134, 239, 172, 0.4); }
+  50%      { box-shadow: 0 0 9px rgba(134, 239, 172, 0.85); }
+}
+
+/* Header right-side action group — keeps the Agent pill + new-conv
+   button visually grouped and away from the title block. */
+.ai__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 
 .msg__tools {
   margin-top: 8px;

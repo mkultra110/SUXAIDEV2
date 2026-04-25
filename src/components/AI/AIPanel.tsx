@@ -439,7 +439,7 @@ async function loadProjectPreamble(
 
 export function AIPanel() {
   const { token } = useAuth();
-  const { activeFile, selection, updateActiveContent, openDiff, openFiles, workspaceRoot } = useWorkspace();
+  const { activeFile, selection, openDiff, openFiles, workspaceRoot } = useWorkspace();
   // Cache the loaded preamble per workspaceRoot so we read AGENTS.md
   // once per workspace open — not on every send.
   const preambleRef = useRef<{ root: string | null; preamble: string } | null>(null);
@@ -454,6 +454,7 @@ export function AIPanel() {
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const requestApproval = useCallback(
     (
@@ -714,8 +715,28 @@ export function AIPanel() {
         command === 'chat'
           ? cleaned || text
           : `${command.toUpperCase()}${cleaned ? `: ${cleaned}` : ''}`;
+
+      // Auto-context: when a file is open and there's no explicit
+      // attachment / selection, the model still needs to know which
+      // file the user means. For agent mode we inject a short header
+      // pointing at the active path + selection so the model doesn't
+      // have to ask "which file?" before doing anything. For plain
+      // chat we ALSO send `context.filePath/fileContent` separately,
+      // but the agent-mode branch never reaches that path so we have
+      // to embed it inline. Skip when there's no active file or when
+      // the user already attached one — don't double-spam.
+      const alreadyHasActiveFile =
+        merged.some((a) => a.path === activeFile?.path) || !!selection;
+      const inlineContextHeader =
+        activeConv?.agentMode && activeFile && !alreadyHasActiveFile
+          ? `\n\n[active editor file: ${activeFile.path}` +
+            (activeFile.language ? ` (${activeFile.language})` : '') +
+            `]\nUse the read_file tool on this path if you need its contents.`
+          : '';
+
       const fullPromptForHistory =
         buildCommandPrompt(command, cleaned || selection || activeFile?.content || '') +
+        inlineContextHeader +
         attachmentBlock;
 
       const userMsg: ChatMessage = {
@@ -1016,9 +1037,19 @@ export function AIPanel() {
   const onApplyCode = useCallback(
     (code: string) => {
       if (!activeFile) return;
-      updateActiveContent(code);
+      // Open the diff view instead of overwriting the buffer outright.
+      // The model usually returns just the modified snippet — replacing
+      // the whole file with that snippet would silently delete every
+      // surrounding line. The diff view lets the user accept hunks
+      // individually (or hit "Accept all" to replace fully on purpose).
+      openDiff({
+        path: activeFile.path,
+        original: activeFile.content,
+        proposed: code,
+        label: `apply · ${modelId}`,
+      });
     },
-    [activeFile, updateActiveContent],
+    [activeFile, openDiff, modelId],
   );
 
   const onDiffCode = useCallback(
@@ -1049,6 +1080,8 @@ export function AIPanel() {
             onRename={renameConversation}
           />
           <ModelSelector value={modelId} onChange={setModelId} />
+        </div>
+        <div className="ai__header-actions">
           <button
             type="button"
             className={`ai__agent-toggle ${activeConv?.agentMode ? 'ai__agent-toggle--on' : ''}`}
@@ -1067,28 +1100,27 @@ export function AIPanel() {
                 ),
               );
             }}
-            title="Agent mode lets the AI read and edit files itself, with your approval"
+            title={
+              activeConv?.agentMode
+                ? 'Agent mode ON — Claude can read/edit files (with your approval)'
+                : 'Agent mode OFF — chat only'
+            }
+            aria-pressed={!!activeConv?.agentMode}
           >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M12 2v4m0 12v4M4 12H2m20 0h-2M5 5l3 3m8 8 3 3M5 19l3-3m8-8 3-3"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
+            <span className="ai__agent-dot" aria-hidden />
+            <span>Agent</span>
+          </button>
+          <button
+            className="ai__clear"
+            onClick={newConversation}
+            title="New conversation"
+            aria-label="New conversation"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
             </svg>
-            Agent {activeConv?.agentMode ? 'on' : 'off'}
           </button>
         </div>
-        <button
-          className="ai__clear"
-          onClick={newConversation}
-          title="New conversation"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          </svg>
-        </button>
       </div>
 
       <div className="ai__commands">
@@ -1210,7 +1242,51 @@ export function AIPanel() {
       )}
 
       <form
-        className="ai__composer"
+        className={`ai__composer ${dragOver ? 'ai__composer--dragover' : ''}`}
+        onDragOver={(e) => {
+          // Accept drags carrying our custom payload (sidebar entry)
+          // OR a plain file path (legacy text/uri-list, OS file drop).
+          const types = e.dataTransfer.types;
+          if (
+            types.includes('text/x-suxai-path') ||
+            types.includes('Files') ||
+            types.includes('text/uri-list')
+          ) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            if (!dragOver) setDragOver(true);
+          }
+        }}
+        onDragLeave={(e) => {
+          // Only clear when the cursor leaves the composer entirely,
+          // not when it crosses an inner child.
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          setDragOver(false);
+        }}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const sidebarPath = e.dataTransfer.getData('text/x-suxai-path');
+          const candidates: string[] = [];
+          if (sidebarPath) candidates.push(sidebarPath);
+          for (const file of Array.from(e.dataTransfer.files)) {
+            const p = (file as unknown as { path?: string }).path;
+            if (typeof p === 'string' && p) candidates.push(p);
+          }
+          for (const path of candidates) {
+            try {
+              const f = await window.suxai.fs.readFile(path);
+              const name = f.path.split(/[\\/]/).pop() ?? f.path;
+              setAttachments((list) =>
+                list.some((a) => a.path === f.path)
+                  ? list
+                  : [...list, { path: f.path, content: f.content, name }],
+              );
+            } catch (err) {
+              toast.error('Could not attach file', (err as Error).message);
+            }
+          }
+        }}
         onSubmit={(e) => {
           e.preventDefault();
           const slash = parseSlashCommand(input);

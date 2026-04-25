@@ -267,6 +267,18 @@ function TreeList({
               style={{ paddingLeft: 8 + depth * 12 }}
               onClick={() => onToggle(e)}
               onContextMenu={(ev) => onContextMenu(e, ev)}
+              draggable={!e.isDirectory}
+              onDragStart={(ev) => {
+                if (e.isDirectory) return;
+                // text/x-suxai-path is the canonical payload — the AI
+                // composer reads it and resolves the path via IPC.
+                // Also stamp text/plain so dropping the same drag onto
+                // a regular textarea (outside SUXAI) just inserts the
+                // path string instead of a Chrome-internal blob.
+                ev.dataTransfer.setData('text/x-suxai-path', e.path);
+                ev.dataTransfer.setData('text/plain', e.path);
+                ev.dataTransfer.effectAllowed = 'copy';
+              }}
             >
               <span className="sidebar__chev" aria-hidden>
                 {e.isDirectory ? (

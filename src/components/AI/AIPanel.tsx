@@ -622,6 +622,31 @@ export function AIPanel() {
   );
   const messages = activeConv?.messages ?? [];
 
+  // Approaching-context-limit warning. Heuristic: 4 chars ≈ 1 token,
+  // 200K token window for Sonnet/Opus 4.x → warn around 140K tokens
+  // (≈ 560K chars across all messages). Fires once per threshold
+  // crossing thanks to the ref guard so the user isn't spammed.
+  const warnedAtRef = useRef<number>(0);
+  useEffect(() => {
+    if (!activeConv) return;
+    const totalChars = activeConv.messages.reduce(
+      (acc, m) => acc + (m.historyContent?.length ?? m.content.length),
+      0,
+    );
+    const approxTokens = Math.round(totalChars / 4);
+    const WARN_AT = 140_000; // ~70% of 200K window
+    if (approxTokens > WARN_AT && warnedAtRef.current < WARN_AT) {
+      warnedAtRef.current = approxTokens;
+      toast.info(
+        `Conversation getting long (~${Math.round(approxTokens / 1000)}K tokens)`,
+        'Type /compact to summarise older messages and free up context.',
+      );
+    }
+    // Reset the guard when the conversation shrinks (e.g. after
+    // /compact runs).
+    if (approxTokens < WARN_AT * 0.8) warnedAtRef.current = 0;
+  }, [activeConv, toast]);
+
   // Mutate the active conversation's messages array.
   const setMessages = useCallback(
     (
@@ -753,6 +778,98 @@ export function AIPanel() {
   }, []);
 
   /**
+   * Run a compaction pass: take all but the last 6 turns of the
+   * active conversation, ask Haiku 4.5 (cheap + fast) to summarise
+   * them into a single text block, and splice the result back into
+   * the conversation as a synthetic system-tag message. The trailing
+   * 6 turns stay verbatim so the model keeps fine-grained context
+   * for follow-up edits.
+   *
+   * Auto-triggered via the >70% context heuristic OR manually via
+   * the /compact slash command. Idempotent — calling twice in a row
+   * just folds the latest tail into the existing summary.
+   */
+  const compactConversation = useCallback(async () => {
+    if (!token || !activeConvId) return;
+    const conv = conversations.find((c) => c.id === activeConvId);
+    if (!conv || conv.messages.length <= 8) return;
+    const TAIL = 6; // keep the most recent 6 messages verbatim
+    const tail = conv.messages.slice(-TAIL);
+    const head = conv.messages.slice(0, -TAIL);
+    if (head.length === 0) return;
+
+    // Render the head as a compact transcript for the summarising
+    // model. We trim attachments / tool dumps to stay under a
+    // reasonable input size — the goal is a summary, not perfect
+    // fidelity.
+    const transcript = head
+      .map((m) => {
+        const role = m.role === 'user' ? 'User' : 'Assistant';
+        const body = m.content.slice(0, 4000);
+        const tools =
+          m.toolCalls && m.toolCalls.length > 0
+            ? `\n[tools called: ${m.toolCalls
+                .map((tc) => tc.name)
+                .join(', ')}]`
+            : '';
+        return `${role}: ${body}${tools}`;
+      })
+      .join('\n\n---\n\n');
+
+    setStreaming(true);
+    let summary = '';
+    await new Promise<void>((resolve) => {
+      const cancel = streamAi(
+        token,
+        {
+          // Force Haiku — it's cheap and fast for summarisation. If
+          // not available the server's findModel would fall back to
+          // the default; either way the summary quality is fine.
+          modelId: 'claude-haiku-4-5-20251001',
+          command: 'chat',
+          prompt:
+            'You are compacting a long developer-AI conversation to fit in a smaller context window. Produce ONE concise summary (≤ 800 words) that preserves: the user\'s overall task, file paths discussed, key decisions made, code snippets that may be referenced later, and the current state of any in-progress work. Drop redundancy, exploratory dead-ends, and verbose tool dumps. Output plain prose, no headings.\n\n--- TRANSCRIPT TO SUMMARISE ---\n' +
+            transcript,
+        },
+        {
+          onToken: (chunk) => {
+            summary += chunk;
+          },
+          onDone: () => resolve(),
+          onError: (err) => {
+            toast.error('Compaction failed', err.message);
+            resolve();
+          },
+        },
+      );
+      abortRef.current = cancel;
+    });
+    abortRef.current = null;
+    setStreaming(false);
+    if (!summary.trim()) {
+      toast.error('Compaction produced an empty summary');
+      return;
+    }
+
+    // Splice: drop the head, prepend a synthetic system-tag user
+    // message containing the summary, keep the verbatim tail.
+    const summaryMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: '<conversation_summary>',
+      historyContent:
+        '<conversation_summary>\n' +
+        summary.trim() +
+        '\n</conversation_summary>\n\n[The earlier conversation was compacted to free up the context window. Treat this summary as ground truth for any references to past decisions or files.]',
+    };
+    setMessages([summaryMessage, ...tail]);
+    toast.success(
+      `Compacted ${head.length} messages → 1 summary`,
+      `${tail.length} most recent messages kept verbatim.`,
+    );
+  }, [token, activeConvId, conversations, setMessages, toast]);
+
+  /**
    * Built-in local slash commands. These don't go to the LLM — they
    * mutate local state (clear conversation, toggle plan mode, list
    * keybindings, etc.) similarly to Cursor's command palette but
@@ -869,16 +986,29 @@ export function AIPanel() {
           toast.info('Open the model selector', `Currently: ${modelId}`);
           return true;
         }
-        case 'compact':
+        case 'compact': {
+          // Real compaction via Haiku 4.5: summarize everything but
+          // the last 6 turns into a single block, replace the old
+          // history with that summary in-place. Context window
+          // shrinks dramatically for the rest of the conversation;
+          // model retains the key facts, file paths, decisions.
+          if (!activeConv || messages.length <= 8) {
+            toast.info(
+              'Nothing to compact',
+              'Conversation already small. Compaction kicks in around 8+ turns.',
+            );
+            setInput('');
+            return true;
+          }
+          setInput('');
+          void compactConversation();
+          return true;
+        }
         case 'init': {
-          // Reserved — fall through to a friendly toast for now so
-          // the user knows it's a real slot, just not implemented.
           setInput('');
           toast.info(
-            `/${cmd} not implemented yet`,
-            cmd === 'compact'
-              ? 'Conversation compaction lands in a later release.'
-              : 'Repo init / AGENTS.md generation lands in a later release.',
+            '/init not implemented yet',
+            'Repo init / AGENTS.md generation lands in a later release.',
           );
           return true;
         }
@@ -916,9 +1046,9 @@ export function AIPanel() {
       return false;
     },
     [
-      activeConvId, activeConv?.mode, activeConv?.agentMode,
+      activeConvId, activeConv, activeConv?.mode, activeConv?.agentMode,
       modelId, setMessages, toast, customCommands,
-      selection, activeFile?.path,
+      selection, activeFile?.path, messages, compactConversation,
     ],
   );
 

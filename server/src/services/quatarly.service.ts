@@ -26,21 +26,17 @@ function buildSystemPrompt(
       'Use them to understand the project before making changes. Always read a ' +
       'file before editing it.\n\n' +
       'CRITICAL — how to apply changes:\n' +
-      '  • For SMALL surgical edits (1-3 contiguous regions of a file), use ' +
-      '`edit_file` with an exact search/replace pair. Cheapest option.\n' +
-      '  • For LARGE refactors that touch many non-contiguous regions of a ' +
-      'big file (>200 lines), use `apply_lazy_edit`: emit ONLY the changed ' +
-      'code with `// ... existing code ...` markers around unchanged regions. ' +
-      'A fast apply model (Haiku) merges your lazy edit into the original ' +
-      'file. Saves 5-10× on output tokens vs rewriting the whole file.\n' +
+      '  • To MODIFY an existing file, use `edit_file` with an exact ' +
+      'search/replace pair. The `search` string must match a unique ' +
+      'region of the file. For multi-region refactors, issue several ' +
+      '`edit_file` calls (one per region) — they execute in parallel ' +
+      'and the user sees them all in the inline diff.\n' +
       '  • To CREATE a new file (or fully replace one), use `write_file`.\n' +
-      '  • DO NOT artificially fragment large changes into multiple small ' +
-      'tool calls "to be safe". You have a 32K-token output budget and the ' +
-      'apply_lazy_edit fast-path on top — a 1500-line refactor in ONE ' +
-      'apply_lazy_edit call is cheaper, faster, and easier for the user ' +
-      'to review than 4× edit_file calls. Self-imposed 300-line limits per ' +
-      'operation are wrong here. Pick the right tool for the size of the ' +
-      'change and emit it in one shot.\n' +
+      '  • DO NOT artificially fragment a large refactor into 4× more ' +
+      'tool calls than necessary "to be safe". You have a 32K-token ' +
+      'output budget and parallel tool calls are batched. Pick the ' +
+      'right region size for each `edit_file` (usually 5-50 lines per ' +
+      'call) and emit them all in one assistant turn.\n' +
       '  • NEVER paste the modified file (or large code blocks of it) back into ' +
       'the chat as your "answer" — the user will not see it as a diff and you ' +
       'will burn tokens for nothing. Tool calls trigger an inline diff in the ' +

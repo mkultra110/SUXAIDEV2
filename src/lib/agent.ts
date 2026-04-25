@@ -236,9 +236,24 @@ export function toolsForMode(mode: 'composer' | 'ask' = 'composer'): ToolDefinit
       t.name === 'create_plan',
     );
   }
-  // Composer drops create_plan (plan-mode-only); everything else
-  // including codebase_search and apply_lazy_edit is exposed.
-  return AGENT_TOOLS.filter((t) => t.name !== 'create_plan');
+  // Composer mode tool surface.
+  //
+  // `apply_lazy_edit` is HIDDEN from the model in v0.11.2:
+  // the underlying /ai/apply endpoint runs Haiku in non-streaming
+  // mode with max_tokens=64K, which on a 1 MB+ original file takes
+  // longer than the typical 120 s reverse-proxy idle timeout. The
+  // bridge then returns null, the tool throws "Apply model returned
+  // no result", and the model abandons the edit instead of falling
+  // back to edit_file. The implementation stays in the dispatcher
+  // so older agentic conversations that already issued an
+  // apply_lazy_edit tool_use can still settle, but new turns won't
+  // see it as an option until /ai/apply is rewritten in streaming
+  // mode (planned for v0.12).
+  //
+  // create_plan is plan-mode-only.
+  return AGENT_TOOLS.filter(
+    (t) => t.name !== 'create_plan' && t.name !== 'apply_lazy_edit',
+  );
 }
 
 /**

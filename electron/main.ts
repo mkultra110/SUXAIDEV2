@@ -191,24 +191,51 @@ function registerIpc() {
   // the user to be able to inspect/export the file manually. Use a
   // temp-rename for atomic writes so a crash mid-write can't corrupt it.
   ipcMain.handle('conv:read', async () => {
+    let raw: string;
     try {
-      const raw = await fs.readFile(CONVERSATIONS_FILE(), 'utf8');
-      // Forward the raw parsed value — caller decides legacy vs current
-      // shape.
+      raw = await fs.readFile(CONVERSATIONS_FILE(), 'utf8');
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+        console.warn('[conv:read] could not read file:', err);
+      }
+      return null;
+    }
+    try {
       return JSON.parse(raw);
-    } catch {
+    } catch (err) {
+      // Corrupted JSON would otherwise be silently nuked the next time
+      // conv:write fires. Surface it loudly and rename the bad file
+      // so the user (or a support engineer) can recover messages from
+      // it manually instead of losing them outright.
+      console.error('[conv:read] corrupted JSON, preserving as .corrupt-<ts>:', err);
+      try {
+        const bak = `${CONVERSATIONS_FILE()}.corrupt-${Date.now()}`;
+        await fs.rename(CONVERSATIONS_FILE(), bak);
+        console.error(`[conv:read] saved corrupt copy to ${bak}`);
+      } catch (renameErr) {
+        console.error('[conv:read] could not preserve corrupt file:', renameErr);
+      }
       return null;
     }
   });
   ipcMain.handle('conv:write', async (_e, data: unknown) => {
     // Accept any JSON-serialisable payload — the old contract was
-    // \"array of messages\", the new one is { version, active, list }.
+    // "array of messages", the new one is { version, active, list }.
     if (data === null || data === undefined) {
       throw new Error('Conversations payload required');
     }
     await fs.mkdir(USER_DATA(), { recursive: true });
-    const tmp = `${CONVERSATIONS_FILE()}.${process.pid}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(data), { mode: 0o600 });
+    // Atomic write + fsync, same durability story as fs:write-file.
+    // A crash mid-write would otherwise corrupt the file and trigger
+    // the rename-as-corrupt path on next read.
+    const tmp = `${CONVERSATIONS_FILE()}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+    const fh = await fs.open(tmp, 'w', 0o600);
+    try {
+      await fh.writeFile(JSON.stringify(data));
+      await fh.sync();
+    } finally {
+      await fh.close();
+    }
     await fs.rename(tmp, CONVERSATIONS_FILE());
     return true;
   });

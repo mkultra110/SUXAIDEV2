@@ -108,12 +108,25 @@ export async function loadConversations(): Promise<PersistedV2> {
           (c): c is Conversation =>
             !!c && typeof c.id === 'string' && Array.isArray((c as Conversation).messages),
         );
+        if (list.length !== obj.list.length) {
+          console.warn(
+            `[conv] dropped ${obj.list.length - list.length} malformed conversation entries on load`,
+          );
+        }
         const active =
           (typeof obj.active === 'string' && list.some((c) => c.id === obj.active))
             ? obj.active
             : list[0]?.id ?? null;
         return sanitizeForPersist({ version: 2, active, list });
       }
+      // The shape doesn't match v1 (array) or v2 ({version,list}) — log
+      // loudly so the user knows their file isn't recognised. Without
+      // this warning, hand-edited or partially-written JSON would
+      // silently reset the entire history on next save.
+      console.warn(
+        '[conv] persisted file present but shape unrecognised — starting fresh; check userData/conversations.json',
+        { keys: Object.keys(obj as Record<string, unknown>) },
+      );
     }
   } catch (err) {
     console.warn('[conv] load failed:', err);

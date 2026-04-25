@@ -32,7 +32,9 @@ export function renderMarkdown(text: string): string {
   const raw = md.parse(escapeHtml(text), { async: false }) as string;
   return DOMPurify.sanitize(raw, {
     ADD_ATTR: ['target', 'rel'],
-    ALLOWED_URI_REGEXP:
-      /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+    // Explicit allowlist: http(s), mailto, tel, and relative refs only.
+    // Blocks data:, javascript:, vbscript:, file: and other exotic
+    // protocols that could ship a payload through href / src.
+    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[#/?.])/i,
   });
 }

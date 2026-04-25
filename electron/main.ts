@@ -307,18 +307,31 @@ function registerIpc() {
     if (typeof content !== 'string') throw new Error('Content must be a string');
     // Atomic write: write to a sibling tmp file, fsync, then rename. A
     // crash mid-write leaves the original file untouched. Falls back to
-    // a direct write only if the rename itself fails — e.g. crossing
-    // device boundaries on a /tmp-mounted filesystem.
+    // a direct (still-fsynced) write only if the rename itself fails —
+    // e.g. crossing device boundaries on a /tmp-mounted filesystem.
     const tmp = `${safe}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.tmp`;
     try {
-      await fs.writeFile(tmp, content, 'utf8');
+      const fh = await fs.open(tmp, 'w');
+      try {
+        await fh.writeFile(content, 'utf8');
+        await fh.sync(); // flush page cache to disk before rename
+      } finally {
+        await fh.close();
+      }
       await fs.rename(tmp, safe);
     } catch (err) {
       // Best-effort cleanup of the tmp; ignore secondary errors.
       try { await fs.unlink(tmp); } catch { /* */ }
-      // EXDEV (cross-device link) → fall back to a non-atomic write.
+      // EXDEV (cross-device link) → fall back to a non-atomic write,
+      // but still fsync so a crash immediately after doesn't lose data.
       if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
-        await fs.writeFile(safe, content, 'utf8');
+        const fh = await fs.open(safe, 'w');
+        try {
+          await fh.writeFile(content, 'utf8');
+          await fh.sync();
+        } finally {
+          await fh.close();
+        }
         return true;
       }
       throw err;

@@ -81,6 +81,9 @@ export function streamAi(
       // Auto-refresh on expired token — the SSE path bypasses the normal
       // api/client wrapper, so we replicate its 401-retry behaviour here.
       if (res.status === 401) {
+        // Drain the failed response body so the underlying socket is
+        // returned to the pool cleanly before we open a fresh request.
+        try { await res.text(); } catch { /* already consumed / aborted */ }
         const fresh = await tryRefreshToken();
         if (fresh) res = await doFetch(fresh);
       }

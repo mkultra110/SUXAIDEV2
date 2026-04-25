@@ -871,6 +871,151 @@ export function AIPanel() {
   }, [token, activeConvId, conversations, setMessages, toast]);
 
   /**
+   * `/init` workflow: walk the workspace, render the same repo map
+   * we inject in agent preambles, then ask Haiku 4.5 to draft an
+   * AGENTS.md file from it. The result lands in <workspace>/AGENTS.md
+   * via the inline diff (so the user can accept hunk-by-hunk or
+   * reject if they don't like the draft).
+   *
+   * Doesn't require Plan / Agent mode — runs as a one-off model call
+   * with no tools. Cheap & fast (Haiku, ~5s end-to-end on a typical
+   * repo).
+   */
+  const runInitWorkflow = useCallback(async () => {
+    if (!token || !workspaceRoot) return;
+    // Build the repo map fresh — don't reuse the cached preamble
+    // because the user may want to /init right after switching
+    // workspace.
+    let repoMapText = '';
+    try {
+      repoMapText = await buildRepoMap({
+        workspaceRoot,
+        activeFilePath: activeFile?.path ?? null,
+        openPaths: openFiles.map((f) => f.path),
+        recentPaths: editorContext.recentlyViewedFiles,
+        budgetTokens: 1500,
+      });
+    } catch (err) {
+      console.warn('[init] repo map failed:', err);
+    }
+    // Also surface a few "important" files (top-level configs) that
+    // the model can mention in AGENTS.md without us reading them.
+    const importantHints: string[] = [];
+    for (const candidate of [
+      'package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod',
+      'CMakeLists.txt', 'build.gradle', 'pom.xml', 'tsconfig.json',
+      'README.md', 'README', '.cursor/rules', 'AGENTS.md',
+    ]) {
+      try {
+        const sep = workspaceRoot.includes('\\') && !workspaceRoot.includes('/') ? '\\' : '/';
+        const candPath = `${workspaceRoot}${workspaceRoot.endsWith(sep) ? '' : sep}${candidate}`;
+        const f = await window.suxai.fs.readFile(candPath);
+        importantHints.push(`## ${candidate} (${f.content.length} bytes)\n\`\`\`\n${f.content.slice(0, 2000)}\n\`\`\``);
+      } catch { /* file missing — fine */ }
+    }
+
+    const prompt =
+      'You are generating an AGENTS.md file for a codebase. AGENTS.md ' +
+      'is project guidance read by AI coding assistants on every turn ' +
+      '— think of it as a CLAUDE.md / .cursorrules. Keep it concise ' +
+      '(max 200 lines), specific, and actionable.\n\n' +
+      'Cover at minimum:\n' +
+      '  • What this project IS (one sentence) and what it does NOT do.\n' +
+      '  • Tech stack (languages, frameworks, build tool).\n' +
+      '  • How to build / test / run (exact commands).\n' +
+      '  • Coding conventions worth knowing (style, naming, layout).\n' +
+      '  • Files / directories that should NOT be edited (generated, vendored, etc.).\n' +
+      '  • Anything weird about this repo that would catch an AI off-guard.\n\n' +
+      'Write in plain English (or French if the project obviously is FR).\n' +
+      'Output ONLY the markdown body, no fences, no preamble. Use proper ' +
+      'markdown headings (##, ###) and bullets.\n\n' +
+      '--- REPO MAP (top files by structural importance) ---\n' +
+      (repoMapText || '(empty)') +
+      '\n\n--- IMPORTANT FILES (verbatim excerpts) ---\n' +
+      (importantHints.join('\n\n') || '(none found)');
+
+    const proposalMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      command: 'chat',
+      content: '/init — generate AGENTS.md',
+    };
+    const assistantMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      streaming: true,
+      modelId: 'claude-haiku-4-5-20251001',
+    };
+    setMessages((m) => [...m, proposalMsg, assistantMsg]);
+    setStreaming(true);
+    let full = '';
+    await new Promise<void>((resolve) => {
+      const cancel = streamAi(
+        token,
+        {
+          modelId: 'claude-haiku-4-5-20251001',
+          command: 'chat',
+          prompt,
+        },
+        {
+          onToken: (chunk) => {
+            full += chunk;
+            setMessages((m) =>
+              m.map((msg) => (msg.id === assistantMsg.id ? { ...msg, content: msg.content + chunk } : msg)),
+            );
+          },
+          onDone: () => {
+            setMessages((m) =>
+              m.map((msg) => (msg.id === assistantMsg.id ? { ...msg, streaming: false } : msg)),
+            );
+            resolve();
+          },
+          onError: (err) => {
+            setMessages((m) =>
+              m.map((msg) =>
+                msg.id === assistantMsg.id
+                  ? { ...msg, streaming: false, error: err.message }
+                  : msg,
+              ),
+            );
+            resolve();
+          },
+        },
+      );
+      abortRef.current = cancel;
+    });
+    abortRef.current = null;
+    setStreaming(false);
+    if (!full.trim()) return;
+
+    // Open the generated AGENTS.md in the inline diff. If a real
+    // AGENTS.md already exists, we diff against it; otherwise we
+    // diff against an empty buffer so the user sees every line as
+    // a green-add hunk.
+    const sep = workspaceRoot.includes('\\') && !workspaceRoot.includes('/') ? '\\' : '/';
+    const target = `${workspaceRoot}${workspaceRoot.endsWith(sep) ? '' : sep}AGENTS.md`;
+    let original = '';
+    try {
+      const r = await window.suxai.fs.readFile(target);
+      original = r.content;
+    } catch { /* file doesn't exist yet — that's fine */ }
+    openDiff({
+      path: target,
+      original,
+      proposed: full.replace(/^```[a-zA-Z]*\n?|```\s*$/g, ''),
+      label: '/init · agents.md',
+    });
+    toast.info(
+      'AGENTS.md drafted',
+      'Review and accept hunks in the editor. The file will land in your workspace root.',
+    );
+  }, [
+    token, workspaceRoot, activeFile, openFiles, editorContext,
+    openDiff, setMessages, toast,
+  ]);
+
+  /**
    * Built-in local slash commands. These don't go to the LLM — they
    * mutate local state (clear conversation, toggle plan mode, list
    * keybindings, etc.) similarly to Cursor's command palette but
@@ -1006,11 +1151,16 @@ export function AIPanel() {
           return true;
         }
         case 'init': {
+          // Generate AGENTS.md from the workspace's repo map +
+          // top-of-tree files. The user reviews the proposal in an
+          // inline diff before it lands on disk.
+          if (!workspaceRoot) {
+            setInput('');
+            toast.error('/init needs a workspace', 'Open a folder first.');
+            return true;
+          }
           setInput('');
-          toast.info(
-            '/init not implemented yet',
-            'Repo init / AGENTS.md generation lands in a later release.',
-          );
+          void runInitWorkflow();
           return true;
         }
       }
@@ -1049,7 +1199,8 @@ export function AIPanel() {
     [
       activeConvId, activeConv, activeConv?.mode, activeConv?.agentMode,
       modelId, setMessages, toast, customCommands,
-      selection, activeFile?.path, messages, compactConversation,
+      selection, activeFile?.path, messages, compactConversation, runInitWorkflow,
+      workspaceRoot,
     ],
   );
 

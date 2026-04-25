@@ -29,7 +29,17 @@ type TokenRefresher = () => Promise<string | null>;
 let refreshHook: TokenRefresher | null = null;
 export function setTokenRefresher(hook: TokenRefresher | null): void {
   refreshHook = hook;
+  // A new login wipes the in-flight refresh promise — the new session
+  // shouldn't share state with the old one.
+  inFlightRefresh = null;
 }
+
+// Single-flight: if many requests 401 simultaneously (e.g. an SSE
+// stream + a /auth/me call after wake-from-sleep), they all await the
+// same in-flight refresh promise. Without this guard, two refreshes
+// would race, the loser writes a stale rotation back to safeStorage,
+// and the next refresh fails with "invalid refresh token".
+let inFlightRefresh: Promise<string | null> | null = null;
 
 /**
  * Get a fresh token via the refresh flow. Returns null if no refresh is
@@ -38,11 +48,20 @@ export function setTokenRefresher(hook: TokenRefresher | null): void {
  */
 export async function tryRefreshToken(): Promise<string | null> {
   if (!refreshHook) return null;
-  try {
-    return await refreshHook();
-  } catch {
-    return null;
-  }
+  if (inFlightRefresh) return inFlightRefresh;
+  const hook = refreshHook;
+  inFlightRefresh = (async () => {
+    try {
+      return await hook();
+    } catch {
+      return null;
+    } finally {
+      // Clear AFTER the promise settles so concurrent awaiters share
+      // the same result — don't clear preemptively.
+      setTimeout(() => { inFlightRefresh = null; }, 0);
+    }
+  })();
+  return inFlightRefresh;
 }
 
 async function rawRequest<T>(pathname: string, opts: RequestOptions): Promise<T> {
@@ -95,7 +114,9 @@ async function request<T = unknown>(pathname: string, opts: RequestOptions = {})
       !opts._retried &&
       pathname !== '/auth/refresh'
     ) {
-      const fresh = await refreshHook();
+      // Single-flight via tryRefreshToken so simultaneous 401s collapse
+      // to a single refresh round-trip.
+      const fresh = await tryRefreshToken();
       if (fresh) {
         return rawRequest<T>(pathname, { ...opts, token: fresh, _retried: true });
       }

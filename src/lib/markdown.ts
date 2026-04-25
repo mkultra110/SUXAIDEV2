@@ -34,7 +34,10 @@ export function renderMarkdown(text: string): string {
     ADD_ATTR: ['target', 'rel'],
     // Explicit allowlist: http(s), mailto, tel, and relative refs only.
     // Blocks data:, javascript:, vbscript:, file: and other exotic
-    // protocols that could ship a payload through href / src.
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[#/?.])/i,
+    // protocols that could ship a payload through href / src. The
+    // leading `\s*` tolerates the rare cases where DOMPurify hands us
+    // a value with surrounding whitespace; the protocols themselves
+    // are still tightly anchored.
+    ALLOWED_URI_REGEXP: /^\s*(?:(?:https?|mailto|tel):|[#/?.])/i,
   });
 }

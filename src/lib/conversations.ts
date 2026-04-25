@@ -22,6 +22,34 @@ function newId(): string {
   return crypto.randomUUID();
 }
 
+/**
+ * Strip transient state before persisting. A `streaming` flag or a
+ * `pending`/`running` tool call would replay back into the next session
+ * as a stuck UI element (and chatToAgentMessages would skip them).
+ *
+ * Defined up front so loadConversations can reuse it across both the
+ * v1-legacy and v2 code paths.
+ */
+function sanitizeForPersist(state: PersistedV2): PersistedV2 {
+  return {
+    ...state,
+    list: state.list.map((c) => ({
+      ...c,
+      messages: c.messages.map((m) => {
+        const next = { ...m, streaming: false };
+        if (next.toolCalls && next.toolCalls.length > 0) {
+          const cleaned = next.toolCalls.filter(
+            (tc) => tc.status !== 'pending' && tc.status !== 'running',
+          );
+          if (cleaned.length === 0) delete next.toolCalls;
+          else next.toolCalls = cleaned;
+        }
+        return next;
+      }),
+    })),
+  };
+}
+
 export function emptyConversation(): Conversation {
   const now = new Date().toISOString();
   return {
@@ -91,34 +119,6 @@ export async function loadConversations(): Promise<PersistedV2> {
     console.warn('[conv] load failed:', err);
   }
   return empty;
-}
-
-/**
- * Strip transient state before persisting. A `streaming` flag or a
- * `pending`/`running` tool call would replay back into the next session
- * as a stuck UI element (and chatToAgentMessages would skip them).
- */
-function sanitizeForPersist(state: PersistedV2): PersistedV2 {
-  return {
-    ...state,
-    list: state.list.map((c) => ({
-      ...c,
-      messages: c.messages.map((m) => {
-        const next = { ...m, streaming: false };
-        if (next.toolCalls && next.toolCalls.length > 0) {
-          // Drop pending/running tool calls — they have no result, so
-          // the next conversation render would show a forever-spinning
-          // card and chatToAgentMessages would now ignore them anyway.
-          const cleaned = next.toolCalls.filter(
-            (tc) => tc.status !== 'pending' && tc.status !== 'running',
-          );
-          if (cleaned.length === 0) delete next.toolCalls;
-          else next.toolCalls = cleaned;
-        }
-        return next;
-      }),
-    })),
-  };
 }
 
 export async function saveConversations(state: PersistedV2): Promise<void> {

@@ -302,13 +302,10 @@ function registerIpc() {
     return { path: safe, content };
   });
 
-  ipcMain.handle('fs:write-file', async (_e, filePath: string, content: string) => {
-    const safe = sanitizeFsPath(filePath);
-    if (typeof content !== 'string') throw new Error('Content must be a string');
-    // Atomic write: write to a sibling tmp file, fsync, then rename. A
-    // crash mid-write leaves the original file untouched. Falls back to
-    // a direct (still-fsynced) write only if the rename itself fails —
-    // e.g. crossing device boundaries on a /tmp-mounted filesystem.
+  // Shared helper: atomic write (tmp + fsync + rename) with EXDEV
+  // fallback. Reused by fs:write-file and fs:save-as so user-initiated
+  // saves and agent-initiated saves get the same durability guarantees.
+  async function atomicWrite(safe: string, content: string): Promise<void> {
     const tmp = `${safe}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.tmp`;
     try {
       const fh = await fs.open(tmp, 'w');
@@ -320,10 +317,7 @@ function registerIpc() {
       }
       await fs.rename(tmp, safe);
     } catch (err) {
-      // Best-effort cleanup of the tmp; ignore secondary errors.
       try { await fs.unlink(tmp); } catch { /* */ }
-      // EXDEV (cross-device link) → fall back to a non-atomic write,
-      // but still fsync so a crash immediately after doesn't lose data.
       if ((err as NodeJS.ErrnoException).code === 'EXDEV') {
         const fh = await fs.open(safe, 'w');
         try {
@@ -332,10 +326,16 @@ function registerIpc() {
         } finally {
           await fh.close();
         }
-        return true;
+        return;
       }
       throw err;
     }
+  }
+
+  ipcMain.handle('fs:write-file', async (_e, filePath: string, content: string) => {
+    const safe = sanitizeFsPath(filePath);
+    if (typeof content !== 'string') throw new Error('Content must be a string');
+    await atomicWrite(safe, content);
     return true;
   });
 
@@ -347,7 +347,7 @@ function registerIpc() {
     });
     if (result.canceled || !result.filePath) return null;
     const safe = sanitizeFsPath(result.filePath);
-    await fs.writeFile(safe, content, 'utf8');
+    await atomicWrite(safe, content);
     return safe;
   });
 

@@ -35,22 +35,27 @@ export function findModel(id: string): SupportedModel | undefined {
 const cacheControl = z
   .object({ type: z.literal('ephemeral') })
   .optional();
+// Per-block byte caps stop a malicious or runaway client from posting
+// a single 50 MB text block that DOMPurify and the upstream provider
+// would both choke on. The Express body cap is 10 MB; this is the
+// per-field equivalent so individual blocks stay manageable.
+const MAX_BLOCK_TEXT = 1_000_000; // 1 MB per text/tool_result block
 const textBlock = z.object({
   type: z.literal('text'),
-  text: z.string(),
+  text: z.string().max(MAX_BLOCK_TEXT),
   cache_control: cacheControl,
 });
 const toolUseBlock = z.object({
   type: z.literal('tool_use'),
-  id: z.string(),
-  name: z.string(),
+  id: z.string().max(200),
+  name: z.string().max(80),
   input: z.unknown(),
   cache_control: cacheControl,
 });
 const toolResultBlock = z.object({
   type: z.literal('tool_result'),
-  tool_use_id: z.string(),
-  content: z.string(),
+  tool_use_id: z.string().max(200),
+  content: z.string().max(MAX_BLOCK_TEXT),
   is_error: z.boolean().optional(),
   cache_control: cacheControl,
 });

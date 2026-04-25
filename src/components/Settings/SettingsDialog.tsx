@@ -55,7 +55,11 @@ export function SettingsDialog() {
                 min={10}
                 max={24}
                 value={settings.fontSize}
-                onChange={(e) => update({ fontSize: Number(e.target.value) || 13 })}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  const clamped = Number.isFinite(n) ? Math.max(10, Math.min(24, n)) : 13;
+                  update({ fontSize: clamped });
+                }}
                 className="settings__input"
               />
               <span className="settings__unit">px</span>
@@ -66,7 +70,11 @@ export function SettingsDialog() {
                 min={1}
                 max={8}
                 value={settings.tabSize}
-                onChange={(e) => update({ tabSize: Number(e.target.value) || 2 })}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  const clamped = Number.isFinite(n) ? Math.max(1, Math.min(8, Math.trunc(n))) : 2;
+                  update({ tabSize: clamped });
+                }}
                 className="settings__input"
               />
               <span className="settings__unit">spaces</span>

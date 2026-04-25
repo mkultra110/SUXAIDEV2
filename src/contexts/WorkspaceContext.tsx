@@ -302,22 +302,29 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!alreadyWritten) {
         await window.suxai.fs.writeFile(targetPath, toSave.content);
       }
-      setState((prev) => ({
-        ...prev,
-        openFiles: prev.openFiles.map((f) =>
-          f.path === toSave.path
-            ? {
-                ...f,
-                path: targetPath,
-                name: targetPath.split(/[\\/]/).pop() ?? f.name,
-                dirty: false,
-                untitled: false,
-                language: langFromPath(targetPath),
-              }
-            : f,
-        ),
-        activePath: prev.activePath === toSave.path ? targetPath : prev.activePath,
-      }));
+      setState((prev) => {
+        // The user may have closed the tab between when we started
+        // the write and when it resolved. Don't resurrect a closed
+        // file or stamp activePath onto a tab that no longer exists.
+        const stillOpen = prev.openFiles.some((f) => f.path === toSave.path);
+        if (!stillOpen) return prev;
+        return {
+          ...prev,
+          openFiles: prev.openFiles.map((f) =>
+            f.path === toSave.path
+              ? {
+                  ...f,
+                  path: targetPath,
+                  name: targetPath.split(/[\\/]/).pop() ?? f.name,
+                  dirty: false,
+                  untitled: false,
+                  language: langFromPath(targetPath),
+                }
+              : f,
+          ),
+          activePath: prev.activePath === toSave.path ? targetPath : prev.activePath,
+        };
+      });
       return 'saved';
     } catch (err) {
       console.error('Failed to save file:', err);

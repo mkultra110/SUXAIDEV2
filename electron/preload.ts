@@ -60,6 +60,19 @@ const api = {
     write: (workspaceRoot: string, slug: string, content: string): Promise<{ path: string }> =>
       ipcRenderer.invoke('plan:write', workspaceRoot, slug, content),
   },
+  search: {
+    grep: (input: {
+      pattern: string;
+      cwd: string;
+      glob?: string;
+      max_results?: number;
+      case_sensitive?: boolean;
+    }): Promise<{
+      hits: { path: string; line: number; text: string }[];
+      source?: string;
+      error?: string;
+    }> => ipcRenderer.invoke('search:grep', input),
+  },
   checkpoint: {
     create: (workspaceRoot: string, turnId: string, files: string[]): Promise<{ id: string }> =>
       ipcRenderer.invoke('checkpoint:create', workspaceRoot, turnId, files),

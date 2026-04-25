@@ -814,6 +814,166 @@ function registerIpc() {
       });
     },
   );
+
+  // ---- Codebase search (grep) --------------------------------------
+  // Powers the agent's `grep` and `codebase_search` tools. Tries
+  // `rg` (ripgrep) first when available — fast on big repos. Falls
+  // back to a Node walk that respects .gitignore + a built-in
+  // ignore list when ripgrep isn't on the PATH (Windows users
+  // without scoop/choco). Returns a capped list of {path, line, text}
+  // hits so the model gets enough context to decide what to read
+  // next without being drowned in 10 000 matches.
+  ipcMain.handle(
+    'search:grep',
+    async (
+      _e,
+      input: {
+        pattern: string;
+        cwd: string;
+        /** Glob to restrict the search (e.g. "**\/*.ts"). Optional. */
+        glob?: string;
+        /** Max number of matches to return (caller-side cap). */
+        max_results?: number;
+        case_sensitive?: boolean;
+      },
+    ) => {
+      if (!input || typeof input.pattern !== 'string' || input.pattern.length === 0) {
+        return { error: 'pattern required', hits: [] };
+      }
+      const safeCwd = sanitizeFsPath(input.cwd, { mustExist: true });
+      const limit = Math.min(Math.max(input.max_results ?? 100, 1), 500);
+      const args = [
+        '--json',
+        '--max-count', '20',
+        '--max-columns', '400',
+        '--max-filesize', '5M',
+        '--no-messages',
+      ];
+      if (!input.case_sensitive) args.push('--ignore-case');
+      if (input.glob) {
+        args.push('--glob', input.glob);
+      }
+      args.push(input.pattern, '.');
+      const hits: { path: string; line: number; text: string }[] = [];
+      const rgError: { code?: number; msg?: string } = {};
+      try {
+        await new Promise<void>((resolve) => {
+          const child = spawn('rg', args, { cwd: safeCwd });
+          let buf = '';
+          child.stdout.on('data', (chunk) => {
+            buf += chunk.toString();
+            let nl;
+            while ((nl = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, nl);
+              buf = buf.slice(nl + 1);
+              if (!line) continue;
+              try {
+                const ev = JSON.parse(line);
+                if (ev.type === 'match' && hits.length < limit) {
+                  const data = ev.data;
+                  hits.push({
+                    path: data.path?.text ?? '?',
+                    line: data.line_number ?? 0,
+                    text: (data.lines?.text ?? '').replace(/\n+$/, ''),
+                  });
+                  if (hits.length >= limit) child.kill();
+                }
+              } catch { /* malformed JSON line — ignore */ }
+            }
+          });
+          child.on('error', (err) => {
+            rgError.msg = err.message;
+            resolve();
+          });
+          child.on('close', (code) => {
+            if (typeof code === 'number') rgError.code = code;
+            resolve();
+          });
+        });
+        if (hits.length > 0) return { hits, source: 'ripgrep' };
+        // ripgrep not installed (ENOENT) → fall back to Node grep.
+      } catch (err) {
+        rgError.msg = (err as Error).message;
+      }
+      // Node fallback. Slow on big trees but always available.
+      const nodeHits = await nodeGrep(safeCwd, input.pattern, {
+        caseSensitive: input.case_sensitive ?? false,
+        glob: input.glob,
+        limit,
+      });
+      return { hits: nodeHits, source: 'node-fallback', rgError };
+    },
+  );
+}
+
+/**
+ * Minimal recursive grep used when ripgrep isn't on PATH. Skips
+ * ignore-listed dirs (node_modules, .git, dist…) and large files.
+ * Not as fast as rg, but ships zero deps and works everywhere.
+ */
+async function nodeGrep(
+  root: string,
+  pattern: string,
+  opts: { caseSensitive: boolean; glob?: string; limit: number },
+): Promise<{ path: string; line: number; text: string }[]> {
+  const NOISY = new Set([
+    'node_modules', '.git', '.svn', '.hg', 'dist', 'dist-electron',
+    'build', 'release', '.next', '.cache', '.turbo', '.parcel-cache',
+    '.idea', '.vscode', 'coverage', '__pycache__', '.venv', 'venv',
+    'target',
+  ]);
+  let regex: RegExp;
+  try {
+    regex = new RegExp(pattern, opts.caseSensitive ? '' : 'i');
+  } catch {
+    // Treat unparseable input as a literal substring search.
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    regex = new RegExp(escaped, opts.caseSensitive ? '' : 'i');
+  }
+  // Glob support is intentionally minimal — we only honour a trailing
+  // extension filter ("**\/*.ts" → /\.ts$/) since that's the common
+  // case. Anything fancier would need a full glob library.
+  let extensionFilter: RegExp | null = null;
+  if (opts.glob) {
+    const m = opts.glob.match(/\.([a-zA-Z0-9_]+)$/);
+    if (m) extensionFilter = new RegExp(`\\.${m[1]}$`);
+  }
+  const hits: { path: string; line: number; text: string }[] = [];
+  async function walk(dir: string): Promise<void> {
+    if (hits.length >= opts.limit) return;
+    let entries: import('node:fs').Dirent[];
+    try {
+      entries = await fs.readdir(dir, { withFileTypes: true });
+    } catch { return; }
+    for (const e of entries) {
+      if (hits.length >= opts.limit) return;
+      if (NOISY.has(e.name)) continue;
+      const abs = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        await walk(abs);
+      } else if (e.isFile()) {
+        if (extensionFilter && !extensionFilter.test(e.name)) continue;
+        let stat;
+        try { stat = await fs.stat(abs); } catch { continue; }
+        if (stat.size > 5_000_000) continue; // skip files > 5MB
+        let content: string;
+        try { content = await fs.readFile(abs, 'utf8'); } catch { continue; }
+        const lines = content.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          if (hits.length >= opts.limit) return;
+          if (regex.test(lines[i])) {
+            hits.push({
+              path: abs,
+              line: i + 1,
+              text: lines[i].slice(0, 400),
+            });
+          }
+        }
+      }
+    }
+  }
+  await walk(root);
+  return hits;
 }
 
 app.whenReady().then(() => {

@@ -117,6 +117,34 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'grep',
+    description:
+      "Search the user's workspace for a regex pattern. Powered by ripgrep when available, falls back to a Node walk otherwise. Returns up to 100 matches by default with file path + line number + matching line. Prefer this over reading every file when looking for symbol definitions, callers, TODO markers, or any regex you'd grep for at the shell.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'Regex pattern. Anchor it (^, $, \\b) to keep noise low.',
+        },
+        glob: {
+          type: 'string',
+          description:
+            'Optional file pattern (e.g. "**/*.ts", "src/**/*.cpp") to scope the search. Trailing extension is honoured even by the Node fallback.',
+        },
+        max_results: {
+          type: 'integer',
+          description: 'Cap on returned matches (default 100, max 500).',
+        },
+        case_sensitive: {
+          type: 'boolean',
+          description: 'When true, match case strictly. Defaults to false.',
+        },
+      },
+      required: ['pattern'],
+    },
+  },
+  {
     // Plan-mode-only tool. Available to the agent when the
     // conversation runs in 'ask' mode. Writes a structured markdown
     // plan that the user can review before flipping back to composer
@@ -152,8 +180,14 @@ export const AGENT_TOOLS: ToolDefinition[] = [
  */
 export function toolsForMode(mode: 'composer' | 'ask' = 'composer'): ToolDefinition[] {
   if (mode === 'ask') {
+    // Plan / Ask mode: read-only investigation tools only. grep is
+    // included because Plan needs to find references and definitions
+    // across the codebase before drafting the plan.
     return AGENT_TOOLS.filter((t) =>
-      t.name === 'read_file' || t.name === 'list_dir' || t.name === 'create_plan',
+      t.name === 'read_file' ||
+      t.name === 'list_dir' ||
+      t.name === 'grep' ||
+      t.name === 'create_plan',
     );
   }
   return AGENT_TOOLS.filter((t) => t.name !== 'create_plan');
@@ -442,6 +476,44 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
         ? `[timed out after ${timeout_ms ?? 120000}ms]`
         : `[exit ${result.exit_code}]`;
       return `${header}\n${result.stdout}\n${exitLine}`;
+    }
+    case 'grep': {
+      const pattern = expectString(args, 'pattern');
+      const glob = typeof args.glob === 'string' ? args.glob : undefined;
+      const max_results = typeof args.max_results === 'number' ? args.max_results : undefined;
+      const case_sensitive = typeof args.case_sensitive === 'boolean' ? args.case_sensitive : undefined;
+      if (!opts.workspaceRoot) {
+        throw new ToolExecutionError(
+          'grep',
+          'No workspace root open — grep needs a folder context. Open a folder first.',
+        );
+      }
+      if (!window.suxai.search?.grep) {
+        throw new ToolExecutionError(
+          'grep',
+          'grep IPC unavailable. Update SUXAI to a build with v0.9.22+.',
+        );
+      }
+      const out = await window.suxai.search.grep({
+        pattern,
+        cwd: opts.workspaceRoot,
+        glob,
+        max_results,
+        case_sensitive,
+      });
+      if (!out.hits || out.hits.length === 0) {
+        const detail = out.error ? ` (${out.error})` : '';
+        return `<<<grep pattern=${JSON.stringify(pattern)} hits=0${detail}>>>\n(no matches)\n<<<end>>>`;
+      }
+      const sourceTag = out.source ? ` source=${out.source}` : '';
+      const lines = out.hits.map(
+        (h) => `${h.path}:${h.line}: ${h.text}`,
+      );
+      return (
+        `<<<grep pattern=${JSON.stringify(pattern)} hits=${out.hits.length}${sourceTag}>>>\n` +
+        lines.join('\n') +
+        `\n<<<end>>>`
+      );
     }
     case 'create_plan': {
       // Plan-mode-only tool. Persists a markdown plan to

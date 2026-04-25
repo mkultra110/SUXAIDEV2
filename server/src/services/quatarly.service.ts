@@ -62,13 +62,19 @@ export async function streamCompletion(req: AiRequestInput, handlers: StreamHand
 
 async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandlers): Promise<void> {
   const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/chat/completions`;
+  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    { role: 'system', content: buildSystemPrompt(req.command) },
+  ];
+  if (req.history && req.history.length > 0) {
+    for (const turn of req.history) {
+      messages.push({ role: turn.role, content: turn.content });
+    }
+  }
+  messages.push({ role: 'user', content: buildUserContent(req) });
   const body = {
     model: modelId,
     stream: true,
-    messages: [
-      { role: 'system', content: buildSystemPrompt(req.command) },
-      { role: 'user', content: buildUserContent(req) },
-    ],
+    messages,
   };
   try {
     const res = await fetch(url, {
@@ -122,12 +128,33 @@ async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandl
 
 async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHandlers): Promise<void> {
   const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/messages`;
+  const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  if (req.history && req.history.length > 0) {
+    for (const turn of req.history) {
+      messages.push({ role: turn.role, content: turn.content });
+    }
+  }
+  messages.push({ role: 'user', content: buildUserContent(req) });
+  // Anthropic requires alternating user/assistant turns starting with user.
+  // If the history happens to start with an assistant turn we drop it; if
+  // there are consecutive same-role turns we collapse them with a blank
+  // line separator. The user turn we just appended is always last.
+  const cleaned: typeof messages = [];
+  for (const m of messages) {
+    const last = cleaned[cleaned.length - 1];
+    if (cleaned.length === 0 && m.role !== 'user') continue;
+    if (last && last.role === m.role) {
+      last.content = `${last.content}\n\n${m.content}`;
+    } else {
+      cleaned.push({ ...m });
+    }
+  }
   const body = {
     model: modelId,
     max_tokens: 2048,
     stream: true,
     system: buildSystemPrompt(req.command),
-    messages: [{ role: 'user', content: buildUserContent(req) }],
+    messages: cleaned,
   };
   try {
     const res = await fetch(url, {

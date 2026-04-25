@@ -3,10 +3,18 @@ import { tryRefreshToken } from './client';
 
 export type AiCommand = 'explain' | 'refactor' | 'fix' | 'optimize' | 'edit' | 'chat';
 
+export interface AiHistoryTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface AiRequest {
   modelId: string;
   command: AiCommand;
   prompt: string;
+  /** Prior turns of the conversation, oldest-first. Used to keep the
+   *  model coherent across follow-ups ("fix it", "now in TypeScript"…). */
+  history?: AiHistoryTurn[];
   context?: {
     filePath?: string;
     language?: string;

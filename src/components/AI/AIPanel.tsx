@@ -194,12 +194,21 @@ export function AIPanel() {
           ? activeFile
           : null;
 
+      // Include the prior turns of THIS conversation so the model stays
+      // coherent across follow-ups. We strip streaming/error metadata
+      // and cap to the last 20 turns to keep the request manageable.
+      const history = messages
+        .filter((m) => !m.streaming && !m.error && m.content.trim().length > 0)
+        .slice(-20)
+        .map((m) => ({ role: m.role, content: m.content }));
+
       const cancel = streamAi(
         token,
         {
           modelId,
           command,
           prompt,
+          history,
           context: {
             filePath: activeFile?.path,
             language: activeFile?.language,
@@ -252,7 +261,7 @@ export function AIPanel() {
       );
       abortRef.current = cancel;
     },
-    [token, input, selection, activeFile, modelId, extractMentions, attachments],
+    [token, input, selection, activeFile, modelId, extractMentions, attachments, messages],
   );
 
   const stop = () => {

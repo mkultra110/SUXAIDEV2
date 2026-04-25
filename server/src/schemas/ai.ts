@@ -29,10 +29,16 @@ export const aiRequestSchema = z.object({
     message: 'Unsupported model',
   }),
   command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'edit', 'chat']).default('chat'),
-  // Generous upper bound — raise this if users report hitting it. The
-  // main cost here is upstream token usage (billed by Quatarly), not
-  // server resources.
   prompt: z.string().min(1, 'Prompt cannot be empty').max(2_000_000, 'Prompt too large'),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().min(1).max(200_000),
+      }),
+    )
+    .max(40)
+    .optional(),
   context: z
     .object({
       filePath: z.string().optional(),

@@ -73,32 +73,33 @@ function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
       out.push({ role: 'user', content: m.historyContent ?? m.content });
       continue;
     }
-    // assistant
+    // assistant — only emit tool_use blocks that have a matching result.
+    // A pending/running tool_use without a corresponding tool_result on
+    // the next turn is rejected by Anthropic ("400 tool_use_id ... has
+    // no tool_result"). We drop those blocks entirely; the model will
+    // re-issue them in the next iteration if it still wants them.
+    const completed = (m.toolCalls ?? []).filter(
+      (tc) => tc.result !== undefined && tc.status !== 'pending' && tc.status !== 'running',
+    );
     const blocks: AgentContentBlock[] = [];
     if (m.content && m.content.trim()) {
       blocks.push({ type: 'text', text: m.content });
     }
-    if (m.toolCalls) {
-      for (const tc of m.toolCalls) {
-        blocks.push({
-          type: 'tool_use',
-          id: tc.id,
-          name: tc.name,
-          input: tc.input,
-        });
-      }
+    for (const tc of completed) {
+      blocks.push({
+        type: 'tool_use',
+        id: tc.id,
+        name: tc.name,
+        input: tc.input,
+      });
     }
     if (blocks.length > 0) {
       out.push({ role: 'assistant', content: blocks });
     }
-    // tool results (if any) become a follow-up user turn
-    const completedResults = (m.toolCalls ?? []).filter(
-      (tc) => tc.result !== undefined,
-    );
-    if (completedResults.length > 0) {
+    if (completed.length > 0) {
       out.push({
         role: 'user',
-        content: completedResults.map((tc) => ({
+        content: completed.map((tc) => ({
           type: 'tool_result',
           tool_use_id: tc.id,
           content: tc.result!,
@@ -110,6 +111,39 @@ function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
   return out;
 }
 
+// Cap the agent transcript at MAX_AGENT_MESSAGES while preserving
+// tool_use/tool_result pairs. Anthropic rejects a transcript that ends
+// (or starts) with a tool_use missing its tool_result, or vice versa.
+// We always keep:
+//   1. The very first user message (kicks the conversation off; if we
+//      drop it, the model loses task framing).
+//   2. The last MAX_AGENT_MESSAGES messages — but if the slice would
+//      cut between a tool_use turn and the tool_result turn that
+//      follows, we shift the cut earlier.
+const MAX_AGENT_MESSAGES = 40;
+function trimAgentMessages(messages: AgentMessage[]): AgentMessage[] {
+  if (messages.length <= MAX_AGENT_MESSAGES) return messages;
+  const first = messages[0];
+  let cut = messages.length - MAX_AGENT_MESSAGES;
+  // If the first kept message is a "user" turn whose content is purely
+  // tool_result blocks, that orphans the previous tool_use. Walk forward
+  // until we land on a regular user/assistant boundary.
+  while (cut < messages.length) {
+    const m = messages[cut];
+    const isToolResultOnly =
+      m.role === 'user' &&
+      Array.isArray(m.content) &&
+      m.content.every((b) => (b as { type?: string }).type === 'tool_result');
+    if (!isToolResultOnly) break;
+    cut++;
+  }
+  const tail = messages.slice(cut);
+  // Re-prepend the original opening message so the model still sees the
+  // task framing. If the head is identical to tail[0], skip the dup.
+  if (tail.length > 0 && first === tail[0]) return tail;
+  return [first, ...tail];
+}
+
 interface AgentLoopArgs {
   token: string;
   modelId: string;
@@ -117,6 +151,13 @@ interface AgentLoopArgs {
   firstAssistantMsg: ChatMessage;
   /** Snapshot of all messages including the first user + first assistant. */
   conversationMessages: ChatMessage[];
+  /**
+   * Optional preamble injected as the very first user turn on every
+   * agent iteration — used for AGENTS.md / CLAUDE.md project guidance
+   * the user wants the model to keep in mind across the conversation.
+   * Empty string means no preamble.
+   */
+  preamble?: string;
   setMessages: (
     updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
   ) => void;
@@ -144,7 +185,14 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
     // back as part of the prompt — we exclude it from the agent
     // messages we forward to the model.
     const sent = working.filter((m) => m.id !== currentAssistantId);
-    const agentMessages = chatToAgentMessages(sent);
+    const baseMessages = chatToAgentMessages(sent);
+    const trimmed = trimAgentMessages(baseMessages);
+    // Prepend AGENTS.md/CLAUDE.md preamble (if any) as a synthetic
+    // first user turn. Anthropic's caching keys on prefix bytes — keep
+    // this preamble identical across iterations to maximise cache hits.
+    const agentMessages: AgentMessage[] = args.preamble
+      ? [{ role: 'user', content: args.preamble }, ...trimmed]
+      : trimmed;
 
     let stopReason = '';
     const collectedTools: ToolCall[] = [];
@@ -348,9 +396,58 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
   toast.info('Agent finished');
 }
 
+/**
+ * Read project guidance — AGENTS.md takes precedence over CLAUDE.md
+ * because it's the cross-vendor standard. We try a few candidate
+ * locations: workspace root, then the active file's directory.
+ * Returns an empty string if nothing usable is found, so the agent
+ * loop can no-op when no guidance file exists.
+ */
+async function loadProjectPreamble(
+  workspaceRoot: string | null,
+  activeFilePath?: string,
+): Promise<string> {
+  const roots: string[] = [];
+  if (workspaceRoot) roots.push(workspaceRoot);
+  if (activeFilePath) {
+    const dir = activeFilePath.replace(/[\\/][^\\/]*$/, '');
+    if (dir && !roots.includes(dir)) roots.push(dir);
+  }
+  for (const root of roots) {
+    for (const name of ['AGENTS.md', 'CLAUDE.md']) {
+      const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/';
+      const candidate = `${root}${root.endsWith(sep) ? '' : sep}${name}`;
+      try {
+        const f = await window.suxai.fs.readFile(candidate);
+        if (f.content.trim().length > 0) {
+          // Cap at 16k chars — large project READMEs would otherwise
+          // dominate the cache prefix.
+          const body = f.content.length > 16_000
+            ? f.content.slice(0, 16_000) + '\n\n[truncated AGENTS.md — load full file with read_file if needed]'
+            : f.content;
+          return (
+            `# Project guidance (${candidate})\n\n` +
+            body +
+            '\n\n---\n\n' +
+            'The text above is automatic project context loaded by SUXAI from the ' +
+            'workspace AGENTS.md/CLAUDE.md. Use it as background; the user message ' +
+            'that follows is the actual task.'
+          );
+        }
+      } catch {
+        /* file missing — try the next candidate */
+      }
+    }
+  }
+  return '';
+}
+
 export function AIPanel() {
   const { token } = useAuth();
-  const { activeFile, selection, updateActiveContent, openDiff, openFiles } = useWorkspace();
+  const { activeFile, selection, updateActiveContent, openDiff, openFiles, workspaceRoot } = useWorkspace();
+  // Cache the loaded preamble per workspaceRoot so we read AGENTS.md
+  // once per workspace open — not on every send.
+  const preambleRef = useRef<{ root: string | null; preamble: string } | null>(null);
   const [modelId, setModelId] = useState<string>(() => {
     return localStorage.getItem(STORAGE_MODEL_KEY) || DEFAULT_MODEL_ID;
   });
@@ -361,6 +458,7 @@ export function AIPanel() {
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const requestApproval = useCallback(
     (
@@ -684,12 +782,23 @@ export function AIPanel() {
         modelProviderForId(modelId) === 'anthropic' &&
         token
       ) {
+        // Load AGENTS.md/CLAUDE.md once per workspace and reuse the
+        // string across iterations — avoids repeated FS reads and
+        // keeps the prompt prefix stable for Anthropic caching.
+        let preamble = '';
+        if (preambleRef.current?.root === workspaceRoot) {
+          preamble = preambleRef.current.preamble;
+        } else {
+          preamble = await loadProjectPreamble(workspaceRoot, activeFile?.path);
+          preambleRef.current = { root: workspaceRoot, preamble };
+        }
         runAgentLoop({
           token,
           modelId,
           firstUserMsg: userMsg,
           firstAssistantMsg: assistantMsg,
           conversationMessages: [...messages, userMsg, assistantMsg],
+          preamble,
           setMessages,
           setStreaming,
           abortRef,
@@ -770,7 +879,7 @@ export function AIPanel() {
       abortRef.current = cancel;
     },
     // attachments dropped from deps — we read it via attachmentsRef above.
-    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast, requestApproval],
+    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast, requestApproval, workspaceRoot],
   );
 
   const stop = () => {
@@ -841,19 +950,25 @@ export function AIPanel() {
 
   const deleteConversation = useCallback(
     (id: string) => {
-      if (
-        !window.confirm(
-          'Delete this conversation? Its history will be removed and the AI will not remember it.',
-        )
-      ) {
-        return;
-      }
+      // Two-step: first click sets pending, second click confirms.
+      // Cancelled by clicking elsewhere or 4 seconds of inactivity.
+      // Avoids window.confirm which blocks the renderer event loop and
+      // looks out of place inside Electron.
+      setPendingDelete(id);
+    },
+    [],
+  );
+
+  // Confirm deletion the second time deleteConversation is called for the
+  // same id, then clear the pending state.
+  const confirmDelete = useCallback(
+    (id: string) => {
+      setPendingDelete(null);
       setConversations((list) => {
         const next = list.filter((c) => c.id !== id);
         if (id === activeConvId) {
           abortRef.current?.();
           setStreaming(false);
-          // Switch to next available conversation, or create a fresh one.
           if (next.length > 0) {
             setActiveConvId(next[next.length - 1].id);
           } else {
@@ -868,6 +983,14 @@ export function AIPanel() {
     },
     [activeConvId, toast],
   );
+
+  // Auto-clear the pending delete after a short window so a stale "are
+  // you sure?" never lingers across page navigation.
+  useEffect(() => {
+    if (!pendingDelete) return;
+    const t = setTimeout(() => setPendingDelete(null), 4000);
+    return () => clearTimeout(t);
+  }, [pendingDelete]);
 
   const renameConversation = useCallback((id: string, title: string) => {
     setConversations((list) =>
@@ -908,6 +1031,8 @@ export function AIPanel() {
             onSwitch={switchConversation}
             onNew={newConversation}
             onDelete={deleteConversation}
+            onConfirmDelete={confirmDelete}
+            pendingDeleteId={pendingDelete}
             onRename={renameConversation}
           />
           <ModelSelector value={modelId} onChange={setModelId} />

@@ -8,7 +8,12 @@ interface Props {
   activeId: string | null;
   onSwitch: (id: string) => void;
   onNew: () => void;
+  /** First call requests deletion (item enters pending state). */
   onDelete: (id: string) => void;
+  /** Second click commits the deletion. */
+  onConfirmDelete: (id: string) => void;
+  /** Id currently armed for deletion (shown in confirmation state). */
+  pendingDeleteId: string | null;
   onRename: (id: string, title: string) => void;
 }
 
@@ -18,6 +23,8 @@ export function ConversationSwitcher({
   onSwitch,
   onNew,
   onDelete,
+  onConfirmDelete,
+  pendingDeleteId,
   onRename,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -168,23 +175,36 @@ export function ConversationSwitcher({
                   )}
                   <button
                     type="button"
-                    className="cswitch__del"
+                    className={`cswitch__del${pendingDeleteId === c.id ? ' cswitch__del--armed' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDelete(c.id);
+                      if (pendingDeleteId === c.id) onConfirmDelete(c.id);
+                      else onDelete(c.id);
                     }}
-                    title="Delete this conversation"
-                    aria-label={`Delete ${c.title}`}
+                    title={
+                      pendingDeleteId === c.id
+                        ? 'Click again to confirm deletion'
+                        : 'Delete this conversation'
+                    }
+                    aria-label={
+                      pendingDeleteId === c.id
+                        ? `Confirm delete ${c.title}`
+                        : `Delete ${c.title}`
+                    }
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                      <path
-                        d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
-                        stroke="currentColor"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
+                    {pendingDeleteId === c.id ? (
+                      <span style={{ fontSize: 10, fontWeight: 600 }}>Sure?</span>
+                    ) : (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                        <path
+                          d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    )}
                   </button>
                 </div>
               ))}

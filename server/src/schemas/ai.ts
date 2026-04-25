@@ -27,18 +27,32 @@ export function findModel(id: string): SupportedModel | undefined {
 // Agent-mode content blocks. When `agentMessages` / `tools` are present,
 // the request takes precedence over `prompt` + `history` and we hand the
 // Anthropic API the rich block-shaped messages directly.
-const textBlock = z.object({ type: z.literal('text'), text: z.string() });
+//
+// `cache_control` lives on every block — the server adds ephemeral
+// breakpoints for prompt caching after validation, but we also accept
+// pre-marked breakpoints from the client (e.g. for tools dumps) so the
+// schema doesn't reject them.
+const cacheControl = z
+  .object({ type: z.literal('ephemeral') })
+  .optional();
+const textBlock = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+  cache_control: cacheControl,
+});
 const toolUseBlock = z.object({
   type: z.literal('tool_use'),
   id: z.string(),
   name: z.string(),
   input: z.unknown(),
+  cache_control: cacheControl,
 });
 const toolResultBlock = z.object({
   type: z.literal('tool_result'),
   tool_use_id: z.string(),
   content: z.string(),
   is_error: z.boolean().optional(),
+  cache_control: cacheControl,
 });
 const contentBlock = z.union([textBlock, toolUseBlock, toolResultBlock]);
 
@@ -46,42 +60,48 @@ const toolDefinition = z.object({
   name: z.string().min(1).max(80),
   description: z.string().max(4000),
   input_schema: z.record(z.string(), z.unknown()),
+  cache_control: cacheControl,
 });
 
-export const aiRequestSchema = z.object({
-  modelId: z.string().refine((v) => SUPPORTED_MODELS.some((m) => m.id === v), {
-    message: 'Unsupported model',
-  }),
-  command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'edit', 'chat']).default('chat'),
-  prompt: z.string().min(1, 'Prompt cannot be empty').max(2_000_000, 'Prompt too large'),
-  history: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string().min(1).max(200_000),
-      }),
-    )
-    .max(40)
-    .optional(),
-  context: z
-    .object({
-      filePath: z.string().optional(),
-      language: z.string().optional(),
-      fileContent: z.string().max(1_000_000).optional(),
-      selection: z.string().max(200_000).optional(),
-    })
-    .optional(),
-  // --- Agent-mode extensions ---
-  tools: z.array(toolDefinition).max(20).optional(),
-  agentMessages: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.union([z.string(), z.array(contentBlock).max(40)]),
-      }),
-    )
-    .max(60)
-    .optional(),
-});
+export const aiRequestSchema = z
+  .object({
+    modelId: z.string().refine((v) => SUPPORTED_MODELS.some((m) => m.id === v), {
+      message: 'Unsupported model',
+    }),
+    command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'edit', 'chat']).default('chat'),
+    prompt: z.string().max(2_000_000, 'Prompt too large'),
+    history: z
+      .array(
+        z.object({
+          role: z.enum(['user', 'assistant']),
+          content: z.string().min(1).max(200_000),
+        }),
+      )
+      .max(40)
+      .optional(),
+    context: z
+      .object({
+        filePath: z.string().optional(),
+        language: z.string().optional(),
+        fileContent: z.string().max(1_000_000).optional(),
+        selection: z.string().max(200_000).optional(),
+      })
+      .optional(),
+    // --- Agent-mode extensions ---
+    tools: z.array(toolDefinition).max(20).optional(),
+    agentMessages: z
+      .array(
+        z.object({
+          role: z.enum(['user', 'assistant']),
+          content: z.union([z.string(), z.array(contentBlock).max(80)]),
+        }),
+      )
+      .max(120)
+      .optional(),
+  })
+  .refine(
+    (v) => (v.agentMessages && v.agentMessages.length > 0) || v.prompt.trim().length > 0,
+    { message: 'Prompt cannot be empty', path: ['prompt'] },
+  );
 
 export type AiRequestInput = z.infer<typeof aiRequestSchema>;

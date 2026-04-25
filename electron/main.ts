@@ -254,6 +254,9 @@ function registerIpc() {
   });
 
   ipcMain.handle('fs:read-dir', async (_e, dirPath: string) => {
+    if (typeof dirPath !== 'string' || dirPath.length === 0 || dirPath.includes('\0')) {
+      throw new Error('Invalid path');
+    }
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     return entries.map((e) => ({
       name: e.name,
@@ -306,7 +309,7 @@ function registerIpc() {
     // crash mid-write leaves the original file untouched. Falls back to
     // a direct write only if the rename itself fails — e.g. crossing
     // device boundaries on a /tmp-mounted filesystem.
-    const tmp = `${safe}.${process.pid}.${Date.now()}.tmp`;
+    const tmp = `${safe}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.tmp`;
     try {
       await fs.writeFile(tmp, content, 'utf8');
       await fs.rename(tmp, safe);
@@ -442,21 +445,28 @@ function registerIpc() {
     const id = `term_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     sessions.set(id, { proc, cwd: safe });
     const sender = event.sender;
-    proc.stdout.on('data', (chunk) => {
-      if (!sender.isDestroyed()) sender.send('terminal:data', { id, chunk: chunk.toString() });
-    });
-    proc.stderr.on('data', (chunk) => {
-      if (!sender.isDestroyed()) sender.send('terminal:data', { id, chunk: chunk.toString() });
-    });
+    const safeSend = (channel: string, payload: unknown) => {
+      if (sender.isDestroyed()) return;
+      try { sender.send(channel, payload); }
+      catch { /* sender disposed mid-send; nothing to do */ }
+    };
+    proc.stdout.on('data', (chunk) => safeSend('terminal:data', { id, chunk: chunk.toString() }));
+    proc.stderr.on('data', (chunk) => safeSend('terminal:data', { id, chunk: chunk.toString() }));
     proc.on('close', (code) => {
       sessions.delete(id);
-      if (!sender.isDestroyed()) sender.send('terminal:exit', { id, code });
+      safeSend('terminal:exit', { id, code });
     });
     proc.on('error', (err) => {
-      if (!sender.isDestroyed()) {
-        sender.send('terminal:data', { id, chunk: `\r\n[spawn error] ${err.message}\r\n` });
-      }
+      safeSend('terminal:data', { id, chunk: `\r\n[spawn error] ${err.message}\r\n` });
     });
+    // If the renderer goes away (window close, reload), don't leak child shells.
+    const onDestroyed = () => {
+      try { proc.kill('SIGTERM'); } catch { /* */ }
+      setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* */ } }, 2000).unref();
+      sessions.delete(id);
+    };
+    sender.once('destroyed', onDestroyed);
+    proc.once('close', () => sender.removeListener('destroyed', onDestroyed));
     return { id, shell: cmd };
   });
 
@@ -491,13 +501,17 @@ function registerIpc() {
     'terminal:run-once',
     (_e, input: { command: string; cwd?: string; timeout_ms?: number }) => {
       return new Promise((resolve) => {
-        if (!input || typeof input.command !== 'string' || input.command.trim() === '') {
+        if (
+          !input ||
+          typeof input.command !== 'string' ||
+          input.command.trim().length === 0
+        ) {
           resolve({ stdout: '', exit_code: -1, error: 'empty command' });
           return;
         }
         const safeCwd = (() => {
           try { return resolvePath(input.cwd); }
-          catch (err) { return null; }
+          catch { return null; }
         })();
         if (!safeCwd) {
           resolve({ stdout: '', exit_code: -1, error: 'invalid cwd' });
@@ -506,21 +520,35 @@ function registerIpc() {
         const isWin = process.platform === 'win32';
         const cmd = isWin ? process.env.COMSPEC ?? 'cmd.exe' : '/bin/sh';
         const args = isWin ? ['/c', input.command] : ['-c', input.command];
+        // Pager-safe env: tools like `git log` / `less` would normally
+        // open a pager and hang waiting for keystrokes; PAGER=cat keeps
+        // them streaming. Force NO_COLOR-friendly defaults too.
         const child = spawn(cmd, args, {
           cwd: safeCwd,
-          env: { ...process.env, TERM: 'xterm-256color' },
+          env: {
+            ...process.env,
+            TERM: 'dumb',
+            PAGER: 'cat',
+            GIT_PAGER: 'cat',
+            MANPAGER: 'cat',
+            CI: '1',
+            NODE_DISABLE_COLORS: '1',
+          },
         });
         const CAP = 200_000;
         let buf = '';
         let timedOut = false;
-        const timeout = setTimeout(
-          () => {
-            timedOut = true;
-            child.kill('SIGTERM');
-            setTimeout(() => child.kill('SIGKILL'), 2000);
-          },
-          Math.min(Math.max(input.timeout_ms ?? 120_000, 1000), 600_000),
-        );
+        const rawTimeout =
+          typeof input.timeout_ms === 'number' && Number.isFinite(input.timeout_ms)
+            ? input.timeout_ms
+            : 120_000;
+        const timeoutMs = Math.min(Math.max(rawTimeout, 1000), 600_000);
+        const timeout = setTimeout(() => {
+          timedOut = true;
+          try { child.kill('SIGTERM'); } catch { /* */ }
+          setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } }, 2000).unref();
+        }, timeoutMs);
+        timeout.unref();
         const append = (s: string) => {
           if (buf.length >= CAP) return;
           buf += s;

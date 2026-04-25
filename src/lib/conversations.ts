@@ -84,7 +84,7 @@ export async function loadConversations(): Promise<PersistedV2> {
           (typeof obj.active === 'string' && list.some((c) => c.id === obj.active))
             ? obj.active
             : list[0]?.id ?? null;
-        return { version: 2, active, list };
+        return sanitizeForPersist({ version: 2, active, list });
       }
     }
   } catch (err) {
@@ -93,9 +93,37 @@ export async function loadConversations(): Promise<PersistedV2> {
   return empty;
 }
 
+/**
+ * Strip transient state before persisting. A `streaming` flag or a
+ * `pending`/`running` tool call would replay back into the next session
+ * as a stuck UI element (and chatToAgentMessages would skip them).
+ */
+function sanitizeForPersist(state: PersistedV2): PersistedV2 {
+  return {
+    ...state,
+    list: state.list.map((c) => ({
+      ...c,
+      messages: c.messages.map((m) => {
+        const next = { ...m, streaming: false };
+        if (next.toolCalls && next.toolCalls.length > 0) {
+          // Drop pending/running tool calls — they have no result, so
+          // the next conversation render would show a forever-spinning
+          // card and chatToAgentMessages would now ignore them anyway.
+          const cleaned = next.toolCalls.filter(
+            (tc) => tc.status !== 'pending' && tc.status !== 'running',
+          );
+          if (cleaned.length === 0) delete next.toolCalls;
+          else next.toolCalls = cleaned;
+        }
+        return next;
+      }),
+    })),
+  };
+}
+
 export async function saveConversations(state: PersistedV2): Promise<void> {
   try {
-    await window.suxai.conversations.write(state);
+    await window.suxai.conversations.write(sanitizeForPersist(state));
   } catch (err) {
     console.warn('[conv] save failed:', err);
   }

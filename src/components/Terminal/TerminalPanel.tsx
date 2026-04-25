@@ -32,8 +32,10 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const spawningRef = useRef(false);
   const offDataRef = useRef<(() => void) | null>(null);
   const offExitRef = useRef<(() => void) | null>(null);
+  const termOnDataRef = useRef<{ dispose(): void } | null>(null);
   const [height, setHeight] = useState<number>(DEFAULT_HEIGHT);
   const [dragging, setDragging] = useState(false);
 
@@ -97,11 +99,14 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
     term.focus();
 
     (async () => {
-      if (sessionIdRef.current) return; // already spawned
+      if (sessionIdRef.current || spawningRef.current) return; // already spawned / in flight
+      spawningRef.current = true;
       try {
         const { id, shell } = await window.suxai.terminal.spawn(workspaceRoot ?? undefined);
         sessionIdRef.current = id;
         term.writeln(`\x1b[2m[suxai] ${shell} — ${workspaceRoot ?? 'default cwd'}\x1b[0m`);
+        offDataRef.current?.();
+        offExitRef.current?.();
         offDataRef.current = window.suxai.terminal.onData((p) => {
           if (p.id === id) term.write(p.chunk);
         });
@@ -111,12 +116,16 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
             sessionIdRef.current = null;
           }
         });
-        term.onData((data) => {
-          if (sessionIdRef.current)
-            void window.suxai.terminal.write(sessionIdRef.current, data);
-        });
+        if (!termOnDataRef.current) {
+          termOnDataRef.current = term.onData((data) => {
+            if (sessionIdRef.current)
+              void window.suxai.terminal.write(sessionIdRef.current, data);
+          });
+        }
       } catch (err) {
         term.writeln(`\r\n\x1b[31m[spawn failed] ${(err as Error).message}\x1b[0m`);
+      } finally {
+        spawningRef.current = false;
       }
     })();
 
@@ -131,8 +140,13 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
     return () => {
       offDataRef.current?.();
       offExitRef.current?.();
+      offDataRef.current = null;
+      offExitRef.current = null;
+      termOnDataRef.current?.dispose();
+      termOnDataRef.current = null;
       if (sessionIdRef.current) {
         void window.suxai.terminal.kill(sessionIdRef.current);
+        sessionIdRef.current = null;
       }
     };
   }, []);
@@ -148,10 +162,20 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
   useEffect(() => {
     if (!open) return;
     const host = hostRef.current;
-    if (!host) return;
-    const ro = new ResizeObserver(() => fitRef.current?.fit());
+    if (!host || typeof ResizeObserver === 'undefined') return;
+    let raf = 0;
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        try { fitRef.current?.fit(); }
+        catch { /* term may be disposed mid-resize */ }
+      });
+    });
     ro.observe(host);
-    return () => ro.disconnect();
+    return () => {
+      cancelAnimationFrame(raf);
+      ro.disconnect();
+    };
   }, [open]);
 
   useEffect(() => {

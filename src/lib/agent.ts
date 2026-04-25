@@ -131,7 +131,7 @@ const DANGER_PATTERNS: RegExp[] = [
   /\bgit\s+push\s+[^&\n]*--force\b/,
   /\bnpm\s+(publish|unpublish)\b/,
   /\byarn\s+publish\b/,
-  />\s*\/dev\/(sda|nvme|disk|null|zero)/,
+  />\s*\/dev\/(sd[a-z]|nvme|disk|hd[a-z])\b/,
   /\bshutdown\b/,
   /\bdd\s+.*\bof=\/dev\//,
   /\bchmod\s+-R\s+0?777\b/,
@@ -143,6 +143,53 @@ export function detectDangerousCommand(cmd: string): boolean {
 
 const MAX_FILE_BYTES = 200_000;
 const MAX_DIR_ENTRIES = 200;
+
+/**
+ * Directories the agent should never list — they're huge, almost
+ * never relevant to the model's task, and burn through the context
+ * window. Mirror what `git status` would already gitignore by default.
+ */
+const NOISY_DIRS = new Set([
+  'node_modules',
+  '.git',
+  '.svn',
+  '.hg',
+  'dist',
+  'dist-electron',
+  'build',
+  'release',
+  '.next',
+  '.cache',
+  '.turbo',
+  '.parcel-cache',
+  '.idea',
+  '.vscode',
+  'coverage',
+  '__pycache__',
+  '.venv',
+  'venv',
+  'target',
+  '.DS_Store',
+]);
+
+/**
+ * Heuristic binary detection: scan the first chunk for NUL bytes or a
+ * heavy ratio of non-printable characters. Good enough for the agent
+ * to refuse images/exes without dragging in a libmagic dep.
+ */
+function looksBinary(content: string): boolean {
+  if (content.length === 0) return false;
+  const sample = content.slice(0, 4096);
+  if (sample.includes('\0')) return true;
+  let nonPrintable = 0;
+  for (let i = 0; i < sample.length; i++) {
+    const code = sample.charCodeAt(i);
+    // Printable ASCII + common whitespace, or any extended unicode (>=0x80).
+    if (code === 9 || code === 10 || code === 13) continue;
+    if (code < 32) nonPrintable++;
+  }
+  return nonPrintable / sample.length > 0.05;
+}
 
 /**
  * Approval callback the executor invokes before any file-modifying tool.
@@ -199,6 +246,13 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
     case 'read_file': {
       const path = expectString(args, 'path');
       const f = await window.suxai.fs.readFile(path);
+      if (looksBinary(f.content)) {
+        return (
+          `<<<file path=${f.path} binary=true>>>\n` +
+          `[binary or non-text file; ${f.content.length} bytes — refusing to inline. ` +
+          `If you must inspect it, ask the user for guidance.]\n<<<end>>>`
+        );
+      }
       const truncated = f.content.length > MAX_FILE_BYTES;
       const body = truncated
         ? f.content.slice(0, MAX_FILE_BYTES) +
@@ -208,13 +262,29 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
     }
     case 'list_dir': {
       const path = expectString(args, 'path');
-      const entries = await window.suxai.fs.readDir(path);
-      const truncated = entries.length > MAX_DIR_ENTRIES;
-      const lines = entries.slice(0, MAX_DIR_ENTRIES).map(
+      const all = await window.suxai.fs.readDir(path);
+      // Sort: directories first, then alphabetical, with noisy/hidden
+      // entries pushed to the bottom so the model sees the meaningful
+      // children first. Hidden files (`.*`) other than NOISY_DIRS keep
+      // their place — `.env.example` and `.gitignore` matter.
+      const visible = all
+        .filter((e) => !NOISY_DIRS.has(e.name))
+        .sort((a, b) => {
+          if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+      const hidden = all.filter((e) => NOISY_DIRS.has(e.name));
+      const truncated = visible.length > MAX_DIR_ENTRIES;
+      const lines = visible.slice(0, MAX_DIR_ENTRIES).map(
         (e) => `${e.isDirectory ? 'D' : 'F'}  ${e.path}`,
       );
       if (truncated) {
-        lines.push(`[TRUNCATED — ${entries.length - MAX_DIR_ENTRIES} more entries omitted]`);
+        lines.push(`[TRUNCATED — ${visible.length - MAX_DIR_ENTRIES} more entries omitted]`);
+      }
+      if (hidden.length > 0) {
+        lines.push(
+          `[hidden by gitignore-default: ${hidden.map((e) => e.name).join(', ')}]`,
+        );
       }
       return `<<<dir path=${path}>>>\n${lines.join('\n')}\n<<<end>>>`;
     }

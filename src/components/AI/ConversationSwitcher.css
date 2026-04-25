@@ -130,6 +130,14 @@
   color: #ff8e8e;
   background: rgba(239, 68, 68, 0.12);
 }
+.cswitch__del--armed {
+  opacity: 1 !important;
+  width: auto;
+  padding: 0 8px;
+  color: #ff8e8e;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
 
 .cswitch__rename {
   flex: 1;

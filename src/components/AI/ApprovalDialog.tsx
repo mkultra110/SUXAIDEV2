@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { diffLines } from 'diff';
 import { Button } from '../ui/Button';
@@ -21,20 +21,38 @@ interface Props {
 }
 
 export function ApprovalDialog({ request }: Props) {
+  const settledRef = useRef(false);
+
+  useEffect(() => {
+    settledRef.current = false;
+  }, [request]);
+
+  const settle = useCallback(
+    (approved: boolean) => {
+      if (!request || settledRef.current) return;
+      settledRef.current = true;
+      request.resolve(approved);
+    },
+    [request],
+  );
+
   useEffect(() => {
     if (!request) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        request.resolve(false);
+        e.stopPropagation();
+        settle(false);
       } else if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         e.preventDefault();
-        request.resolve(true);
+        e.stopPropagation();
+        settle(true);
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [request]);
+    // capture: intercept before any other Esc/Cmd+Enter shortcut on the page.
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [request, settle]);
 
   const diffHunks = useMemo(() => {
     if (!request?.preview) return null;
@@ -57,7 +75,7 @@ export function ApprovalDialog({ request }: Props) {
       className="approval__overlay"
       role="dialog"
       aria-modal="true"
-      onClick={() => request.resolve(false)}
+      onClick={() => settle(false)}
     >
       <div className="approval__card glass-strong" onClick={(e) => e.stopPropagation()}>
         <div className="approval__head">
@@ -107,13 +125,13 @@ export function ApprovalDialog({ request }: Props) {
         )}
 
         <div className="approval__actions">
-          <Button variant="ghost" size="md" onClick={() => request.resolve(false)}>
+          <Button variant="ghost" size="md" onClick={() => settle(false)}>
             Reject <kbd className="approval__kbd">Esc</kbd>
           </Button>
           <Button
             variant={dangerous ? 'secondary' : 'primary'}
             size="md"
-            onClick={() => request.resolve(true)}
+            onClick={() => settle(true)}
           >
             {dangerous ? 'Approve anyway' : 'Approve'}{' '}
             <kbd className="approval__kbd">⌘↵</kbd>

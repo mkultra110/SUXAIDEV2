@@ -61,11 +61,12 @@ export function useEditorContextTracker(
               startColumn: sel.startColumn,
               endLine: sel.endLineNumber,
               endColumn: sel.endColumn,
-              // 64 KB selection slice — covers most "select this
-              // big block of code" cases. Heavy selections are
-              // truncated and the model sees the boundary in the
-              // <additional_data> XML.
-              text: model.getValueInRange(sel).slice(0, 65536),
+              // 256 KB selection slice (v0.11.1, was 64 KB). Covers
+              // even very long "select the whole file then ask for
+              // changes" workflows without hitting the limit. Heavy
+              // selections are still truncated and the model sees
+              // the boundary in the <additional_data> XML.
+              text: model.getValueInRange(sel).slice(0, 256 * 1024),
             }
           : null;
       scheduleFlush({

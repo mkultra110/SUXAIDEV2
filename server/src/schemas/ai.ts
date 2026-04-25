@@ -35,13 +35,14 @@ export function findModel(id: string): SupportedModel | undefined {
 const cacheControl = z
   .object({ type: z.literal('ephemeral') })
   .optional();
-// Per-block byte caps. The Express body cap is 32 MB (see
-// server/src/index.ts); this per-field cap stays under a third of
-// that so a single huge block can't be the whole payload. 4 MB
-// covers very large files (entire codebases of small projects) in
-// one block while still leaving headroom for the rest of the
-// agentMessages array.
-const MAX_BLOCK_TEXT = 4_000_000; // 4 MB per text/tool_result block
+// Per-block byte caps. v0.11.1 raises this to 8 MB (Express body
+// cap was bumped to 64 MB in tandem). Large generated files,
+// transcripts of long agent loops, and gigantic tool_result dumps
+// from grep on big monorepos all benefit. The schema is the real
+// safety net — even at 8 MB, an agentMessages array with 200
+// messages × 200 blocks each would still be far over the 64 MB
+// body limit, so practical sends stay reasonable.
+const MAX_BLOCK_TEXT = 8_000_000; // 8 MB per text/tool_result block
 const textBlock = z.object({
   type: z.literal('text'),
   text: z.string().max(MAX_BLOCK_TEXT),
@@ -81,28 +82,28 @@ export const aiRequestSchema = z
      *  a markdown plan via create_plan only. Defaults to 'composer'
      *  for back-compat when older clients don't send the field. */
     mode: z.enum(['composer', 'ask']).default('composer'),
-    prompt: z.string().max(8_000_000, 'Prompt too large'),
+    prompt: z.string().max(16_000_000, 'Prompt too large'),
     /** Optional override for the upstream max_tokens output cap.
-     *  Defaults: 16K in agent mode, 8K in plain chat. Capped at
-     *  64K (Anthropic's hard limit on Sonnet/Opus 4.x). Send a
-     *  bigger value when the user explicitly asks the model to
-     *  rewrite a large file in one turn. */
+     *  Defaults: 32K in agent mode, 16K in plain chat (v0.11.1).
+     *  Capped at 64K (Anthropic's hard limit on Sonnet/Opus 4.x).
+     *  Send a bigger value when the user explicitly asks the model
+     *  to rewrite a large file in one turn. */
     max_output_tokens: z.number().int().min(1024).max(64000).optional(),
     history: z
       .array(
         z.object({
           role: z.enum(['user', 'assistant']),
-          content: z.string().min(1).max(2_000_000),
+          content: z.string().min(1).max(4_000_000),
         }),
       )
-      .max(60)
+      .max(100)
       .optional(),
     context: z
       .object({
         filePath: z.string().optional(),
         language: z.string().optional(),
-        fileContent: z.string().max(8_000_000).optional(),
-        selection: z.string().max(1_000_000).optional(),
+        fileContent: z.string().max(16_000_000).optional(),
+        selection: z.string().max(2_000_000).optional(),
       })
       .optional(),
     // --- Agent-mode extensions ---

@@ -50,13 +50,14 @@ app.use(
   }),
 );
 
-// 32 MB is the upper end of "reasonable" for a single agent turn:
-// it covers a large attached file (4 MB max per block × a handful
-// of files) plus rolling tool history. The per-field zod caps in
-// server/src/schemas/ai.ts are the real safety net; this value is
-// just the outer wall so the JSON parser doesn't blow up before
-// schema validation has a chance to give a precise error.
-app.use(express.json({ limit: '32mb' }));
+// 64 MB body limit (v0.11.1, was 32 MB). Lets a single agent turn
+// carry several big attachments (8 MB per block × a handful of
+// files) plus a long rolling tool history without hitting 413.
+// The per-field zod caps in server/src/schemas/ai.ts remain the
+// real safety net; this value is the outer wall so the JSON
+// parser doesn't blow up before schema validation can give a
+// precise error.
+app.use(express.json({ limit: '64mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true, version: env.UPDATE_VERSION }));
 

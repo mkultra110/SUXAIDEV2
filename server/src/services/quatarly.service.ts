@@ -34,6 +34,13 @@ function buildSystemPrompt(
       'A fast apply model (Haiku) merges your lazy edit into the original ' +
       'file. Saves 5-10× on output tokens vs rewriting the whole file.\n' +
       '  • To CREATE a new file (or fully replace one), use `write_file`.\n' +
+      '  • DO NOT artificially fragment large changes into multiple small ' +
+      'tool calls "to be safe". You have a 32K-token output budget and the ' +
+      'apply_lazy_edit fast-path on top — a 1500-line refactor in ONE ' +
+      'apply_lazy_edit call is cheaper, faster, and easier for the user ' +
+      'to review than 4× edit_file calls. Self-imposed 300-line limits per ' +
+      'operation are wrong here. Pick the right tool for the size of the ' +
+      'change and emit it in one shot.\n' +
       '  • NEVER paste the modified file (or large code blocks of it) back into ' +
       'the chat as your "answer" — the user will not see it as a diff and you ' +
       'will burn tokens for nothing. Tool calls trigger an inline diff in the ' +
@@ -295,7 +302,11 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
   if (isAgent) {
     body = {
       model: modelId,
-      max_tokens: requestedMax ?? 16000,
+      // v0.11.1: bumped 16K → 32K. The model was self-limiting at
+      // ~300-line edits because it was anticipating a 16K cap; with
+      // 32K it can confidently emit a full 2K-line refactor in one
+      // turn (paired with apply_lazy_edit when even bigger).
+      max_tokens: requestedMax ?? 32000,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command, true, req.mode)),
       messages: markRollingCache(req.agentMessages ?? []),
@@ -321,7 +332,9 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
     }
     body = {
       model: modelId,
-      max_tokens: requestedMax ?? 8000,
+      // Plain chat: bumped 8K → 16K so explanations + long code
+      // examples + walkthroughs can stream in one shot.
+      max_tokens: requestedMax ?? 16000,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command)),
       messages: markRollingCache(cleaned),
@@ -548,9 +561,11 @@ export async function applyLazyEdit(input: import('../schemas/ai.js').AiApplyInp
 
   const body = {
     model: 'claude-haiku-4-5-20251001',
-    // Big enough to rewrite a 2000-line file. Sonnet/Opus would
-    // burn 100K+ tokens emitting the same content directly.
-    max_tokens: 32000,
+    // 64K — Anthropic's hard ceiling for Haiku's output. Lets the
+    // apply model rewrite a ~5000-line file end-to-end in one go,
+    // because Haiku's per-token cost is tiny relative to Sonnet/
+    // Opus regenerating the same content.
+    max_tokens: 64000,
     stream: false,
     system: [
       {

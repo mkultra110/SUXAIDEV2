@@ -264,14 +264,15 @@ export function detectDangerousCommand(cmd: string): boolean {
   return DANGER_PATTERNS.some((re) => re.test(cmd));
 }
 
-// Reading caps: allow large files in one tool call so the agent can
-// inspect entire codebases without slicing them into chunks. The
-// effective ceiling is bounded by the server's per-block cap (4 MB,
-// see server/src/schemas/ai.ts). Anything bigger is auto-truncated
+// Reading caps. v0.11.1 raised these to 4 MB / file so the agent can
+// pull entire files of a typical real-world codebase (Cursor's own
+// agent.ts is ~3 MB after preamble injection) in one tool_result.
+// Bounded by the server's per-block cap (8 MB, see
+// server/src/schemas/ai.ts). Anything bigger is auto-truncated
 // with a "[TRUNCATED — file is X bytes]" footer so the model knows
 // it's not seeing the full thing and can ask for a tighter slice.
-const MAX_FILE_BYTES = 1_500_000; // ~1.5 MB
-const MAX_DIR_ENTRIES = 400;
+const MAX_FILE_BYTES = 4_000_000; // 4 MB
+const MAX_DIR_ENTRIES = 800;
 
 /**
  * Directories the agent should never list — they're huge, almost

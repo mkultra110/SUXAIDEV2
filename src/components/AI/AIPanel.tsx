@@ -35,14 +35,15 @@ function extractFirstCodeBlock(text: string): string | null {
 }
 
 /**
- * Hard cap for inlined attachments (paperclip / drag-drop). The
- * server's per-block schema cap is 4 MB; we leave headroom for the
- * message envelope and other context. Anything bigger gets sliced
- * with a "[truncated — N more bytes]" footer so the model sees the
- * boundary explicitly. Mirrors the read_file truncation policy.
+ * Hard cap for inlined attachments (paperclip / drag-drop). v0.11.1
+ * raises this to 7 MB — the server's per-block schema cap moved to
+ * 8 MB so we keep ~1 MB of headroom for the message envelope and
+ * other context. Anything bigger gets sliced with a "[truncated —
+ * N more bytes]" footer so the model sees the boundary explicitly.
+ * Mirrors the read_file truncation policy.
  */
-const ATTACHMENT_HARD_CAP = 3_500_000; // 3.5 MB
-const ATTACHMENT_WARN_THRESHOLD = 1_000_000; // 1 MB
+const ATTACHMENT_HARD_CAP = 7_000_000; // 7 MB
+const ATTACHMENT_WARN_THRESHOLD = 2_000_000; // 2 MB
 
 function adjustOversizedAttachment(
   content: string,

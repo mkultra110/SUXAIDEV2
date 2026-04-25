@@ -1018,10 +1018,21 @@ export function AIPanel() {
             resolve();
           },
           onError: (err) => {
+            // v0.11.8: human-readable message when the upstream
+            // stream was truncated mid-flight (network drop, idle
+            // proxy timeout, Anthropic 529). The user can just
+            // resend their message to retry; the heartbeat in
+            // v0.11.7 made this much rarer but it's still possible
+            // on flaky mobile networks.
+            const code = (err as Error & { code?: string }).code;
+            const friendly =
+              code === 'STREAM_TRUNCATED'
+                ? `Connexion interrompue avant la fin de la réponse — relance ta question pour reprendre. (${err.message})`
+                : err.message;
             setMessages((m) =>
               m.map((msg) =>
                 msg.id === assistantMsg.id
-                  ? { ...msg, streaming: false, error: err.message }
+                  ? { ...msg, streaming: false, error: friendly }
                   : msg,
               ),
             );
@@ -1748,10 +1759,21 @@ export function AIPanel() {
             abortRef.current = null;
           },
           onError: (err) => {
+            // v0.11.8: human-readable message when the upstream
+            // stream was truncated mid-flight (network drop, idle
+            // proxy timeout, Anthropic 529). The user can just
+            // resend their message to retry; the heartbeat in
+            // v0.11.7 made this much rarer but it's still possible
+            // on flaky mobile networks.
+            const code = (err as Error & { code?: string }).code;
+            const friendly =
+              code === 'STREAM_TRUNCATED'
+                ? `Connexion interrompue avant la fin de la réponse — relance ta question pour reprendre. (${err.message})`
+                : err.message;
             setMessages((m) =>
               m.map((msg) =>
                 msg.id === assistantMsg.id
-                  ? { ...msg, streaming: false, error: err.message }
+                  ? { ...msg, streaming: false, error: friendly }
                   : msg,
               ),
             );

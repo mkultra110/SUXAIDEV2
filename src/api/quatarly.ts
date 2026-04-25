@@ -121,6 +121,11 @@ export function streamAi(
             tool_use?: { id: string; name: string; input: unknown };
             stop_reason?: string;
             error?: string;
+            /** v0.11.7: server tags errors with a typed code so the
+             *  client can decide whether the partial response is
+             *  worth retrying (STREAM_TRUNCATED → yes, ratelimit →
+             *  yes with backoff, anthropic_error → no). */
+            code?: string;
           }
           let obj: SseEvent | null = null;
           try {
@@ -128,7 +133,11 @@ export function streamAi(
           } catch {
             continue;
           }
-          if (obj?.error) throw new Error(obj.error);
+          if (obj?.error) {
+            const e = new Error(obj.error) as Error & { code?: string };
+            if (obj.code) e.code = obj.code;
+            throw e;
+          }
           if (obj?.delta) {
             full += obj.delta;
             handlers.onToken?.(obj.delta);

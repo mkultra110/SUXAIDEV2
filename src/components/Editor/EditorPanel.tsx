@@ -7,6 +7,7 @@ import { Breadcrumbs } from './Breadcrumbs';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { emitAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
+import { useEditorContextTracker } from '../../lib/editor-context-tracker';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
 
@@ -35,6 +36,11 @@ export function EditorPanel() {
   } = useWorkspace();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+  // Mirror of editorRef.current in state, used to drive the editor
+  // context tracker hook. Refs alone don't trigger the hook's
+  // dependency array so we need a real React value here.
+  const [trackedEditor, setTrackedEditor] = useState<Parameters<OnMount>[0] | null>(null);
+  useEditorContextTracker(trackedEditor);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [actionBar, setActionBar] = useState<ActionBarPos | null>(null);
   const [settings] = useSettings();
@@ -177,6 +183,7 @@ export function EditorPanel() {
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
       editorRef.current = editor;
+      setTrackedEditor(editor);
 
       // Dispose this editor's TextModel when the host React component
       // unmounts. Without this, Monaco keeps every TextModel ever

@@ -33,8 +33,30 @@ function buildSystemPrompt(command: AiRequestInput['command'], agent = false): s
       'is the ONLY correct way to deliver edits in agent mode.\n' +
       '  • If the user just asks a question (no edit intent), answer in chat ' +
       'as normal — short code snippets for explanation are fine.\n\n' +
+      // Pronoun resolution — the SUXAI client injects an
+      // <additional_data> XML block before every user_query that
+      // tells you which file is focused, what the user has selected,
+      // recent edits, etc. Resolve demonstratives against this block
+      // INSTEAD of asking the user to repeat themselves.
+      'PRONOUN RESOLUTION (very important):\n' +
+      '  Each user message includes an <additional_data> block before ' +
+      'the actual <user_query>. Use it to resolve references silently:\n' +
+      '    • "ce script" / "ce fichier" / "this file" / "the file" → ' +
+      '<current_file path="…"> from <additional_data>\n' +
+      '    • "cette fonction" / "this function" / "la fonction ci-dessus" → ' +
+      'the smallest enclosing function around <current_file>.cursor_line ' +
+      '(use read_file with a tight line range around that line)\n' +
+      '    • "la sélection" / "this selection" / "ce code" → the contents ' +
+      'of <selection> in <additional_data>\n' +
+      '    • "le fichier que je viens d\'éditer" / "le précédent" → first ' +
+      'entry of <recent_edits>\n' +
+      '  ALWAYS confirm the resolved target in your first sentence: e.g. ' +
+      '«Modification de `chams.cpp` (le fichier actif) lignes 142–155…». ' +
+      'Never ask "quel fichier ?" if <current_file> is set — that is the ' +
+      "answer.\n\n" +
       'When you finish, briefly summarize what you changed and why. ' +
-      'If a request is ambiguous, ask before acting.'
+      'If a request is ambiguous (e.g. genuinely no current_file and no ' +
+      'selection), ask before acting.'
     );
   }
   switch (command) {

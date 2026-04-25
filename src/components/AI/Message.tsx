@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Spinner } from '../ui/Spinner';
 import { CodeBlock } from './CodeBlock';
 import { ToolCall } from './ToolCall';
+import { EditedFilesPanel } from './EditedFilesPanel';
 import { renderMarkdown } from '../../lib/markdown';
 import './Message.css';
 
@@ -242,11 +243,14 @@ export function Message({
           })()}
         </div>
         {message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="msg__tools">
-            {message.toolCalls.map((tc) => (
-              <ToolCall key={tc.id} call={tc} />
-            ))}
-          </div>
+          <>
+            <EditedFilesPanel message={message} />
+            <div className="msg__tools">
+              {message.toolCalls.map((tc) => (
+                <ToolCall key={tc.id} call={tc} />
+              ))}
+            </div>
+          </>
         )}
         {message.error && <div className="msg__error">⚠ {message.error}</div>}
       </div>

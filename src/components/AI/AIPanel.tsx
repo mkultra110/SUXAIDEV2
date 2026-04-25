@@ -18,6 +18,7 @@ import {
   type Conversation,
 } from '../../lib/conversations';
 import { AGENT_TOOLS, executeTool, type ToolCall } from '../../lib/agent';
+import { buildAdditionalDataXml } from '../../lib/additional-data';
 import type { AgentMessage, AgentContentBlock } from '../../api/quatarly';
 import { useToast } from '../ui/Toast';
 import './AIPanel.css';
@@ -439,7 +440,7 @@ async function loadProjectPreamble(
 
 export function AIPanel() {
   const { token } = useAuth();
-  const { activeFile, selection, openDiff, openFiles, workspaceRoot } = useWorkspace();
+  const { activeFile, selection, openDiff, openFiles, workspaceRoot, editorContext } = useWorkspace();
   // Cache the loaded preamble per workspaceRoot so we read AGENTS.md
   // once per workspace open — not on every send.
   const preambleRef = useRef<{ root: string | null; preamble: string } | null>(null);
@@ -763,18 +764,26 @@ export function AIPanel() {
       // but the agent-mode branch never reaches that path so we have
       // to embed it inline. Skip when there's no active file or when
       // the user already attached one — don't double-spam.
-      const alreadyHasActiveFile =
-        merged.some((a) => a.path === activeFile?.path) || !!selection;
-      const inlineContextHeader =
-        activeConv?.agentMode && activeFile && !alreadyHasActiveFile
-          ? `\n\n[active editor file: ${activeFile.path}` +
-            (activeFile.language ? ` (${activeFile.language})` : '') +
-            `]\nUse the read_file tool on this path if you need its contents.`
+      // Build the rich <additional_data> XML block. Replaces the
+      // older ad-hoc "[active editor file: …]" header with a
+      // structured payload the model can parse to resolve "ce script",
+      // "cette fonction", "la sélection" without asking. Cursor-style.
+      // Only emitted when running in agent mode AND we actually have
+      // editor context — chat-only flows already get filePath via the
+      // legacy `context` field on the request.
+      const additionalDataXml =
+        activeConv?.agentMode
+          ? buildAdditionalDataXml({
+              editorContext,
+              activeFileLanguage: activeFile?.language,
+              workspaceRoot,
+              userAlreadyAttached: merged.some((a) => a.path === activeFile?.path),
+            })
           : '';
 
       const fullPromptForHistory =
         buildCommandPrompt(command, cleaned || selection || activeFile?.content || '') +
-        inlineContextHeader +
+        additionalDataXml +
         attachmentBlock;
 
       const userMsg: ChatMessage = {

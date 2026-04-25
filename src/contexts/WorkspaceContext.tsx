@@ -40,6 +40,54 @@ interface WorkspaceState {
   pendingDiff: PendingDiff | null;
 }
 
+/**
+ * Rich snapshot of "what the user is currently looking at", consumed
+ * by the AI panel to build the <additional_data> XML block injected
+ * into every user message. Resolves demonstrative pronouns ("ce
+ * script", "cette fonction", "la sélection") without the user having
+ * to spell out the file path. Lives in a separate state slice so the
+ * tracker can update it on every editor event without forcing a
+ * cascade of re-renders through the whole workspace tree.
+ */
+export interface EditorContext {
+  /** Active file path or null when nothing is open. */
+  activeFilePath: string | null;
+  /** 1-based cursor position (line, column). null when no editor. */
+  cursorPosition: { line: number; column: number } | null;
+  /** Active selection: line range + first 4 KB of text. null when empty. */
+  selection: {
+    startLine: number;
+    startColumn: number;
+    endLine: number;
+    endColumn: number;
+    text: string;
+  } | null;
+  /** First visible viewport range (line numbers). */
+  visibleRange: { startLine: number; endLine: number } | null;
+  /** Last 5 edits across the workspace, newest first. */
+  recentEdits: { path: string; line: number; ts: number }[];
+  /** Last 10 distinct files the user focused, newest first. */
+  recentlyViewedFiles: string[];
+  /** Diagnostics for the active file (severity error/warning). */
+  diagnostics: {
+    path: string;
+    severity: 'error' | 'warning' | 'info' | 'hint';
+    message: string;
+    line: number;
+    column: number;
+  }[];
+}
+
+const EMPTY_EDITOR_CONTEXT: EditorContext = {
+  activeFilePath: null,
+  cursorPosition: null,
+  selection: null,
+  visibleRange: null,
+  recentEdits: [],
+  recentlyViewedFiles: [],
+  diagnostics: [],
+};
+
 export type SaveOutcome = 'saved' | 'unchanged' | 'cancelled' | 'error';
 
 interface WorkspaceValue extends WorkspaceState {
@@ -63,6 +111,14 @@ interface WorkspaceValue extends WorkspaceState {
   closeDiff: () => void;
   acceptDiff: () => void;
   activeFile: OpenFile | null;
+  /** Rich editor context — used by the AI panel. Never null; empty
+   *  by default. Updated by `useEditorContextTracker(editor)`. */
+  editorContext: EditorContext;
+  /** Push a fresh snapshot. Called by the Monaco event tracker. Merges
+   *  partial updates so callers can update only the slices they own. */
+  updateEditorContext: (patch: Partial<EditorContext>) => void;
+  /** Record a single edit for the recentEdits ring buffer. */
+  recordEdit: (path: string, line: number) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null);
@@ -151,6 +207,41 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     pendingDiff: null,
   });
   const [restored, setRestored] = useState(false);
+  // Rich editor context lives in its own slice — updated on every
+  // cursor move / selection change / scroll, which would otherwise
+  // re-render every consumer of WorkspaceState. The AI panel is the
+  // only real consumer; everyone else can ignore this slice via
+  // useEditorContext() instead of useWorkspace().
+  const [editorContext, setEditorContext] = useState<EditorContext>(EMPTY_EDITOR_CONTEXT);
+  const updateEditorContext = useCallback((patch: Partial<EditorContext>) => {
+    setEditorContext((prev) => {
+      const next = { ...prev, ...patch };
+      // Maintain the recentlyViewedFiles ring buffer when the active
+      // file actually changes — without this, switching tabs back and
+      // forth wouldn't update the list at all.
+      if (
+        patch.activeFilePath &&
+        patch.activeFilePath !== prev.activeFilePath
+      ) {
+        const filtered = prev.recentlyViewedFiles.filter(
+          (p) => p !== patch.activeFilePath,
+        );
+        next.recentlyViewedFiles = [patch.activeFilePath, ...filtered].slice(0, 10);
+      }
+      return next;
+    });
+  }, []);
+  const recordEdit = useCallback((path: string, line: number) => {
+    setEditorContext((prev) => {
+      const filtered = prev.recentEdits.filter(
+        (e) => !(e.path === path && Math.abs(e.line - line) <= 2),
+      );
+      return {
+        ...prev,
+        recentEdits: [{ path, line, ts: Date.now() }, ...filtered].slice(0, 5),
+      };
+    });
+  }, []);
 
   const setWorkspaceRoot = useCallback((root: string | null) => {
     setState((s) => ({ ...s, workspaceRoot: root }));
@@ -515,12 +606,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       openDiff,
       closeDiff,
       acceptDiff,
+      editorContext,
+      updateEditorContext,
+      recordEdit,
     }),
     [
       state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
       closeOthers, closeToTheRight, closeAll, setActive,
       updateActiveContent, setSelection, saveActiveFile, reloadActiveFromDisk, newUntitled, reorderTab,
       togglePin, renameFile, openDiff, closeDiff, acceptDiff,
+      editorContext, updateEditorContext, recordEdit,
     ],
   );
 

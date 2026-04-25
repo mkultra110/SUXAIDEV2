@@ -485,8 +485,19 @@ export function InlineDiff({ diff }: { diff: PendingDiff }) {
       toast.success('Changes applied', `+${stats.added} / −${stats.removed} lines`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
-      setError(msg);
-      toast.error('Could not save', msg);
+      // v0.11.9: STALE_FILE is the named error main process throws
+      // when the on-disk mtime moved between read and write (an
+      // external editor or a CI tool touched the file). Surface a
+      // friendlier message so the user understands they need to
+      // either reload the file (and lose the diff) or force-write
+      // (and clobber the external edit).
+      const isStale = /modified externally|STALE_FILE/i.test(msg);
+      const friendly = isStale
+        ? `Le fichier a été modifié à l'extérieur depuis l'ouverture du diff. ` +
+          `Recharge le fichier (le diff sera perdu) ou rejette ce diff puis relance la requête.`
+        : msg;
+      setError(friendly);
+      toast.error(isStale ? 'Fichier modifié à l\'extérieur' : 'Could not save', friendly);
     } finally {
       setBusy(false);
     }

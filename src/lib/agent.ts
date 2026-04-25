@@ -264,19 +264,94 @@ export function toolsForMode(mode: 'composer' | 'ask' = 'composer'): ToolDefinit
 const DANGER_PATTERNS: RegExp[] = [
   /\brm\s+-rf?\s+(\/|~|\$HOME|\*)/,
   /\bsudo\b/,
+  /\bdoas\b/,
   /\bmkfs\b/,
-  /\b(curl|wget)\b[^\n|]*\|\s*(sh|bash|zsh)/,
-  /\bgit\s+push\s+[^&\n]*--force\b/,
+  /\b(curl|wget|fetch)\b[^\n|]*\|\s*(sh|bash|zsh|fish)/,
+  /\bbash\s*<\s*\(\s*(curl|wget|fetch)\b/, // bash <(curl …)
+  /\beval\s+[`"'$]?\s*\(?\s*(curl|wget|fetch)\b/, // eval $(curl …)
+  /\bgit\s+push\s+[^&\n]*--force\b(?!-with-lease)/,
+  /\bgit\s+reset\s+--hard\s+(origin\/)?(main|master|prod)\b/,
   /\bnpm\s+(publish|unpublish)\b/,
   /\byarn\s+publish\b/,
+  /\b(cargo|gem|gh\s+release\s+create|pypi|twine\s+upload)\b\s*publish\b/,
   />\s*\/dev\/(sd[a-z]+\d*|hd[a-z]+\d*|nvme\d+n\d+(p\d+)?|mmcblk\d+(p\d+)?|disk\d*|loop\d+)\b/,
   /\bshutdown\b/,
+  /\breboot\b/,
+  /\bhalt\b/,
+  /\bpoweroff\b/,
   /\bdd\s+.*\bof=\/dev\//,
   /\bchmod\s+-R\s+0?777\b/,
+  /\bchown\s+-R\s+\S+\s+\//,
+  // Fork bomb (`:(){ :|:& };:`)
+  /:\s*\(\s*\)\s*\{[^}]*:\|\s*:\s*&[^}]*\};\s*:/,
+  // Windows nuclear options
+  /\bRemove-Item\b[^\n]*\b-Recurse\b[^\n]*\b-Force\b[^\n]*[A-Z]:\\/i,
+  /\brd\s+\/s\s+\/q\s+[A-Z]:/i,
+  /\bformat\s+[A-Z]:/i,
+  /\bdiskpart\b/,
+  // Container / cluster destruction
+  /\bdocker\s+system\s+prune\s+-?[af]+(?:\s+--volumes)?/,
+  /\bkubectl\s+delete\s+ns\b/,
+  /\bhelm\s+uninstall\b/,
 ];
 
+/**
+ * Strip *some* shell obfuscation before pattern matching. Not a full
+ * shell parser — just enough to defeat the most common evasions:
+ *
+ *   • Quoted-letter splitting     'r''m'  →  rm
+ *   • Mixed quoting               r"m"    →  rm
+ *   • Backslash-escapes           r\m     →  rm
+ *   • Variable indirection        X=rm    →  picked up by a separate pass
+ *
+ * Catches the patterns from cline #11210 and observed jailbreaks; a
+ * dedicated tokenizer (shell-quote) would be more thorough but adds
+ * a dependency. This regex pass is a defence-in-depth layer: the
+ * approval prompt remains the user's last line of defence.
+ */
+function deobfuscateShell(cmd: string): string {
+  let s = cmd;
+  // Drop ALL pairs of single/double quotes, joining adjacent letters:
+  // "'r''m'" → "rm". Done in two passes to handle alternating types.
+  s = s.replace(/(['"])(.*?)\1/g, '$2');
+  // Drop backslash escapes: \r\m → rm
+  s = s.replace(/\\(.)/g, '$1');
+  // Resolve X=cmd; … $X → … cmd. Detects assignments + their use
+  // in the same command. Simple form only (X=rm; $X -rf …).
+  const assigns = [...s.matchAll(/\b([A-Z_][A-Z0-9_]*)=([^\s;|&]+)/g)];
+  for (const a of assigns) {
+    const [, name, value] = a;
+    s = s.replace(new RegExp('\\$\\{?' + name + '\\}?', 'g'), value);
+  }
+  // Strip heredoc preludes (`bash <<EOF\nrm -rf /\nEOF`) — collapse
+  // the body up to the closing tag.
+  s = s.replace(/<<-?\s*['"]?(\w+)['"]?\n([\s\S]*?)\n\1\b/g, ' $2 ');
+  // Decode trivial base64 (`echo cm0gLXJmIC8= | base64 -d | sh`).
+  // We only de-obfuscate when the user's pattern is "base64 -d | (sh|bash)"
+  // because that's the realistic threat — random base64 in a command
+  // is normal and shouldn't trigger.
+  s = s.replace(
+    /\becho\s+([A-Za-z0-9+/=]+)\s*\|\s*base64\s+-d\s*\|\s*(sh|bash|zsh)\b/g,
+    (full, b64) => {
+      try {
+        // atob is the renderer-safe base64 decoder (Buffer isn't
+        // available in @monaco-editor/react bundles).
+        return decodeURIComponent(escape(atob(b64)));
+      } catch {
+        return full;
+      }
+    },
+  );
+  return s;
+}
+
 export function detectDangerousCommand(cmd: string): boolean {
-  return DANGER_PATTERNS.some((re) => re.test(cmd));
+  // Two-pass: raw command first (catches obvious cases unaltered),
+  // then de-obfuscated (catches `'r''m' -rf /` etc).
+  if (DANGER_PATTERNS.some((re) => re.test(cmd))) return true;
+  const cleaned = deobfuscateShell(cmd);
+  if (cleaned !== cmd && DANGER_PATTERNS.some((re) => re.test(cleaned))) return true;
+  return false;
 }
 
 // Reading caps. v0.11.1 raised these to 4 MB / file so the agent can

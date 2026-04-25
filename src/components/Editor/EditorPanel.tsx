@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Editor, { type OnMount } from '@monaco-editor/react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
-import { DiffView } from './DiffView';
+import { InlineDiff } from './InlineDiff';
 import { InlineEdit } from './InlineEdit';
 import { Breadcrumbs } from './Breadcrumbs';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
@@ -386,7 +386,7 @@ export function EditorPanel() {
       )}
 
       <div className="editor__body" ref={containerRef}>
-        {pendingDiff && <DiffView diff={pendingDiff} />}
+        {pendingDiff && <InlineDiff diff={pendingDiff} />}
         {inlineEdit && activeFile && !pendingDiff && (
           <InlineEdit
             top={inlineEdit.top}

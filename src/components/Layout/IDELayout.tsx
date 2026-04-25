@@ -10,7 +10,13 @@ import { AIPanel } from '../AI/AIPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
-  const { openFile, setWorkspaceRoot, saveActiveFile, activeFile } = useWorkspace();
+  const {
+    openFile,
+    setWorkspaceRoot,
+    saveActiveFile,
+    reloadActiveFromDisk,
+    activeFile,
+  } = useWorkspace();
   const toast = useToast();
 
   useEffect(() => {
@@ -19,19 +25,28 @@ function WorkspaceHotkeys() {
     };
     const onDrop = async (e: DragEvent) => {
       e.preventDefault();
-      const file = e.dataTransfer?.files?.[0];
-      if (!file) return;
-      const anyFile = file as unknown as { path?: string };
-      if (!anyFile.path) return;
-      try {
-        const result = await window.suxai.fs.readFile(anyFile.path);
-        const name = anyFile.path.split(/[\\/]/).pop() ?? anyFile.path;
-        openFile({ path: result.path, name, content: result.content });
-        const parent = anyFile.path.replace(/[\\/][^\\/]+$/, '');
+      // Open every dropped file, not just the first.
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      for (const file of files) {
+        const anyFile = file as unknown as { path?: string };
+        if (!anyFile.path) continue;
+        try {
+          const result = await window.suxai.fs.readFile(anyFile.path);
+          const name = anyFile.path.split(/[\\/]/).pop() ?? anyFile.path;
+          openFile({ path: result.path, name, content: result.content });
+        } catch (err) {
+          console.error('Failed to open dropped file:', err);
+          toast.error('Cannot open file', (err as Error).message);
+        }
+      }
+      // Adopt the first dropped file's parent as the workspace root if
+      // we don't have one.
+      const first = files.find((f) => (f as unknown as { path?: string }).path) as
+        | (File & { path: string })
+        | undefined;
+      if (first?.path) {
+        const parent = first.path.replace(/[\\/][^\\/]+$/, '');
         if (parent) setWorkspaceRoot(parent);
-      } catch (err) {
-        console.error('Failed to open dropped file:', err);
-        toast.error('Cannot open file', (err as Error).message);
       }
     };
     const onKeyDown = async (e: KeyboardEvent) => {
@@ -39,20 +54,44 @@ function WorkspaceHotkeys() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         if (!activeFile) return;
-        const ok = await saveActiveFile();
-        if (ok) toast.success('Saved', activeFile.name);
-        else toast.error('Save failed', activeFile.name);
+        const outcome = await saveActiveFile();
+        switch (outcome) {
+          case 'saved':
+            toast.success('Saved', activeFile.name);
+            break;
+          case 'error':
+            toast.error('Save failed', activeFile.name);
+            break;
+          case 'cancelled':
+            // User dismissed the Save-As dialog — silent, no toast.
+            break;
+          case 'unchanged':
+            // Nothing to write; no toast either.
+            break;
+        }
       }
+    };
+    // When the user comes back to the window after editing the file in
+    // another app, refresh the active buffer from disk (only if it has
+    // no unsaved changes locally — never overwrite the user's edits).
+    const onFocus = () => {
+      void reloadActiveFromDisk().then((reloaded) => {
+        if (reloaded && activeFile) {
+          toast.info('Reloaded from disk', activeFile.name);
+        }
+      });
     };
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('drop', onDrop);
     window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
       window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('focus', onFocus);
     };
-  }, [openFile, setWorkspaceRoot, saveActiveFile, activeFile, toast]);
+  }, [openFile, setWorkspaceRoot, saveActiveFile, reloadActiveFromDisk, activeFile, toast]);
 
   return null;
 }

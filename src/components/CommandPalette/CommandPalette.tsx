@@ -79,9 +79,9 @@ export function CommandPalette() {
         group: 'File',
         run: async () => {
           if (!activeFile) return toast.info('No file open');
-          const ok = await saveActiveFile();
-          if (ok) toast.success('Saved', activeFile.name);
-          else toast.error('Save failed', activeFile.name);
+          const outcome = await saveActiveFile();
+          if (outcome === 'saved') toast.success('Saved', activeFile.name);
+          else if (outcome === 'error') toast.error('Save failed', activeFile.name);
         },
       },
       {

@@ -31,6 +31,8 @@ interface WorkspaceState {
   pendingDiff: PendingDiff | null;
 }
 
+export type SaveOutcome = 'saved' | 'unchanged' | 'cancelled' | 'error';
+
 interface WorkspaceValue extends WorkspaceState {
   setWorkspaceRoot: (root: string | null) => void;
   openFile: (file: OpenFile) => void;
@@ -41,7 +43,8 @@ interface WorkspaceValue extends WorkspaceState {
   setActive: (path: string) => void;
   updateActiveContent: (content: string) => void;
   setSelection: (text: string) => void;
-  saveActiveFile: () => Promise<boolean>;
+  saveActiveFile: () => Promise<SaveOutcome>;
+  reloadActiveFromDisk: () => Promise<boolean>;
   newUntitled: () => void;
   reorderTab: (fromPath: string, toPath: string) => void;
   togglePin: (path: string) => void;
@@ -180,15 +183,35 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     })();
   }, [restored]);
 
-  // Persist on change, only after restoration ran so we don't blow it away.
+  // Persist on change. We only need to react when the path list / active
+  // path / workspace root changes — content edits don't affect what we
+  // store. Untitled buffers (no on-disk file yet) are excluded from the
+  // saved list so we don't try to read a virtual `untitled://N` path on
+  // next launch.
+  const persistedKey = useMemo(() => {
+    const paths = state.openFiles
+      .filter((f) => !f.untitled && !f.path.startsWith('untitled://'))
+      .map((f) => f.path);
+    return JSON.stringify({
+      root: state.workspaceRoot,
+      paths,
+      active: state.activePath,
+    });
+  }, [state.workspaceRoot, state.openFiles, state.activePath]);
+
   useEffect(() => {
     if (!restored) return;
+    const parsed = JSON.parse(persistedKey) as {
+      root: string | null;
+      paths: string[];
+      active: string | null;
+    };
     savePersisted({
-      workspaceRoot: state.workspaceRoot,
-      openPaths: state.openFiles.map((f) => f.path),
-      activePath: state.activePath,
+      workspaceRoot: parsed.root,
+      openPaths: parsed.paths,
+      activePath: parsed.active,
     });
-  }, [restored, state.workspaceRoot, state.openFiles, state.activePath]);
+  }, [restored, persistedKey]);
 
   const openFile = useCallback((file: OpenFile) => {
     setState((s) => {
@@ -202,6 +225,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const closeFile = useCallback((path: string) => {
+    // Guard against silently discarding unsaved changes — for both
+    // disk-backed dirty files and untitled buffers with content.
+    const target = stateRef.current.openFiles.find((f) => f.path === path);
+    if (target) {
+      const hasContent = target.untitled
+        ? target.content.length > 0
+        : !!target.dirty;
+      if (hasContent) {
+        const ok = window.confirm(
+          target.untitled
+            ? `Close "${target.name}"? It hasn't been saved to disk yet.`
+            : `Close "${target.name}" with unsaved changes?`,
+        );
+        if (!ok) return;
+      }
+    }
     setState((s) => {
       const filtered = s.openFiles.filter((f) => f.path !== path);
       let nextActive = s.activePath;
@@ -220,10 +259,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const updateActiveContent = useCallback((content: string) => {
     setState((s) => {
       if (!s.activePath) return s;
-      const next = s.openFiles.map((f) =>
-        f.path === s.activePath ? { ...f, content, dirty: true } : f,
-      );
-      return { ...s, openFiles: next };
+      let changed = false;
+      const next = s.openFiles.map((f) => {
+        if (f.path !== s.activePath) return f;
+        if (f.content === content) return f; // exact same buffer — no-op
+        changed = true;
+        return { ...f, content, dirty: true };
+      });
+      return changed ? { ...s, openFiles: next } : s;
     });
   }, []);
 
@@ -236,28 +279,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     stateRef.current = state;
   }, [state]);
 
-  const saveActiveFile = useCallback(async () => {
+  const saveActiveFile = useCallback(async (): Promise<SaveOutcome> => {
     const s = stateRef.current;
     const toSave = s.openFiles.find((f) => f.path === s.activePath);
-    if (!toSave) return false;
+    if (!toSave) return 'unchanged';
 
     let targetPath = toSave.path;
     let alreadyWritten = false;
 
     if (toSave.untitled) {
-      // Save-As flow: the dialog handler also writes the file, so we
-      // don't need a second writeFile afterwards.
       try {
         const picked = await window.suxai.fs.saveAs?.(toSave.content, toSave.name);
-        if (!picked) return false;
+        if (!picked) return 'cancelled';
         targetPath = picked;
         alreadyWritten = true;
       } catch (err) {
         console.error('[save-as] failed:', err);
-        return false;
+        return 'error';
       }
     } else if (!toSave.dirty) {
-      return false;
+      return 'unchanged';
     }
 
     try {
@@ -280,9 +321,35 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         ),
         activePath: prev.activePath === toSave.path ? targetPath : prev.activePath,
       }));
-      return true;
+      return 'saved';
     } catch (err) {
       console.error('Failed to save file:', err);
+      return 'error';
+    }
+  }, []);
+
+  // Re-read the active file from disk. Used on window-focus to catch
+  // external changes made while SUXAI was unfocused. Bails if the file
+  // has unsaved local changes — we never silently overwrite the user's
+  // in-memory edits.
+  const reloadActiveFromDisk = useCallback(async (): Promise<boolean> => {
+    const s = stateRef.current;
+    const target = s.openFiles.find((f) => f.path === s.activePath);
+    if (!target) return false;
+    if (target.untitled) return false; // no on-disk source
+    if (target.dirty) return false; // don't trample local edits
+    try {
+      const fresh = await window.suxai.fs.readFile(target.path);
+      if (fresh.content === target.content) return false; // no change
+      setState((prev) => ({
+        ...prev,
+        openFiles: prev.openFiles.map((f) =>
+          f.path === target.path ? { ...f, content: fresh.content } : f,
+        ),
+      }));
+      return true;
+    } catch {
+      // file may have been deleted since — leave the buffer alone
       return false;
     }
   }, []);
@@ -427,6 +494,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateActiveContent,
       setSelection,
       saveActiveFile,
+      reloadActiveFromDisk,
       newUntitled,
       reorderTab,
       togglePin,
@@ -438,7 +506,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
       closeOthers, closeToTheRight, closeAll, setActive,
-      updateActiveContent, setSelection, saveActiveFile, newUntitled, reorderTab,
+      updateActiveContent, setSelection, saveActiveFile, reloadActiveFromDisk, newUntitled, reorderTab,
       togglePin, renameFile, openDiff, closeDiff, acceptDiff,
     ],
   );

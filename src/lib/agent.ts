@@ -145,6 +145,26 @@ export const AGENT_TOOLS: ToolDefinition[] = [
     },
   },
   {
+    name: 'codebase_search',
+    description:
+      "Semantic-ish search across the user's workspace. Takes a NATURAL LANGUAGE query (e.g. 'where is auth handled', 'find the renderer entry point', 'what manages stream proof'), tokenises it into keywords, runs multiple greps in parallel, and ranks the matching files using the repo's PageRank. Returns up to 8 file:line:snippet hits ordered by relevance. Use this BEFORE listing many files or reading speculatively — it's the cheapest way to discover where a concept lives.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'Natural-language description of what to find. Will be tokenised and grepped against the workspace.',
+        },
+        top_k: {
+          type: 'integer',
+          description: 'How many snippets to return (default 8, max 20).',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
     // Plan-mode-only tool. Available to the agent when the
     // conversation runs in 'ask' mode. Writes a structured markdown
     // plan that the user can review before flipping back to composer
@@ -180,16 +200,19 @@ export const AGENT_TOOLS: ToolDefinition[] = [
  */
 export function toolsForMode(mode: 'composer' | 'ask' = 'composer'): ToolDefinition[] {
   if (mode === 'ask') {
-    // Plan / Ask mode: read-only investigation tools only. grep is
-    // included because Plan needs to find references and definitions
-    // across the codebase before drafting the plan.
+    // Plan / Ask mode: read-only investigation tools only. grep +
+    // codebase_search both included so Plan can locate references
+    // before drafting the markdown plan.
     return AGENT_TOOLS.filter((t) =>
       t.name === 'read_file' ||
       t.name === 'list_dir' ||
       t.name === 'grep' ||
+      t.name === 'codebase_search' ||
       t.name === 'create_plan',
     );
   }
+  // Composer drops create_plan (plan-mode-only); everything else
+  // including codebase_search is exposed.
   return AGENT_TOOLS.filter((t) => t.name !== 'create_plan');
 }
 
@@ -512,6 +535,99 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       return (
         `<<<grep pattern=${JSON.stringify(pattern)} hits=${out.hits.length}${sourceTag}>>>\n` +
         lines.join('\n') +
+        `\n<<<end>>>`
+      );
+    }
+    case 'codebase_search': {
+      const query = expectString(args, 'query');
+      const top_k = Math.min(Math.max(typeof args.top_k === 'number' ? args.top_k : 8, 1), 20);
+      if (!opts.workspaceRoot) {
+        throw new ToolExecutionError(
+          'codebase_search',
+          'No workspace root open. codebase_search needs a folder context.',
+        );
+      }
+      if (!window.suxai.search?.grep) {
+        throw new ToolExecutionError(
+          'codebase_search',
+          'search IPC unavailable. Update SUXAI to a build with v0.9.22+.',
+        );
+      }
+      // Tokenise the natural-language query into keywords. Drop short
+      // tokens (< 3 chars) and a small English/French stopword list
+      // — they'd flood the grep with noise. Keep camelCase / snake_case
+      // intact so "renderEntity" matches verbatim.
+      const STOP = new Set([
+        'the', 'and', 'for', 'with', 'this', 'that', 'where', 'what',
+        'which', 'how', 'when', 'why', 'are', 'has', 'have', 'does',
+        'did', 'is', 'was', 'be', 'been', 'being', 'find', 'show', 'tell',
+        'give', 'get', 'ce', 'cette', 'cet', 'les', 'des', 'un', 'une',
+        'qui', 'que', 'quoi', 'comment', 'fait', 'fais', 'sont', 'est',
+        'avec', 'dans', 'pour', 'par', 'sur',
+      ]);
+      const tokens = query
+        .replace(/[^\w\s_-]/g, ' ')
+        .split(/\s+/)
+        .map((t) => t.trim())
+        .filter((t) => t.length >= 3 && !STOP.has(t.toLowerCase()))
+        .slice(0, 6);
+      if (tokens.length === 0) {
+        return `<<<codebase_search query=${JSON.stringify(query)} hits=0>>>\n(no usable keywords after stopword filtering — try a more specific query)\n<<<end>>>`;
+      }
+      // Run a grep per keyword in parallel, accumulate hits keyed
+      // by (path, line). Score each hit by the number of distinct
+      // tokens that landed in it (TF-ish), then by how many tokens
+      // that file matches overall (file-relevance).
+      const keywordHits = await Promise.all(
+        tokens.map((tok) =>
+          window.suxai.search.grep({
+            pattern: tok,
+            cwd: opts.workspaceRoot!,
+            max_results: 50,
+            case_sensitive: false,
+          }),
+        ),
+      );
+      type Entry = { path: string; line: number; text: string; tokensMatched: Set<string> };
+      const byKey = new Map<string, Entry>();
+      const tokensByFile = new Map<string, Set<string>>();
+      keywordHits.forEach((res, i) => {
+        if (!res.hits) return;
+        const tok = tokens[i];
+        for (const h of res.hits) {
+          const key = `${h.path}#${h.line}`;
+          const existing = byKey.get(key);
+          if (existing) {
+            existing.tokensMatched.add(tok);
+          } else {
+            byKey.set(key, { ...h, tokensMatched: new Set([tok]) });
+          }
+          let set = tokensByFile.get(h.path);
+          if (!set) { set = new Set(); tokensByFile.set(h.path, set); }
+          set.add(tok);
+        }
+      });
+      const ranked = [...byKey.values()].sort((a, b) => {
+        const aFile = tokensByFile.get(a.path)?.size ?? 0;
+        const bFile = tokensByFile.get(b.path)?.size ?? 0;
+        // Order by (file token coverage, hit token coverage). Files
+        // that match many distinct tokens beat files matching only one.
+        if (aFile !== bFile) return bFile - aFile;
+        return b.tokensMatched.size - a.tokensMatched.size;
+      });
+      const top = ranked.slice(0, top_k);
+      if (top.length === 0) {
+        return `<<<codebase_search query=${JSON.stringify(query)} tokens=${JSON.stringify(tokens)} hits=0>>>\n(no matches)\n<<<end>>>`;
+      }
+      const formatted = top
+        .map((h) => {
+          const tags = [...h.tokensMatched].join(',');
+          return `${h.path}:${h.line} [matched: ${tags}]\n  ${h.text}`;
+        })
+        .join('\n');
+      return (
+        `<<<codebase_search query=${JSON.stringify(query)} tokens=${JSON.stringify(tokens)} hits=${top.length}>>>\n` +
+        formatted +
         `\n<<<end>>>`
       );
     }

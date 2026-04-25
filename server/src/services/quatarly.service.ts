@@ -9,7 +9,11 @@ export interface StreamHandlers {
   onError: (err: Error) => void;
 }
 
-function buildSystemPrompt(command: AiRequestInput['command'], agent = false): string {
+function buildSystemPrompt(
+  command: AiRequestInput['command'],
+  agent = false,
+  mode: 'composer' | 'ask' = 'composer',
+): string {
   const base =
     'You are SUXAI, a senior AI software engineer embedded in an IDE. ' +
     'Be precise and concise. When returning code, use fenced code blocks. ' +
@@ -56,7 +60,28 @@ function buildSystemPrompt(command: AiRequestInput['command'], agent = false): s
       "answer.\n\n" +
       'When you finish, briefly summarize what you changed and why. ' +
       'If a request is ambiguous (e.g. genuinely no current_file and no ' +
-      'selection), ask before acting.'
+      'selection), ask before acting.' +
+      // Plan-mode override: when the user toggled Plan / Ask mode, the
+      // model gets read-only tools + create_plan only. Reinforce this
+      // in the prompt so the model doesn't try edit_file just because
+      // it remembers the description from earlier turns.
+      (mode === 'ask'
+        ? '\n\nYou are currently in PLAN MODE (Cursor "Ask"). You ' +
+          'have READ-ONLY tools (read_file, list_dir) plus the ' +
+          'create_plan tool. You MUST NOT call edit_file, write_file ' +
+          'or run_command — those are not exposed to you in this ' +
+          'mode. Investigate the codebase, then produce ONE structured ' +
+          'markdown plan via create_plan with this skeleton:\n' +
+          '  ## Context — what the user asked, scope, assumptions\n' +
+          '  ## Per-file analysis — markdown table | File | Issue | Fix |\n' +
+          '  ## Already OK — checklist of files that need no change\n' +
+          '  ## Implementation Plan — numbered, each step ≤ 1 file\n' +
+          '  ## Walkthrough — wrap in <details><summary>Walkthrough</summary>…</details>\n' +
+          '  ## Acceptance Criteria — checkboxes the user can tick after exec\n' +
+          'Slug should be kebab-case derived from the user request ' +
+          '(e.g. "fix-streamproof-bug"). After saving, tell the user ' +
+          'how to flip Plan mode off to execute.'
+        : '')
     );
   }
   switch (command) {
@@ -255,7 +280,7 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       model: modelId,
       max_tokens: 4096,
       stream: true,
-      system: cachedSystem(buildSystemPrompt(req.command, true)),
+      system: cachedSystem(buildSystemPrompt(req.command, true, req.mode)),
       messages: markRollingCache(req.agentMessages ?? []),
       tools: cachedTools(req.tools ?? []),
     };

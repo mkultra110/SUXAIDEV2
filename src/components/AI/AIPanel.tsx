@@ -17,7 +17,7 @@ import {
   saveConversations,
   type Conversation,
 } from '../../lib/conversations';
-import { AGENT_TOOLS, executeTool, type ToolCall } from '../../lib/agent';
+import { executeTool, toolsForMode, type ToolCall } from '../../lib/agent';
 import { buildAdditionalDataXml } from '../../lib/additional-data';
 import type { AgentMessage, AgentContentBlock } from '../../api/quatarly';
 import { useToast } from '../ui/Toast';
@@ -148,6 +148,13 @@ function trimAgentMessages(messages: AgentMessage[]): AgentMessage[] {
 interface AgentLoopArgs {
   token: string;
   modelId: string;
+  /** Operating mode: composer (full agent) or ask (Plan mode, read-only
+   *  + create_plan). Drives both the tools array we send and the
+   *  system-prompt suffix selected upstream. */
+  mode: 'composer' | 'ask';
+  /** Workspace root, passed through to executeTool so plan-mode-only
+   *  tools can scope their writes to <workspace>/.suxai/. */
+  workspaceRoot: string | null;
   firstUserMsg: ChatMessage;
   firstAssistantMsg: ChatMessage;
   /** Snapshot of all messages including the first user + first assistant. */
@@ -205,8 +212,13 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
           modelId,
           command: 'chat',
           prompt: '',
-          tools: AGENT_TOOLS,
+          // Mode-aware tool list: ask mode drops edit_file/write_file/
+          // run_command and adds create_plan; composer keeps the full
+          // write-capable surface. Computed per turn so toggling Plan
+          // mid-conversation takes effect immediately.
+          tools: toolsForMode(args.mode),
           agentMessages,
+          mode: args.mode,
         },
         {
           onToken: (chunk) => {
@@ -331,6 +343,7 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
         try {
           const result = await executeTool(call, {
             approve: (c, preview) => args.requestApproval(c, preview),
+            workspaceRoot: args.workspaceRoot ?? null,
           });
           const status: ToolCallSnapshot['status'] = result.is_error
             ? 'error'
@@ -440,7 +453,7 @@ async function loadProjectPreamble(
 
 export function AIPanel() {
   const { token } = useAuth();
-  const { activeFile, selection, openDiff, openFiles, workspaceRoot, editorContext } = useWorkspace();
+  const { activeFile, selection, openDiff, openFile, openFiles, workspaceRoot, editorContext } = useWorkspace();
   // Cache the loaded preamble per workspaceRoot so we read AGENTS.md
   // once per workspace open — not on every send.
   const preambleRef = useRef<{ root: string | null; preamble: string } | null>(null);
@@ -677,6 +690,138 @@ export function AIPanel() {
     return { cmd: m[1].toLowerCase() as AiCommand, rest: m[2].trim() };
   }, []);
 
+  /**
+   * Built-in local slash commands. These don't go to the LLM — they
+   * mutate local state (clear conversation, toggle plan mode, list
+   * keybindings, etc.) similarly to Cursor's command palette but
+   * triggered from the chat composer.
+   *
+   * Returns true when the input was handled locally (the caller
+   * should clear the input and skip sending), false otherwise.
+   */
+  const handleBuiltinSlash = useCallback(
+    (raw: string): boolean => {
+      const m = raw.trim().match(/^\/(\w[\w-]*)\b\s*(.*)$/);
+      if (!m) return false;
+      const cmd = m[1].toLowerCase();
+      const arg = m[2].trim();
+      switch (cmd) {
+        case 'clear': {
+          // Reset the active conversation in place — same as the +
+          // button but without losing the conversation slot.
+          if (!activeConvId) return true;
+          setConversations((list) =>
+            list.map((c) =>
+              c.id === activeConvId ? { ...c, messages: [], title: 'New conversation' } : c,
+            ),
+          );
+          setInput('');
+          toast.info('Conversation cleared');
+          return true;
+        }
+        case 'help': {
+          const helpMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            modelId: 'system',
+            streaming: false,
+            content:
+              '**Built-in slash commands:**\n\n' +
+              '- `/clear` — wipe this conversation\n' +
+              '- `/help` — this list\n' +
+              '- `/plan` — toggle Plan mode (read-only investigation, produces a markdown plan)\n' +
+              '- `/agent` — toggle Agent mode (lets Claude read/edit your files)\n' +
+              '- `/model` — open the model selector\n' +
+              '- `/explain`, `/refactor`, `/fix`, `/optimize` — task shortcuts on the current file/selection\n\n' +
+              '**Editor shortcuts:**\n\n' +
+              '- `Cmd/Ctrl+S` — save file\n' +
+              '- `Cmd/Ctrl+K` — inline AI edit on selection\n' +
+              '- `Cmd/Ctrl+L` — add selection to chat\n' +
+              '- `Cmd/Ctrl+P` — quick open files\n' +
+              '- `Cmd/Ctrl+Shift+P` — command palette\n' +
+              '- `Ctrl+`` — toggle terminal\n\n' +
+              '**Diff shortcuts (when an inline diff is open):**\n\n' +
+              '- `Alt+↵` — accept current hunk\n' +
+              '- `Shift+Alt+⌫` — reject current hunk\n' +
+              '- `Alt+J` / `Alt+K` — next / previous hunk\n' +
+              '- `Cmd/Ctrl+↵` — accept all changes\n' +
+              '- `Esc` — close the diff (= reject all)',
+          };
+          setMessages((m) => [...m, helpMsg]);
+          setInput('');
+          return true;
+        }
+        case 'plan': {
+          if (!activeConvId) return true;
+          setConversations((list) =>
+            list.map((c) =>
+              c.id === activeConvId
+                ? {
+                    ...c,
+                    mode: c.mode === 'ask' ? 'composer' : 'ask',
+                    agentMode: c.mode === 'ask' ? c.agentMode : true,
+                  }
+                : c,
+            ),
+          );
+          setInput('');
+          toast.info(
+            activeConv?.mode === 'ask' ? 'Plan mode OFF' : 'Plan mode ON',
+          );
+          return true;
+        }
+        case 'agent': {
+          if (!activeConvId) return true;
+          setConversations((list) =>
+            list.map((c) =>
+              c.id === activeConvId
+                ? {
+                    ...c,
+                    agentMode: !c.agentMode,
+                    mode: !c.agentMode ? c.mode : 'composer',
+                  }
+                : c,
+            ),
+          );
+          setInput('');
+          toast.info(activeConv?.agentMode ? 'Agent mode OFF' : 'Agent mode ON');
+          return true;
+        }
+        case 'model': {
+          // Stash a hint in the textarea and let the user click the
+          // model dropdown — no programmatic open since the dropdown
+          // is a portal driven by its own state.
+          setInput('');
+          toast.info('Open the model selector', `Currently: ${modelId}`);
+          return true;
+        }
+        case 'compact':
+        case 'init': {
+          // Reserved — fall through to a friendly toast for now so
+          // the user knows it's a real slot, just not implemented.
+          setInput('');
+          toast.info(
+            `/${cmd} not implemented yet`,
+            cmd === 'compact'
+              ? 'Conversation compaction lands in a later release.'
+              : 'Repo init / AGENTS.md generation lands in a later release.',
+          );
+          return true;
+        }
+      }
+      // Argument-bearing fall-through (`/something foo bar`) → not a
+      // built-in. Swallow only if cmd looks like a no-arg builtin we
+      // know about. Otherwise return false so the AI command parser
+      // gets a chance.
+      void arg;
+      return false;
+    },
+    [
+      activeConvId, activeConv?.mode, activeConv?.agentMode,
+      modelId, setMessages, toast,
+    ],
+  );
+
   // Extract @path/to/file mentions from the composer and read their content
   // so the AI gets them as explicit context. Returns the cleaned prompt
   // (without the @-mentions) and the loaded attachments.
@@ -865,6 +1010,41 @@ export function AIPanel() {
         abortRef.current = () => {
           preambleCancelled = true;
         };
+        // Pre-turn checkpoint: snapshot every open file + the active
+        // file so the user can roll back if the agent's edits go
+        // wrong. Best-effort — snapshot failures don't block the
+        // turn (we just lose the safety net for this particular
+        // round). Plan-mode turns skip this because they can't write.
+        if (
+          workspaceRoot &&
+          window.suxai.checkpoint?.create &&
+          activeConv?.mode !== 'ask'
+        ) {
+          const candidates = Array.from(
+            new Set([
+              activeFile?.path,
+              ...openFiles.map((f) => f.path),
+            ].filter((p): p is string => !!p && !p.startsWith('untitled://'))),
+          );
+          if (candidates.length > 0) {
+            try {
+              await window.suxai.checkpoint.create(
+                workspaceRoot,
+                userMsg.id,
+                candidates,
+              );
+              // Stamp the user message so the "Restore" button shows
+              // up next to it.
+              setMessages((m) =>
+                m.map((msg) =>
+                  msg.id === userMsg.id ? { ...msg, checkpointId: userMsg.id } : msg,
+                ),
+              );
+            } catch (err) {
+              console.warn('[checkpoint] pre-turn snapshot failed:', err);
+            }
+          }
+        }
         // Load AGENTS.md/CLAUDE.md once per workspace and reuse the
         // string across iterations — avoids repeated FS reads and
         // keeps the prompt prefix stable for Anthropic caching.
@@ -888,6 +1068,8 @@ export function AIPanel() {
         runAgentLoop({
           token,
           modelId,
+          mode: activeConv?.mode ?? 'composer',
+          workspaceRoot,
           firstUserMsg: userMsg,
           firstAssistantMsg: assistantMsg,
           conversationMessages: [...messages, userMsg, assistantMsg],
@@ -1155,6 +1337,52 @@ export function AIPanel() {
         <div className="ai__header-actions">
           <button
             type="button"
+            className={
+              `ai__plan-toggle ${activeConv?.mode === 'ask' ? 'ai__plan-toggle--on' : ''}`
+            }
+            onClick={() => {
+              if (!activeConvId) return;
+              if (modelProviderForId(modelId) !== 'anthropic') {
+                toast.info(
+                  'Plan mode needs Claude',
+                  'Pick an Anthropic model — Plan mode uses agent tools, available on Claude only for now.',
+                );
+                return;
+              }
+              setConversations((list) =>
+                list.map((c) =>
+                  c.id === activeConvId
+                    ? {
+                        ...c,
+                        mode: c.mode === 'ask' ? 'composer' : 'ask',
+                        // Activating Plan mode also implies agent mode
+                        // (it's an agent flow with a restricted tool set).
+                        agentMode: c.mode === 'ask' ? c.agentMode : true,
+                      }
+                    : c,
+                ),
+              );
+            }}
+            title={
+              activeConv?.mode === 'ask'
+                ? 'Plan mode ON — read-only investigation, produces a markdown plan'
+                : 'Plan mode OFF — switch on to investigate without editing'
+            }
+            aria-pressed={activeConv?.mode === 'ask'}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M9 5H4v14h16V9h-5M9 5l5 5h6"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>Plan</span>
+          </button>
+          <button
+            type="button"
             className={`ai__agent-toggle ${activeConv?.agentMode ? 'ai__agent-toggle--on' : ''}`}
             onClick={() => {
               if (!activeConvId) return;
@@ -1167,7 +1395,15 @@ export function AIPanel() {
               }
               setConversations((list) =>
                 list.map((c) =>
-                  c.id === activeConvId ? { ...c, agentMode: !c.agentMode } : c,
+                  c.id === activeConvId
+                    ? {
+                        ...c,
+                        agentMode: !c.agentMode,
+                        // Toggling agent off also implicitly leaves Plan
+                        // mode (Plan is meaningless without agent tools).
+                        mode: !c.agentMode ? c.mode : 'composer',
+                      }
+                    : c,
                 ),
               );
             }}
@@ -1287,6 +1523,35 @@ export function AIPanel() {
                 // Defer so state settles before re-sending.
                 setTimeout(() => sendCommand(userTurn.command ?? 'chat', userTurn.content), 0);
               }}
+              onRestoreCheckpoint={async (id) => {
+                if (!workspaceRoot || !window.suxai.checkpoint?.restore) {
+                  toast.error('Restore unavailable', 'No workspace open.');
+                  return;
+                }
+                try {
+                  const r = await window.suxai.checkpoint.restore(workspaceRoot, id);
+                  toast.success(
+                    `Restored ${r.restored.length} file${r.restored.length === 1 ? '' : 's'}`,
+                    'Workspace rolled back to its pre-turn state.',
+                  );
+                  // Reload any restored file that's currently open so
+                  // the editor doesn't keep showing stale post-edit
+                  // content. We re-read each one then re-openFile to
+                  // swap content + clear dirty.
+                  for (const abs of r.restored) {
+                    const target = openFiles.find((f) => f.path === abs);
+                    if (!target) continue;
+                    try {
+                      const fresh = await window.suxai.fs.readFile(abs);
+                      openFile({ ...target, content: fresh.content, dirty: false });
+                    } catch (err) {
+                      console.warn('[restore] could not refresh', abs, err);
+                    }
+                  }
+                } catch (err) {
+                  toast.error('Restore failed', (err as Error).message);
+                }
+              }}
             />
           ))
         )}
@@ -1360,6 +1625,9 @@ export function AIPanel() {
         }}
         onSubmit={(e) => {
           e.preventDefault();
+          // Try built-in local commands FIRST (/clear, /help, /plan…)
+          // — they short-circuit before the LLM is contacted at all.
+          if (handleBuiltinSlash(input)) return;
           const slash = parseSlashCommand(input);
           if (slash) {
             sendCommand(slash.cmd, slash.rest);
@@ -1415,6 +1683,7 @@ export function AIPanel() {
             if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
               // Plain Enter sends; Shift+Enter inserts a newline.
               e.preventDefault();
+              if (handleBuiltinSlash(input)) return;
               const slash = parseSlashCommand(input);
               if (slash) sendCommand(slash.cmd, slash.rest);
               else sendCommand('chat');
@@ -1422,6 +1691,7 @@ export function AIPanel() {
               // Cmd/Ctrl+Enter still works as the explicit "send" combo
               // for users used to it.
               e.preventDefault();
+              if (handleBuiltinSlash(input)) return;
               const slash = parseSlashCommand(input);
               if (slash) sendCommand(slash.cmd, slash.rest);
               else sendCommand('chat');

@@ -1,5 +1,19 @@
 import type { ChatMessage } from '../components/AI/Message';
 
+/**
+ * Operating modes for a conversation. The selected mode controls
+ * which tools are exposed to the model and what suffix is appended
+ * to the agent system prompt.
+ *
+ *   - 'composer' : full agent — read + edit + write + run_command
+ *                  (the default; matches Cursor's "Agent" mode)
+ *   - 'ask'      : Plan mode — read-only tools + create_plan only.
+ *                  The model produces a structured markdown plan in
+ *                  .suxai/plans/<slug>.md without touching any source
+ *                  file. Toggle off when ready to execute the plan.
+ */
+export type ConversationMode = 'composer' | 'ask';
+
 export interface Conversation {
   id: string;
   title: string;
@@ -8,6 +22,10 @@ export interface Conversation {
   messages: ChatMessage[];
   /** When true, send tools with each request and run the agent loop. */
   agentMode?: boolean;
+  /** Operating mode (composer / ask). Defaults to 'composer' when
+   *  unset for back-compat with conversations persisted before this
+   *  field existed. */
+  mode?: ConversationMode;
 }
 
 interface PersistedV2 {

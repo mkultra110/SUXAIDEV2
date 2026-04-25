@@ -56,6 +56,19 @@ const api = {
     write: (data: unknown): Promise<boolean> => ipcRenderer.invoke('conv:write', data),
     clear: (): Promise<boolean> => ipcRenderer.invoke('conv:clear'),
   },
+  plan: {
+    write: (workspaceRoot: string, slug: string, content: string): Promise<{ path: string }> =>
+      ipcRenderer.invoke('plan:write', workspaceRoot, slug, content),
+  },
+  checkpoint: {
+    create: (workspaceRoot: string, turnId: string, files: string[]): Promise<{ id: string }> =>
+      ipcRenderer.invoke('checkpoint:create', workspaceRoot, turnId, files),
+    list: (workspaceRoot: string): Promise<
+      { id: string; ts: number; files: string[]; conversationId?: string; trigger?: string }[]
+    > => ipcRenderer.invoke('checkpoint:list', workspaceRoot),
+    restore: (workspaceRoot: string, turnId: string): Promise<{ restored: string[] }> =>
+      ipcRenderer.invoke('checkpoint:restore', workspaceRoot, turnId),
+  },
   terminal: {
     spawn: (cwd?: string): Promise<{ id: string; shell: string }> =>
       ipcRenderer.invoke('terminal:spawn', cwd),

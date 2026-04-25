@@ -40,6 +40,11 @@ export interface ChatMessage {
    *  this path instead — so the user doesn't see a wall of code AND
    *  a diff for the same change. */
   divertedToFile?: string;
+  /** Checkpoint id stamped on a user message that triggered an agent
+   *  turn. Lets us render a "Restore" button that rolls every snapshotted
+   *  file back to its pre-turn content via window.suxai.checkpoint.restore.
+   */
+  checkpointId?: string;
 }
 
 interface Props {
@@ -49,6 +54,10 @@ interface Props {
   onCopy?: (msg: ChatMessage) => void;
   onRegenerate?: (msg: ChatMessage) => void;
   onDelete?: (msg: ChatMessage) => void;
+  /** Called when the user clicks the Restore button on a user
+   *  message tagged with a checkpointId. Implementation lives in
+   *  AIPanel and rolls back every file snapshotted before the turn. */
+  onRestoreCheckpoint?: (checkpointId: string) => void;
 }
 
 interface Part {
@@ -94,6 +103,7 @@ export function Message({
   onCopy,
   onRegenerate,
   onDelete,
+  onRestoreCheckpoint,
 }: Props) {
   const parts = useMemo(() => parseMarkdown(message.content), [message.content]);
   const [copied, setCopied] = useState(false);
@@ -118,6 +128,16 @@ export function Message({
           )}
           <div className="msg__text msg__text--plain">{message.content}</div>
           <div className="msg__actions msg__actions--user">
+            {message.checkpointId && onRestoreCheckpoint && (
+              <button
+                type="button"
+                className="msg__action msg__action--restore"
+                onClick={() => onRestoreCheckpoint(message.checkpointId!)}
+                title="Restore the workspace to its state right before this turn"
+              >
+                ↶ Restore
+              </button>
+            )}
             <button
               type="button"
               className="msg__action"

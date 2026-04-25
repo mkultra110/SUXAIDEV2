@@ -2,8 +2,13 @@ import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol } fro
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
+import { createHash } from 'node:crypto';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { UpdateManager } from './updater';
+
+function createHashHex(s: string): string {
+  return createHash('sha256').update(s).digest('hex').slice(0, 24);
+}
 
 process.env.APP_ROOT = path.join(__dirname, '..');
 const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL'];
@@ -247,6 +252,198 @@ function registerIpc() {
     }
     return true;
   });
+
+  // ---- Plan mode (Cursor-style "Plan / Ask" mode) -------------------
+  // create_plan tool persists a structured markdown plan under
+  // <workspace>/.suxai/plans/<slug>.md so the user can review it
+  // before flipping the conversation back to composer mode for
+  // execution. workspaceRoot is passed by the renderer because the
+  // main process doesn't track it directly (the renderer is the
+  // single source of truth for "current workspace").
+  ipcMain.handle(
+    'plan:write',
+    async (_e, workspaceRoot: string, slug: string, content: string) => {
+      if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+        throw new Error('plan:write requires a workspaceRoot');
+      }
+      if (typeof slug !== 'string' || !/^[a-z0-9_-]+$/.test(slug)) {
+        throw new Error('plan:write slug must be kebab-case');
+      }
+      if (typeof content !== 'string' || content.length === 0) {
+        throw new Error('plan:write content cannot be empty');
+      }
+      // Sandbox: refuse anything that escapes the workspace root.
+      const safeRoot = sanitizeFsPath(workspaceRoot, { mustExist: true });
+      const plansDir = path.join(safeRoot, '.suxai', 'plans');
+      await fs.mkdir(plansDir, { recursive: true });
+      const target = path.join(plansDir, `${slug}.md`);
+      // Atomic write + fsync, same as fs:write-file.
+      const tmp = `${target}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+      const fh = await fs.open(tmp, 'w');
+      try {
+        await fh.writeFile(content, 'utf8');
+        await fh.sync();
+      } finally {
+        await fh.close();
+      }
+      await fs.rename(tmp, target);
+      return { path: target };
+    },
+  );
+
+  // ---- Checkpoints --------------------------------------------------
+  // Snapshots of files at risk before each agent turn. Stored under
+  // <userData>/checkpoints/<workspaceHash>/<turnId>/ so:
+  //   - workspace privacy is preserved (per-workspace folder)
+  //   - the user's open files don't pollute the workspace folder
+  //   - we can prune old entries trivially (LRU 50 per workspace).
+  // Used by the "Restore" button on each user message that triggered
+  // an agent run.
+  const checkpointDirFor = (workspaceRoot: string): string => {
+    const hash = createHashHex(workspaceRoot);
+    return path.join(USER_DATA(), 'checkpoints', hash);
+  };
+
+  ipcMain.handle(
+    'checkpoint:create',
+    async (_e, workspaceRoot: string, turnId: string, files: string[]) => {
+      if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+        throw new Error('checkpoint:create requires workspaceRoot');
+      }
+      if (typeof turnId !== 'string' || turnId.length === 0) {
+        throw new Error('checkpoint:create requires turnId');
+      }
+      if (!Array.isArray(files)) {
+        throw new Error('checkpoint:create files must be an array');
+      }
+      const dir = path.join(checkpointDirFor(workspaceRoot), turnId);
+      await fs.mkdir(dir, { recursive: true });
+      const safePathFor = (rel: string) => rel.replace(/[/\\]/g, '__');
+      const snapshotted: string[] = [];
+      for (const f of files.slice(0, 50)) {
+        // Hard cap 50 files per turn — heuristic should never propose
+        // more, but defend anyway.
+        if (typeof f !== 'string' || f.length === 0) continue;
+        let safe: string;
+        try { safe = sanitizeFsPath(f, { mustExist: true }); }
+        catch { continue; /* file gone or denied — silently skip */ }
+        try {
+          const buf = await fs.readFile(safe);
+          await fs.writeFile(path.join(dir, safePathFor(f) + '.bak'), buf);
+          snapshotted.push(safe);
+        } catch (err) {
+          console.warn('[checkpoint] could not snapshot', f, err);
+        }
+      }
+      // Manifest with metadata for `checkpoint:list`.
+      await fs.writeFile(
+        path.join(dir, 'manifest.json'),
+        JSON.stringify(
+          { id: turnId, ts: Date.now(), files: snapshotted, workspaceRoot },
+          null,
+          2,
+        ),
+      );
+      // LRU prune: keep the 50 most recent turn directories per
+      // workspace.
+      void pruneCheckpoints(workspaceRoot, 50);
+      return { id: turnId };
+    },
+  );
+
+  ipcMain.handle(
+    'checkpoint:list',
+    async (_e, workspaceRoot: string) => {
+      if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+        throw new Error('checkpoint:list requires workspaceRoot');
+      }
+      const dir = checkpointDirFor(workspaceRoot);
+      let entries: string[];
+      try { entries = await fs.readdir(dir); }
+      catch { return []; }
+      const items: Array<{ id: string; ts: number; files: string[] }> = [];
+      for (const e of entries) {
+        try {
+          const raw = await fs.readFile(path.join(dir, e, 'manifest.json'), 'utf8');
+          const obj = JSON.parse(raw);
+          if (obj && typeof obj.id === 'string') items.push(obj);
+        } catch { /* skip malformed entries */ }
+      }
+      items.sort((a, b) => b.ts - a.ts);
+      return items;
+    },
+  );
+
+  ipcMain.handle(
+    'checkpoint:restore',
+    async (_e, workspaceRoot: string, turnId: string) => {
+      if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+        throw new Error('checkpoint:restore requires workspaceRoot');
+      }
+      if (typeof turnId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(turnId)) {
+        throw new Error('checkpoint:restore turnId is invalid');
+      }
+      const dir = path.join(checkpointDirFor(workspaceRoot), turnId);
+      const raw = await fs.readFile(path.join(dir, 'manifest.json'), 'utf8');
+      const manifest = JSON.parse(raw) as { files: string[] };
+      if (!Array.isArray(manifest.files)) {
+        throw new Error('Checkpoint manifest has no files');
+      }
+      const safePathFor = (abs: string) => {
+        // Reverse of safePathFor used at create time — given the
+        // snapshotted absolute path, find its .bak by looking at its
+        // basename in the dir.
+        const all = manifest.files;
+        return all.find((p) => p === abs);
+      };
+      const restored: string[] = [];
+      for (const abs of manifest.files) {
+        const original = safePathFor(abs);
+        if (!original) continue;
+        let safe: string;
+        try { safe = sanitizeFsPath(original); }
+        catch { continue; }
+        // The bak filename uses the ORIGINAL path with separators
+        // replaced by __. To find it without the original-path map, we
+        // walk the dir; for performance, we just compute the same
+        // mangling we used at create time.
+        const baks = await fs.readdir(dir);
+        const target = baks.find(
+          (b) => b.endsWith('.bak') && safe.endsWith(b.slice(0, -4).replace(/__/g, path.sep)),
+        );
+        if (!target) continue;
+        try {
+          const buf = await fs.readFile(path.join(dir, target));
+          await fs.writeFile(safe, buf);
+          restored.push(safe);
+        } catch (err) {
+          console.warn('[checkpoint] could not restore', abs, err);
+        }
+      }
+      return { restored };
+    },
+  );
+
+  async function pruneCheckpoints(workspaceRoot: string, keep: number): Promise<void> {
+    const dir = checkpointDirFor(workspaceRoot);
+    let entries: string[];
+    try { entries = await fs.readdir(dir); }
+    catch { return; }
+    const stamped = await Promise.all(
+      entries.map(async (e) => {
+        try {
+          const stat = await fs.stat(path.join(dir, e));
+          return { name: e, mtime: stat.mtimeMs };
+        } catch { return { name: e, mtime: 0 }; }
+      }),
+    );
+    stamped.sort((a, b) => b.mtime - a.mtime);
+    const stale = stamped.slice(keep);
+    for (const s of stale) {
+      try { await fs.rm(path.join(dir, s.name), { recursive: true, force: true }); }
+      catch { /* */ }
+    }
+  }
 
   ipcMain.handle('window:minimize', () => mainWindow?.minimize());
   ipcMain.handle('window:maximize-toggle', () => {

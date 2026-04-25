@@ -74,6 +74,11 @@ export const aiRequestSchema = z
       message: 'Unsupported model',
     }),
     command: z.enum(['explain', 'refactor', 'fix', 'optimize', 'edit', 'chat']).default('chat'),
+    /** Operating mode for agent flows. 'composer' = full agent with
+     *  edit/write/run; 'ask' = read-only Plan mode that produces
+     *  a markdown plan via create_plan only. Defaults to 'composer'
+     *  for back-compat when older clients don't send the field. */
+    mode: z.enum(['composer', 'ask']).default('composer'),
     prompt: z.string().max(2_000_000, 'Prompt too large'),
     history: z
       .array(

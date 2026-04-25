@@ -38,6 +38,10 @@ export interface AiRequest {
   // Agent-mode extensions. Set both to enable tool-using agent loop.
   tools?: { name: string; description: string; input_schema: unknown }[];
   agentMessages?: AgentMessage[];
+  /** Operating mode: 'composer' = full agent (default), 'ask' = Plan
+   *  mode (read-only + create_plan). Server uses this to pick the
+   *  right system-prompt suffix. */
+  mode?: 'composer' | 'ask';
 }
 
 export interface AiStreamHandlers {

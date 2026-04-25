@@ -116,7 +116,48 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       required: ['command'],
     },
   },
+  {
+    // Plan-mode-only tool. Available to the agent when the
+    // conversation runs in 'ask' mode. Writes a structured markdown
+    // plan that the user can review before flipping back to composer
+    // mode for execution.
+    name: 'create_plan',
+    description:
+      "[Plan mode only] Write a structured implementation plan to .suxai/plans/<slug>.md. Use this INSTEAD of edit_file/write_file when in Plan mode. The plan should follow the structure: ## Context, ## Per-file analysis (markdown table file/issue/fix), ## Already OK (checklist), ## Implementation Plan (numbered), ## Walkthrough (collapsible <details>), ## Acceptance Criteria. The user reviews then toggles agent mode to execute.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        slug: {
+          type: 'string',
+          description:
+            'Short kebab-case filename without extension (e.g. "fix-streamproof"). Will become .suxai/plans/<slug>.md.',
+        },
+        content: {
+          type: 'string',
+          description: 'Full markdown body of the plan.',
+        },
+      },
+      required: ['slug', 'content'],
+    },
+  },
 ];
+
+/**
+ * Filter the AGENT_TOOLS list according to the conversation mode.
+ *   - 'composer' (default) → all tools INCLUDING run_command, MINUS
+ *     create_plan (which is plan-mode-only).
+ *   - 'ask' → read-only tools (read_file, list_dir) + create_plan.
+ *     edit_file / write_file / run_command are dropped to prevent
+ *     accidental side effects during the planning phase.
+ */
+export function toolsForMode(mode: 'composer' | 'ask' = 'composer'): ToolDefinition[] {
+  if (mode === 'ask') {
+    return AGENT_TOOLS.filter((t) =>
+      t.name === 'read_file' || t.name === 'list_dir' || t.name === 'create_plan',
+    );
+  }
+  return AGENT_TOOLS.filter((t) => t.name !== 'create_plan');
+}
 
 /**
  * Regex patterns that bypass any auto-approve policy. If the command
@@ -242,6 +283,11 @@ function expectString(input: Record<string, unknown>, key: string): string {
 
 export interface ExecuteOptions {
   approve: ApproveFn;
+  /** Absolute path of the user's workspace, when known. Required by
+   *  tools that scope their writes to <workspace>/.suxai/ (e.g.
+   *  create_plan). Tools that don't need it (read_file, edit_file)
+   *  just ignore this. */
+  workspaceRoot?: string | null;
 }
 
 export async function executeTool(
@@ -390,6 +436,45 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
         ? `[timed out after ${timeout_ms ?? 120000}ms]`
         : `[exit ${result.exit_code}]`;
       return `${header}\n${result.stdout}\n${exitLine}`;
+    }
+    case 'create_plan': {
+      // Plan-mode-only tool. Persists a markdown plan to
+      // <workspace>/.suxai/plans/<slug>.md, opens it in the editor
+      // as a preview, and returns a short confirmation. No approval
+      // needed — write target is sandboxed under .suxai/.
+      const slug = expectString(args, 'slug')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 64);
+      if (!slug) {
+        throw new ToolExecutionError(
+          'create_plan',
+          'slug must contain at least one alphanumeric character',
+        );
+      }
+      const content = typeof args.content === 'string' ? (args.content as string) : '';
+      if (!content.trim()) {
+        throw new ToolExecutionError('create_plan', 'content cannot be empty');
+      }
+      if (!window.suxai.plan?.write) {
+        throw new ToolExecutionError(
+          'create_plan',
+          'Plan IPC unavailable. Update SUXAI to a build with v0.9.19+.',
+        );
+      }
+      if (!opts.workspaceRoot) {
+        throw new ToolExecutionError(
+          'create_plan',
+          'Plan mode requires an open workspace. Open a folder first.',
+        );
+      }
+      const result = await window.suxai.plan.write(opts.workspaceRoot, slug, content);
+      return (
+        `Plan saved to ${result.path}. ` +
+        `${content.split('\n').length} lines. The user can review it now ` +
+        `and toggle Plan mode off when ready to execute.`
+      );
     }
     default:
       throw new ToolExecutionError(call.name, `Unknown tool: ${call.name}`);

@@ -41,21 +41,33 @@ export function setTokenRefresher(hook: TokenRefresher | null): void {
 // and the next refresh fails with "invalid refresh token".
 let inFlightRefresh: Promise<string | null> | null = null;
 
+const REFRESH_TIMEOUT_MS = 10_000;
+
 /**
  * Get a fresh token via the refresh flow. Returns null if no refresh is
  * possible (no hook installed, or refresh itself failed). Callers that
  * own their own fetch (e.g. SSE streams) use this to retry once on 401.
+ *
+ * The hook itself is wrapped in a 10s timeout — a hung server must not
+ * starve every other 401-retry attempt forever.
  */
 export async function tryRefreshToken(): Promise<string | null> {
   if (!refreshHook) return null;
   if (inFlightRefresh) return inFlightRefresh;
   const hook = refreshHook;
   inFlightRefresh = (async () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
     try {
-      return await hook();
+      return await Promise.race<string | null>([
+        hook(),
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), REFRESH_TIMEOUT_MS);
+        }),
+      ]);
     } catch {
       return null;
     } finally {
+      if (timer) clearTimeout(timer);
       // Clear AFTER the promise settles so concurrent awaiters share
       // the same result — don't clear preemptively.
       setTimeout(() => { inFlightRefresh = null; }, 0);

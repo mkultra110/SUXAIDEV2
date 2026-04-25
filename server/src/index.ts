@@ -15,6 +15,17 @@ app.set('trust proxy', 1);
 
 app.use(
   helmet({
+    // Strong defaults: HSTS for HTTPS-only, deny framing entirely
+    // (we never embed the API in any iframe), and strict referrer.
+    // CORP stays cross-origin so the Electron renderer can stream from
+    // /ai/chat under a different origin.
+    strictTransportSecurity: {
+      maxAge: 60 * 60 * 24 * 365, // 1 year
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: { action: 'deny' },
+    referrerPolicy: { policy: 'no-referrer' },
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }),
 );

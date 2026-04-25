@@ -61,8 +61,18 @@ async function readAll(): Promise<UserRecord[]> {
 
 async function writeAll(users: UserRecord[]): Promise<void> {
   await ensureDataDir();
-  const tmp = `${DB_FILE}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(users, null, 2), { mode: 0o600 });
+  const tmp = `${DB_FILE}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  // Open with explicit mode so we can fsync before rename. A power
+  // loss between writeFile and rename would otherwise lose every
+  // user in users.json — including the credentials of anyone who
+  // just registered.
+  const fh = await fs.open(tmp, 'w', 0o600);
+  try {
+    await fh.writeFile(JSON.stringify(users, null, 2));
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
   await fs.rename(tmp, DB_FILE);
 }
 
@@ -153,14 +163,27 @@ export const userStore = {
     return result;
   },
 
-  /** Current usage for today (ms). 0 if not yet used today. */
+  /**
+   * Current usage for today (ms). 0 if not yet used today.
+   *
+   * Routed through the write queue so a quota-check that arrives
+   * while a trackUsage write is in flight reads the post-write state.
+   * Without this, two simultaneous AI requests can both check usage,
+   * both see "under quota", and both get to stream — letting a free-
+   * tier user briefly burn 2× their daily budget.
+   */
   async getDailyUsage(userId: string): Promise<{ tier: UserTier; usedMs: number }> {
-    const user = await readAll().then((users) => users.find((u) => u.id === userId));
-    if (!user) return { tier: 'free', usedMs: 0 };
-    const today = todayUtc();
-    return {
-      tier: user.tier,
-      usedMs: user.dailyUsageDate === today ? user.dailyUsageMs : 0,
-    };
+    let result: { tier: UserTier; usedMs: number } = { tier: 'free', usedMs: 0 };
+    await enqueueWrite(async () => {
+      const users = await readAll();
+      const user = users.find((u) => u.id === userId);
+      if (!user) return;
+      const today = todayUtc();
+      result = {
+        tier: user.tier,
+        usedMs: user.dailyUsageDate === today ? user.dailyUsageMs : 0,
+      };
+    });
+    return result;
   },
 };

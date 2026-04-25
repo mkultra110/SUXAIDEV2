@@ -15,6 +15,12 @@ const api = {
     setRefreshToken: (token: string): Promise<boolean> =>
       ipcRenderer.invoke('auth:set-refresh-token', token),
     clearRefreshToken: (): Promise<boolean> => ipcRenderer.invoke('auth:clear-refresh-token'),
+    /** v0.11.13: tells the renderer whether tokens are encrypted at
+     *  rest by the OS keychain, or stored in plaintext (Linux without
+     *  gnome-keyring/kwallet). The renderer surfaces a one-time
+     *  warning toast on plaintext setups. */
+    storageBackend: (): Promise<'native' | 'basic_text' | 'unavailable'> =>
+      ipcRenderer.invoke('auth:storage-backend'),
   },
   window: {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),

@@ -124,6 +124,33 @@ async function readTokenBlob(): Promise<string | null> {
   }
 }
 
+/**
+ * Inspect the safeStorage encryption backend (Linux only matters
+ * for the answer — macOS uses Keychain, Windows uses DPAPI, both
+ * always strong). Returns one of:
+ *   - 'native'      : encryption is via OS keychain/DPAPI/libsecret/kwallet
+ *   - 'basic_text'  : Linux without keychain — tokens stored in CLEAR TEXT
+ *   - 'unavailable' : safeStorage isn't ready yet (very early boot)
+ *
+ * The renderer calls auth:storage-backend at startup and shows a
+ * one-time warning toast when 'basic_text' is detected so the user
+ * understands their refresh token is on disk in plaintext.
+ */
+ipcMain.handle('auth:storage-backend', () => {
+  if (!safeStorage.isEncryptionAvailable()) return 'unavailable';
+  // getSelectedStorageBackend exists on Electron 14+; older builds
+  // don't have it. Treat its absence as 'native' (we have to assume
+  // the OS keychain on macOS / Windows / etc.).
+  const fn = (safeStorage as unknown as { getSelectedStorageBackend?: () => string }).getSelectedStorageBackend;
+  if (typeof fn !== 'function') return 'native';
+  try {
+    const backend = fn.call(safeStorage);
+    return backend === 'basic_text' ? 'basic_text' : 'native';
+  } catch {
+    return 'native';
+  }
+});
+
 async function writeTokenBlob(token: string): Promise<void> {
   await fs.mkdir(USER_DATA(), { recursive: true });
   const data = safeStorage.isEncryptionAvailable()

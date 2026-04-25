@@ -33,6 +33,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenRef.current = state.token;
   }, [state.token]);
 
+  // v0.11.13: warn the user once if their tokens are stored in
+  // plaintext (Linux without keychain). Defensive checks so a
+  // missing IPC (older preload) just no-ops.
+  useEffect(() => {
+    const backendFn = (window as unknown as {
+      suxai?: { auth?: { storageBackend?: () => Promise<string> } };
+    }).suxai?.auth?.storageBackend;
+    if (typeof backendFn !== 'function') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const backend = await backendFn();
+        if (cancelled) return;
+        if (backend === 'basic_text') {
+          // Use a console warn so the user sees this in DevTools, AND
+          // localStorage flag so we can throttle a real toast to once
+          // per session if a Toast hook is available. The toast call
+          // is deferred so AuthProvider doesn't depend on the Toast
+          // provider mounting first.
+          console.warn(
+            '[suxai] Refresh tokens are stored in PLAINTEXT (no system keychain detected). ' +
+              'Install gnome-keyring (GNOME) or kwalletd (KDE) for encrypted storage.',
+          );
+          try {
+            const seenKey = 'suxai.basicTextWarningSeen';
+            if (!localStorage.getItem(seenKey)) {
+              localStorage.setItem(seenKey, '1');
+              window.dispatchEvent(
+                new CustomEvent('suxai:storage-warning', {
+                  detail: {
+                    title: 'Tokens stockés en clair',
+                    body:
+                      'Aucun trousseau (gnome-keyring/kwallet) détecté. ' +
+                      'Vos tokens de session sont sur disque sans chiffrement.',
+                  },
+                }),
+              );
+            }
+          } catch { /* localStorage off → just keep the console warn */ }
+        }
+      } catch { /* */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   // Bootstrap — read token from secure Electron storage.
   useEffect(() => {
     let cancelled = false;

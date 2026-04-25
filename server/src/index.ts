@@ -36,12 +36,11 @@ app.use(
     allowedHeaders: ['content-type', 'authorization', 'accept'],
   }),
 );
-// 10 MB is plenty for even a fat attachment + full file context. Upstream
-// providers reject sooner than this anyway. The prompt schema's per-field
-// caps are the real safety net.
-app.use(express.json({ limit: '10mb' }));
 
-// Global soft-limit to protect against bursts.
+// Global soft-limit to protect against bursts. Runs BEFORE the body
+// parser so a flood of 10 MB POSTs gets rejected at 429 without
+// consuming memory parsing the JSON. Order matters: helmet/cors only
+// add headers; rate-limit must precede body parsing.
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
@@ -50,6 +49,11 @@ app.use(
     legacyHeaders: false,
   }),
 );
+
+// 10 MB is plenty for even a fat attachment + full file context. Upstream
+// providers reject sooner than this anyway. The prompt schema's per-field
+// caps are the real safety net.
+app.use(express.json({ limit: '10mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true, version: env.UPDATE_VERSION }));
 

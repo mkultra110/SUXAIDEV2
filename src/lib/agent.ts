@@ -96,7 +96,50 @@ export const AGENT_TOOLS: ToolDefinition[] = [
       required: ['path', 'content'],
     },
   },
+  {
+    name: 'run_command',
+    description:
+      "Run a shell command in the user's workspace (e.g. `npm run build`, `pytest`, `git status`). Output is captured and returned. Requires user approval. Combine commands with `&&`; don't invoke interactive tools (no vim / htop — they have no TTY). Append `| cat` where a pager would block (git log, less). Default timeout 120 seconds.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Shell command line.' },
+        cwd: {
+          type: 'string',
+          description: 'Optional working directory; defaults to the workspace root.',
+        },
+        timeout_ms: {
+          type: 'integer',
+          description: 'Max runtime in milliseconds (default 120000, max 600000).',
+        },
+      },
+      required: ['command'],
+    },
+  },
 ];
+
+/**
+ * Regex patterns that bypass any auto-approve policy. If the command
+ * matches ANY of these, the approval dialog is forced — the model can't
+ * slip past with a "looks safe" argument.
+ */
+const DANGER_PATTERNS: RegExp[] = [
+  /\brm\s+-rf?\s+(\/|~|\$HOME|\*)/,
+  /\bsudo\b/,
+  /\bmkfs\b/,
+  /\b(curl|wget)\b[^\n|]*\|\s*(sh|bash|zsh)/,
+  /\bgit\s+push\s+[^&\n]*--force\b/,
+  /\bnpm\s+(publish|unpublish)\b/,
+  /\byarn\s+publish\b/,
+  />\s*\/dev\/(sda|nvme|disk|null|zero)/,
+  /\bshutdown\b/,
+  /\bdd\s+.*\bof=\/dev\//,
+  /\bchmod\s+-R\s+0?777\b/,
+];
+
+export function detectDangerousCommand(cmd: string): boolean {
+  return DANGER_PATTERNS.some((re) => re.test(cmd));
+}
 
 const MAX_FILE_BYTES = 200_000;
 const MAX_DIR_ENTRIES = 200;
@@ -223,6 +266,25 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       if (!ok) return `User rejected the write to ${path}.`;
       await window.suxai.fs.writeFile(path, content);
       return `Wrote ${content.length} bytes to ${path}.`;
+    }
+    case 'run_command': {
+      const command = expectString(args, 'command');
+      const cwd = typeof args.cwd === 'string' ? (args.cwd as string) : undefined;
+      const timeout_ms = typeof args.timeout_ms === 'number' ? (args.timeout_ms as number) : undefined;
+      const ok = await opts.approve(call);
+      if (!ok) return `User rejected the command: ${command}`;
+      if (!window.suxai.terminal?.runOnce) {
+        throw new ToolExecutionError('run_command', 'Terminal IPC unavailable');
+      }
+      const result = await window.suxai.terminal.runOnce({ command, cwd, timeout_ms });
+      const header = `$ ${command}${cwd ? `  (cwd: ${cwd})` : ''}`;
+      if (result.error) {
+        throw new ToolExecutionError('run_command', `${header}\n${result.error}`);
+      }
+      const exitLine = result.timed_out
+        ? `[timed out after ${timeout_ms ?? 120000}ms]`
+        : `[exit ${result.exit_code}]`;
+      return `${header}\n${result.stdout}\n${exitLine}`;
     }
     default:
       throw new ToolExecutionError(call.name, `Unknown tool: ${call.name}`);

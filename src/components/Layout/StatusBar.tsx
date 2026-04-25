@@ -9,7 +9,12 @@ interface Pos {
   selection: number;
 }
 
-export function StatusBar() {
+interface StatusBarProps {
+  onToggleTerminal?: () => void;
+  terminalOpen?: boolean;
+}
+
+export function StatusBar({ onToggleTerminal, terminalOpen }: StatusBarProps = {}) {
   const { activeFile } = useWorkspace();
   const [settings, update] = useSettings();
   const [pos, setPos] = useState<Pos>({ line: 1, column: 1, selection: 0 });
@@ -26,6 +31,19 @@ export function StatusBar() {
   return (
     <footer className="statusbar">
       <div className="statusbar__group">
+        {onToggleTerminal && (
+          <button
+            type="button"
+            className={`statusbar__item statusbar__btn ${terminalOpen ? 'statusbar__btn--active' : ''}`}
+            onClick={onToggleTerminal}
+            title="Toggle terminal (Ctrl+`)"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden style={{ marginRight: 4 }}>
+              <path d="M4 17l6-6-6-6M12 19h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Terminal
+          </button>
+        )}
         {activeFile && <span className="statusbar__item">{activeFile.language ?? 'plaintext'}</span>}
       </div>
       <div className="statusbar__spacer" />

@@ -56,6 +56,35 @@ const api = {
     write: (data: unknown): Promise<boolean> => ipcRenderer.invoke('conv:write', data),
     clear: (): Promise<boolean> => ipcRenderer.invoke('conv:clear'),
   },
+  terminal: {
+    spawn: (cwd?: string): Promise<{ id: string; shell: string }> =>
+      ipcRenderer.invoke('terminal:spawn', cwd),
+    write: (id: string, data: string): Promise<boolean> =>
+      ipcRenderer.invoke('terminal:write', id, data),
+    resize: (id: string, cols: number, rows: number): Promise<boolean> =>
+      ipcRenderer.invoke('terminal:resize', id, cols, rows),
+    kill: (id: string): Promise<boolean> => ipcRenderer.invoke('terminal:kill', id),
+    runOnce: (input: {
+      command: string;
+      cwd?: string;
+      timeout_ms?: number;
+    }): Promise<{
+      stdout: string;
+      exit_code: number;
+      timed_out?: boolean;
+      error?: string;
+    }> => ipcRenderer.invoke('terminal:run-once', input),
+    onData: (cb: (payload: { id: string; chunk: string }) => void) => {
+      const listener = (_: unknown, p: { id: string; chunk: string }) => cb(p);
+      ipcRenderer.on('terminal:data', listener);
+      return () => ipcRenderer.removeListener('terminal:data', listener);
+    },
+    onExit: (cb: (payload: { id: string; code: number | null }) => void) => {
+      const listener = (_: unknown, p: { id: string; code: number | null }) => cb(p);
+      ipcRenderer.on('terminal:exit', listener);
+      return () => ipcRenderer.removeListener('terminal:exit', listener);
+    },
+  },
   update: {
     check: (): Promise<{ available: boolean; version: string; notes?: string } | null> =>
       ipcRenderer.invoke('update:check'),

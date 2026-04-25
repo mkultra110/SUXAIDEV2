@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useToast } from '../ui/Toast';
 import { TitleBar } from './TitleBar';
@@ -7,6 +7,7 @@ import { WindowState } from './WindowState';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { EditorPanel } from '../Editor/EditorPanel';
 import { AIPanel } from '../AI/AIPanel';
+import { TerminalPanel } from '../Terminal/TerminalPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
@@ -96,18 +97,35 @@ function WorkspaceHotkeys() {
   return null;
 }
 
+function TerminalHotkey({ onToggle }: { onToggle: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+        e.preventDefault();
+        onToggle();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onToggle]);
+  return null;
+}
+
 export function IDELayout() {
+  const [terminalOpen, setTerminalOpen] = useState(false);
   return (
     <div className="ide">
       <WorkspaceHotkeys />
       <WindowState />
+      <TerminalHotkey onToggle={() => setTerminalOpen((o) => !o)} />
       <TitleBar />
       <div className="ide__body">
         <Sidebar />
         <EditorPanel />
         <AIPanel />
       </div>
-      <StatusBar />
+      <TerminalPanel open={terminalOpen} onToggle={() => setTerminalOpen((o) => !o)} />
+      <StatusBar onToggleTerminal={() => setTerminalOpen((o) => !o)} terminalOpen={terminalOpen} />
     </div>
   );
 }

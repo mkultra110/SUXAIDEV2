@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol } fro
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { UpdateManager } from './updater';
 
 process.env.APP_ROOT = path.join(__dirname, '..');
@@ -383,6 +384,147 @@ function registerIpc() {
   ipcMain.handle('update:check', async () => updateManager?.check() ?? null);
   ipcMain.handle('update:download-and-install', async () =>
     updateManager?.downloadAndInstall() ?? null,
+  );
+
+  // --- Terminal IPC ------------------------------------------------------
+  //
+  // We spawn real shell processes (no node-pty dependency to keep the
+  // install portable — no native rebuild). Each session streams stdout
+  // and stderr back to the renderer via IPC events keyed by session id.
+  // Input from the user goes back through terminal:write.
+  //
+  // For agent-triggered commands that need to return a final result
+  // string, we offer terminal:run-once which buffers the output to a
+  // capped size and resolves with the combined log + exit code.
+
+  interface Session {
+    proc: ChildProcessWithoutNullStreams;
+    cwd: string;
+  }
+  const sessions = new Map<string, Session>();
+
+  const resolvePath = (maybePath: string | undefined): string => {
+    const cwd = maybePath ?? process.cwd();
+    return sanitizeFsPath(cwd, { mustExist: true });
+  };
+
+  const shellFor = (): { cmd: string; args: string[] } => {
+    if (process.platform === 'win32') {
+      return { cmd: process.env.COMSPEC ?? 'cmd.exe', args: [] };
+    }
+    return { cmd: process.env.SHELL ?? '/bin/bash', args: ['-i'] };
+  };
+
+  ipcMain.handle('terminal:spawn', (event, cwd?: string) => {
+    const safe = resolvePath(cwd);
+    const { cmd, args } = shellFor();
+    const proc = spawn(cmd, args, {
+      cwd: safe,
+      env: { ...process.env, TERM: 'xterm-256color' },
+    });
+    const id = `term_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    sessions.set(id, { proc, cwd: safe });
+    const sender = event.sender;
+    proc.stdout.on('data', (chunk) => {
+      if (!sender.isDestroyed()) sender.send('terminal:data', { id, chunk: chunk.toString() });
+    });
+    proc.stderr.on('data', (chunk) => {
+      if (!sender.isDestroyed()) sender.send('terminal:data', { id, chunk: chunk.toString() });
+    });
+    proc.on('close', (code) => {
+      sessions.delete(id);
+      if (!sender.isDestroyed()) sender.send('terminal:exit', { id, code });
+    });
+    proc.on('error', (err) => {
+      if (!sender.isDestroyed()) {
+        sender.send('terminal:data', { id, chunk: `\r\n[spawn error] ${err.message}\r\n` });
+      }
+    });
+    return { id, shell: cmd };
+  });
+
+  ipcMain.handle('terminal:write', (_e, id: string, data: string) => {
+    const s = sessions.get(id);
+    if (!s) return false;
+    s.proc.stdin.write(data);
+    return true;
+  });
+
+  ipcMain.handle('terminal:resize', (_e, _id: string, _cols: number, _rows: number) => {
+    // Without node-pty we can't resize the PTY; ignore. Log line-wrap
+    // remains correct because the shell reads the effective COLUMNS
+    // from the TTY it sees (none here) and falls back to the default.
+    return true;
+  });
+
+  ipcMain.handle('terminal:kill', (_e, id: string) => {
+    const s = sessions.get(id);
+    if (!s) return false;
+    s.proc.kill('SIGTERM');
+    sessions.delete(id);
+    return true;
+  });
+
+  /**
+   * Fire-and-wait command execution for the agent. Buffers stdout+stderr
+   * (capped) and resolves with `{stdout, exit_code, timed_out}` once the
+   * process exits or the timeout fires.
+   */
+  ipcMain.handle(
+    'terminal:run-once',
+    (_e, input: { command: string; cwd?: string; timeout_ms?: number }) => {
+      return new Promise((resolve) => {
+        if (!input || typeof input.command !== 'string' || input.command.trim() === '') {
+          resolve({ stdout: '', exit_code: -1, error: 'empty command' });
+          return;
+        }
+        const safeCwd = (() => {
+          try { return resolvePath(input.cwd); }
+          catch (err) { return null; }
+        })();
+        if (!safeCwd) {
+          resolve({ stdout: '', exit_code: -1, error: 'invalid cwd' });
+          return;
+        }
+        const isWin = process.platform === 'win32';
+        const cmd = isWin ? process.env.COMSPEC ?? 'cmd.exe' : '/bin/sh';
+        const args = isWin ? ['/c', input.command] : ['-c', input.command];
+        const child = spawn(cmd, args, {
+          cwd: safeCwd,
+          env: { ...process.env, TERM: 'xterm-256color' },
+        });
+        const CAP = 200_000;
+        let buf = '';
+        let timedOut = false;
+        const timeout = setTimeout(
+          () => {
+            timedOut = true;
+            child.kill('SIGTERM');
+            setTimeout(() => child.kill('SIGKILL'), 2000);
+          },
+          Math.min(Math.max(input.timeout_ms ?? 120_000, 1000), 600_000),
+        );
+        const append = (s: string) => {
+          if (buf.length >= CAP) return;
+          buf += s;
+          if (buf.length > CAP) buf = buf.slice(0, CAP) + `\n[truncated — output exceeded ${CAP} chars]`;
+        };
+        child.stdout.on('data', (c) => append(c.toString()));
+        child.stderr.on('data', (c) => append(c.toString()));
+        child.on('close', (code) => {
+          clearTimeout(timeout);
+          resolve({
+            stdout: buf,
+            exit_code: typeof code === 'number' ? code : -1,
+            timed_out: timedOut,
+          });
+        });
+        child.on('error', (err) => {
+          clearTimeout(timeout);
+          resolve({ stdout: buf, exit_code: -1, error: err.message });
+        });
+      });
+    },
   );
 }
 

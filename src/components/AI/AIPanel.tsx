@@ -8,6 +8,7 @@ import { Spinner } from '../ui/Spinner';
 import { Message, type ChatMessage, type ToolCallSnapshot } from './Message';
 import { ModelSelector } from './ModelSelector';
 import { ConversationSwitcher } from './ConversationSwitcher';
+import { ApprovalDialog, type ApprovalRequest } from './ApprovalDialog';
 import { onAiCommand } from '../../lib/commands';
 import {
   emptyConversation,
@@ -99,6 +100,10 @@ interface AgentLoopArgs {
   setStreaming: (v: boolean) => void;
   abortRef: React.MutableRefObject<(() => void) | null>;
   toast: { info: (t: string, d?: string) => void; error: (t: string, d?: string) => void };
+  requestApproval: (
+    call: ToolCall,
+    preview?: { path: string; original: string; proposed: string },
+  ) => Promise<boolean>;
 }
 
 async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
@@ -203,17 +208,7 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
       });
 
       const result = await executeTool(call, {
-        approve: async (c, preview) => {
-          if (!preview) return true;
-          const summary = c.name === 'edit_file'
-            ? `Apply this edit?\n\n${preview.path}\n\n— ${
-                String((c.input as { search?: string })?.search ?? '').slice(0, 200)
-              }\n+ ${String((c.input as { replace?: string })?.replace ?? '').slice(0, 200)}`
-            : `Write to ${preview.path}?\n\nProposed (${preview.proposed.length} bytes):\n${preview.proposed.slice(0, 400)}${
-                preview.proposed.length > 400 ? '\n…' : ''
-              }`;
-          return window.confirm(summary);
-        },
+        approve: (c, preview) => args.requestApproval(c, preview),
       });
 
       const finalStatus: ToolCallSnapshot['status'] = result.is_error
@@ -278,6 +273,25 @@ export function AIPanel() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
+  const [approval, setApproval] = useState<ApprovalRequest | null>(null);
+
+  const requestApproval = useCallback(
+    (
+      call: ToolCall,
+      preview?: { path: string; original: string; proposed: string },
+    ): Promise<boolean> =>
+      new Promise<boolean>((resolve) => {
+        setApproval({
+          call,
+          preview,
+          resolve: (approved) => {
+            setApproval(null);
+            resolve(approved);
+          },
+        });
+      }),
+    [],
+  );
   const abortRef = useRef<(() => void) | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -593,6 +607,7 @@ export function AIPanel() {
           setStreaming,
           abortRef,
           toast,
+          requestApproval,
         }).catch((err) => {
           console.error('[agent] loop failed:', err);
           setMessages((m) =>
@@ -668,7 +683,7 @@ export function AIPanel() {
       abortRef.current = cancel;
     },
     // attachments dropped from deps — we read it via attachmentsRef above.
-    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast],
+    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast, requestApproval],
   );
 
   const stop = () => {
@@ -1077,6 +1092,7 @@ export function AIPanel() {
           )}
         </div>
       </form>
+      <ApprovalDialog request={approval} />
     </aside>
   );
 }

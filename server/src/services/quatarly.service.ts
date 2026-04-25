@@ -151,15 +151,79 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
   //      to alternating user/assistant turns.
   const isAgent = Array.isArray(req.agentMessages) && req.agentMessages.length > 0;
 
+  // Attach an ephemeral cache breakpoint to the last content block of
+  // the last message so Anthropic keeps the whole prefix
+  // (system + tools + prior messages) hot. Writes cost 1.25× input once;
+  // every subsequent turn reads the cache at 0.10× input.
+  //
+  // We only touch the LAST message's LAST block. Earlier cache_control
+  // hints inside agentMessages passed by the client are left alone.
+  function markRollingCache(
+    messages: unknown[],
+  ): unknown[] {
+    if (messages.length === 0) return messages;
+    const last = messages[messages.length - 1] as {
+      role: string;
+      content: unknown;
+    };
+    if (!last || typeof last !== 'object') return messages;
+    let nextContent: unknown;
+    if (typeof last.content === 'string') {
+      nextContent = [
+        {
+          type: 'text',
+          text: last.content,
+          cache_control: { type: 'ephemeral' },
+        },
+      ];
+    } else if (Array.isArray(last.content)) {
+      // Mutate a shallow copy of the blocks, tag only the last text-like
+      // block with cache_control. We skip tool_use blocks because they
+      // carry no `text` field.
+      const blocks = last.content.slice() as Array<Record<string, unknown>>;
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        const b = blocks[i];
+        if (b && (b.type === 'text' || b.type === 'tool_result')) {
+          blocks[i] = { ...b, cache_control: { type: 'ephemeral' } };
+          break;
+        }
+      }
+      nextContent = blocks;
+    } else {
+      return messages;
+    }
+    return [
+      ...messages.slice(0, -1),
+      { ...last, content: nextContent },
+    ];
+  }
+
+  // System prompt with a single cache breakpoint on the system text.
+  // This covers the invariant instructions across every turn.
+  function cachedSystem(text: string): Array<Record<string, unknown>> {
+    return [{ type: 'text', text, cache_control: { type: 'ephemeral' } }];
+  }
+
+  // Tools: mark the LAST tool's definition as a cache boundary so the
+  // whole tool list is part of the cached prefix.
+  function cachedTools<T extends Record<string, unknown>>(tools: T[]): T[] {
+    if (tools.length === 0) return tools;
+    const last = tools[tools.length - 1];
+    return [
+      ...tools.slice(0, -1),
+      { ...last, cache_control: { type: 'ephemeral' } } as T,
+    ];
+  }
+
   let body: Record<string, unknown>;
   if (isAgent) {
     body = {
       model: modelId,
       max_tokens: 4096,
       stream: true,
-      system: buildSystemPrompt(req.command, true),
-      messages: req.agentMessages,
-      tools: req.tools ?? [],
+      system: cachedSystem(buildSystemPrompt(req.command, true)),
+      messages: markRollingCache(req.agentMessages ?? []),
+      tools: cachedTools(req.tools ?? []),
     };
   } else {
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
@@ -183,8 +247,8 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       model: modelId,
       max_tokens: 2048,
       stream: true,
-      system: buildSystemPrompt(req.command),
-      messages: cleaned,
+      system: cachedSystem(buildSystemPrompt(req.command)),
+      messages: markRollingCache(cleaned),
     };
   }
   try {
@@ -193,6 +257,11 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       headers: {
         'content-type': 'application/json',
         'anthropic-version': '2023-06-01',
+        // Enable prompt caching + the 1-hour TTL variant. Quatarly
+        // forwards headers it doesn't know about, so if the provider
+        // doesn't support them the request still succeeds (just no
+        // cache hit). We're graceful.
+        'anthropic-beta': 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11',
         authorization: `Bearer ${env.QUATARLY_API_KEY}`,
         'x-api-key': env.QUATARLY_API_KEY,
         apiKey: env.QUATARLY_API_KEY,

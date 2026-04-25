@@ -52,9 +52,11 @@ router.post(
 
     const startedAt = Date.now();
     let closed = false;
+    let lastWrite = Date.now();
     const writeEvent = (obj: unknown) => {
       if (closed) return;
       res.write(`data: ${JSON.stringify(obj)}\n\n`);
+      lastWrite = Date.now();
     };
     const writeDone = () => {
       if (closed) return;
@@ -63,26 +65,73 @@ router.post(
       closed = true;
     };
 
+    // v0.11.7: heartbeat tick. SSE comments (lines starting with ':')
+    // don't trigger an event on the client but keep the connection
+    // alive against intermediary proxies (Caddy ~120 s idle, nginx
+    // 60 s default, mobile carriers even shorter). 15 s is the sweet
+    // spot — frequent enough to never be cut, infrequent enough to
+    // not pollute the stream.
+    const heartbeat = setInterval(() => {
+      if (closed) return;
+      if (Date.now() - lastWrite >= 14_000) {
+        try {
+          res.write(': heartbeat\n\n');
+          lastWrite = Date.now();
+        } catch { /* socket gone — req.close will fire shortly */ }
+      }
+    }, 5_000);
+
+    // v0.11.7: AbortController propagated all the way to the upstream
+    // fetch. When the renderer disconnects (tab closed, Stop button,
+    // refresh), req.close fires → ac.abort() → streamCompletion sees
+    // signal.aborted → reader.cancel() upstream → Quatarly quota
+    // released within milliseconds. Without this, a 60-second
+    // tail-end Anthropic call kept burning quota even when nobody
+    // was reading anymore.
+    const ac = new AbortController();
     req.on('close', () => {
       closed = true;
+      ac.abort();
+      clearInterval(heartbeat);
     });
 
-    await streamCompletion(req.body, {
-      onDelta: (delta) => writeEvent({ delta }),
-      onToolUse: (call) => writeEvent({ tool_use: call }),
-      onStop: (reason) => writeEvent({ stop_reason: reason }),
-      onDone: () => writeDone(),
-      onError: (err) => {
-        writeEvent({ error: err.message });
-        writeDone();
-      },
-    });
+    try {
+      await streamCompletion(
+        req.body,
+        {
+          onDelta: (delta) => writeEvent({ delta }),
+          onToolUse: (call) => writeEvent({ tool_use: call }),
+          onStop: (reason) => writeEvent({ stop_reason: reason }),
+          onDone: () => writeDone(),
+          onError: (err) => {
+            // STREAM_TRUNCATED is the named error from quatarly.service
+            // (v0.11.6) when upstream cuts without message_stop. We
+            // surface it as a typed event so the client can show a
+            // "connection lost — Retry" affordance instead of treating
+            // a partial response as end_turn.
+            const code = (err as Error & { code?: string }).code;
+            writeEvent({
+              error: err.message,
+              code: code ?? 'unknown',
+            });
+            writeDone();
+          },
+        },
+        ac.signal,
+      );
+    } finally {
+      clearInterval(heartbeat);
+    }
 
     // Track actual streaming duration against the user's daily budget.
-    const elapsed = Date.now() - startedAt;
-    userStore.trackUsage(userId, elapsed).catch((err) => {
-      console.error('[ai] failed to track usage:', err);
-    });
+    // Skipped when the client aborted — they shouldn't pay for time
+    // they explicitly cancelled.
+    if (!ac.signal.aborted) {
+      const elapsed = Date.now() - startedAt;
+      userStore.trackUsage(userId, elapsed).catch((err) => {
+        console.error('[ai] failed to track usage:', err);
+      });
+    }
   },
 );
 

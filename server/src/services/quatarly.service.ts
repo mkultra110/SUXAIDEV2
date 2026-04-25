@@ -121,7 +121,11 @@ function buildUserContent(req: AiRequestInput): string {
   return parts.join('\n\n');
 }
 
-export async function streamCompletion(req: AiRequestInput, handlers: StreamHandlers): Promise<void> {
+export async function streamCompletion(
+  req: AiRequestInput,
+  handlers: StreamHandlers,
+  signal?: AbortSignal,
+): Promise<void> {
   const model = findModel(req.modelId);
   if (!model) {
     handlers.onError(new Error('Unsupported model'));
@@ -133,13 +137,13 @@ export async function streamCompletion(req: AiRequestInput, handlers: StreamHand
   }
 
   if (model.provider === 'anthropic') {
-    await streamAnthropic(model.id, req, handlers);
+    await streamAnthropic(model.id, req, handlers, signal);
   } else {
-    await streamOpenAI(model.id, req, handlers);
+    await streamOpenAI(model.id, req, handlers, signal);
   }
 }
 
-async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandlers): Promise<void> {
+async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandlers, signal?: AbortSignal): Promise<void> {
   const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/chat/completions`;
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     { role: 'system', content: buildSystemPrompt(req.command) },
@@ -168,12 +172,16 @@ async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandl
         accept: 'text/event-stream',
       },
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
     }
     const reader = res.body.getReader();
+    if (signal) {
+      signal.addEventListener('abort', () => reader.cancel().catch(() => {}), { once: true });
+    }
     const decoder = new TextDecoder();
     let buf = '';
     while (true) {
@@ -205,7 +213,7 @@ async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandl
   }
 }
 
-async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHandlers): Promise<void> {
+async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHandlers, signal?: AbortSignal): Promise<void> {
   const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/messages`;
 
   // Build the messages payload. Two paths:
@@ -353,12 +361,20 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         accept: 'text/event-stream',
       },
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
       throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
     }
     const reader = res.body.getReader();
+    // v0.11.7: forward the route's AbortSignal to the upstream
+    // reader so a client disconnect tears the Quatarly call down
+    // immediately. Without this the upstream kept generating until
+    // its own stop_reason while nobody was reading.
+    if (signal) {
+      signal.addEventListener('abort', () => reader.cancel().catch(() => {}), { once: true });
+    }
     // fatal:false so a truncated multi-byte UTF-8 char at a chunk
     // boundary becomes U+FFFD instead of throwing — the next chunk's
     // continuation bytes will still complete the codepoint.

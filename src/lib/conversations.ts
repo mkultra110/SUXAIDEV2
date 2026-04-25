@@ -69,7 +69,7 @@ export async function loadConversations(): Promise<PersistedV2> {
         updatedAt: new Date().toISOString(),
         messages,
       };
-      return { version: 2, active: conv.id, list: [conv] };
+      return sanitizeForPersist({ version: 2, active: conv.id, list: [conv] });
     }
 
     // v2 payload — trust only the minimum shape; anything else falls back.

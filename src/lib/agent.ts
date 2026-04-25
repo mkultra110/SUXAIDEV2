@@ -131,7 +131,7 @@ const DANGER_PATTERNS: RegExp[] = [
   /\bgit\s+push\s+[^&\n]*--force\b/,
   /\bnpm\s+(publish|unpublish)\b/,
   /\byarn\s+publish\b/,
-  />\s*\/dev\/(sd[a-z]|nvme|disk|hd[a-z])\b/,
+  />\s*\/dev\/(sd[a-z]+\d*|hd[a-z]+\d*|nvme\d+n\d+(p\d+)?|mmcblk\d+(p\d+)?|disk\d*|loop\d+)\b/,
   /\bshutdown\b/,
   /\bdd\s+.*\bof=\/dev\//,
   /\bchmod\s+-R\s+0?777\b/,

@@ -398,21 +398,16 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
 
 /**
  * Read project guidance — AGENTS.md takes precedence over CLAUDE.md
- * because it's the cross-vendor standard. We try a few candidate
- * locations: workspace root, then the active file's directory.
- * Returns an empty string if nothing usable is found, so the agent
- * loop can no-op when no guidance file exists.
+ * because it's the cross-vendor standard. We only search the
+ * workspace root (not the active file's directory) so the preamble
+ * stays stable across file switches — Anthropic's prompt cache keys
+ * on prefix bytes, and a varying preamble would shred the cache.
  */
 async function loadProjectPreamble(
   workspaceRoot: string | null,
-  activeFilePath?: string,
 ): Promise<string> {
   const roots: string[] = [];
   if (workspaceRoot) roots.push(workspaceRoot);
-  if (activeFilePath) {
-    const dir = activeFilePath.replace(/[\\/][^\\/]*$/, '');
-    if (dir && !roots.includes(dir)) roots.push(dir);
-  }
   for (const root of roots) {
     for (const name of ['AGENTS.md', 'CLAUDE.md']) {
       const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/';
@@ -789,7 +784,7 @@ export function AIPanel() {
         if (preambleRef.current?.root === workspaceRoot) {
           preamble = preambleRef.current.preamble;
         } else {
-          preamble = await loadProjectPreamble(workspaceRoot, activeFile?.path);
+          preamble = await loadProjectPreamble(workspaceRoot);
           preambleRef.current = { root: workspaceRoot, preamble };
         }
         runAgentLoop({

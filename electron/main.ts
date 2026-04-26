@@ -256,6 +256,15 @@ function registerIpc() {
     if (data === null || data === undefined) {
       throw new Error('Conversations payload required');
     }
+    // v0.15.7 (audit-2 #13) — cap the serialized size at 16 MB.
+    // Without this an XSS / extension could call conversations.write
+    // with an arbitrarily large payload and grow conversations.json
+    // without bound. The cap is generous enough for thousands of
+    // typical conversations + thinking blocks + tool I/O.
+    const json = JSON.stringify(data);
+    if (json.length > 16 * 1024 * 1024) {
+      throw new Error('Conversations payload too large (>16 MB)');
+    }
     await fs.mkdir(USER_DATA(), { recursive: true });
     // Atomic write + fsync, same durability story as fs:write-file.
     // A crash mid-write would otherwise corrupt the file and trigger
@@ -263,7 +272,7 @@ function registerIpc() {
     const tmp = `${CONVERSATIONS_FILE()}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
     const fh = await fs.open(tmp, 'w', 0o600);
     try {
-      await fh.writeFile(JSON.stringify(data));
+      await fh.writeFile(json);
       await fh.sync();
     } finally {
       await fh.close();

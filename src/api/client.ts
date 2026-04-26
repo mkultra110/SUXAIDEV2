@@ -81,9 +81,14 @@ export async function tryRefreshToken(): Promise<string | null> {
       return ac.signal.aborted ? null : result;
     } finally {
       clearTimeout(timer);
-      // Clear AFTER the promise settles so concurrent awaiters share
-      // the same result — don't clear preemptively.
-      setTimeout(() => { inFlightRefresh = null; }, 0);
+      // v0.15.7 (audit-2 #1) — clear immediately, not via setTimeout(0).
+      // Concurrent awaiters that already hold a reference to the
+      // promise still resolve with the cached value (Promise instances
+      // are inherently shared once captured). Deferring the clear by a
+      // macrotask only widened the window where a hook's stragglier
+      // cleanup work (e.g. async safeStorage write) could overlap with
+      // the next refresh round and race-overwrite a newer token.
+      inFlightRefresh = null;
     }
   })();
   return inFlightRefresh;

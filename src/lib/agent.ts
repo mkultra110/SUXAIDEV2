@@ -973,6 +973,13 @@ function locateSearch(content: string, search: string): SearchMatch {
   // Whitespace-tolerant fallback. Build a regex from the search where
   // every run of whitespace becomes \s+, and every literal regex
   // metachar is escaped. Then look for unique matches in `content`.
+  // v0.15.7 (audit-2 #3) — defensive caps to avoid pathological inputs
+  // stalling the renderer thread. Any search >4 KB or with >200 ws
+  // tokens skips the fallback : the model is going to hit
+  // `kind:'none'` and re-emit a smaller search anyway.
+  if (search.length > 4000) return { kind: 'none' };
+  const wsTokens = search.match(/\s+/g);
+  if (wsTokens && wsTokens.length > 200) return { kind: 'none' };
   const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = escaped.replace(/\s+/g, '\\s+');
   let re: RegExp;
@@ -983,9 +990,13 @@ function locateSearch(content: string, search: string): SearchMatch {
   }
   const hits: Array<{ start: number; end: number }> = [];
   let m: RegExpExecArray | null;
+  let lastIndex = -1;
   while ((m = re.exec(content)) !== null) {
+    // Defensive: zero-length match would loop forever — bail.
+    if (m.index === lastIndex && m[0].length === 0) break;
+    lastIndex = m.index;
     hits.push({ start: m.index, end: m.index + m[0].length });
-    if (hits.length > 5) break; // bail early on pathological inputs
+    if (hits.length > 5) break;
   }
   if (hits.length === 0) return { kind: 'none' };
   if (hits.length === 1) return { kind: 'whitespace-tolerant', ...hits[0] };

@@ -713,6 +713,22 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         } else if (obj.type === 'message_delta') {
           const delta = obj.delta as { stop_reason?: string } | undefined;
           if (typeof delta?.stop_reason === 'string') {
+            // v0.15.7 (audit-2 #5) — log unknown stop_reason values so
+            // upstream typos / new Anthropic codes show up in /opt/suxai/
+            // logs/server.log instead of silently flowing to clients
+            // that have to fall through to the catch-all break path.
+            const VALID_STOP_REASONS = new Set([
+              'end_turn',
+              'tool_use',
+              'max_tokens',
+              'pause_turn',
+              'refusal',
+              'stop_sequence',
+              'model_context_window_exceeded',
+            ]);
+            if (!VALID_STOP_REASONS.has(delta.stop_reason)) {
+              console.warn('[quatarly] unexpected stop_reason:', delta.stop_reason);
+            }
             lastStopReason = delta.stop_reason;
             h.onStop?.(delta.stop_reason);
           }

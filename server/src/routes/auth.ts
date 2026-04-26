@@ -34,12 +34,18 @@ const loginUserLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   // Skip when validation hasn't run yet (no body parsed) — falls
-  // back to the global IP-keyed bucket. Otherwise key on the email
-  // (already lowercased / trimmed by zod via loginSchema).
+  // back to the global IP-keyed bucket. Otherwise key on the
+  // username (the actual field accepted by loginSchema — v0.13.8
+  // hotfix: previous code looked at `email`, a field that doesn't
+  // exist in the login payload, so the per-account throttle was
+  // effectively dead since v0.12.4). The fallback IP bucket still
+  // protects against single-IP brute-force; this layer specifically
+  // catches credential-stuffing where a botnet spreads attempts
+  // across many IPs but keeps targeting the same account.
   keyGenerator: (req) => {
-    const email = (req.body as { email?: unknown } | undefined)?.email;
-    if (typeof email === 'string' && email.length > 0) {
-      return `login:${email.toLowerCase()}`;
+    const username = (req.body as { username?: unknown } | undefined)?.username;
+    if (typeof username === 'string' && username.length > 0) {
+      return `login:${username.toLowerCase()}`;
     }
     return `login:ip:${req.ip ?? 'unknown'}`;
   },

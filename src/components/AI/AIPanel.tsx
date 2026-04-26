@@ -1745,7 +1745,13 @@ export function AIPanel() {
    */
   const extractMentions = useCallback(
     async (raw: string): Promise<{ cleaned: string; attachments: { path: string; content: string }[] }> => {
-      const re = /@([a-zA-Z_][\w-]*|[^\s@\n]+)/g;
+      // v0.13.8 fix : unicode-safe regex pour matcher @café, @résumé,
+      // @中文/foo.ts, etc. Avant : `[a-zA-Z_]` cassait sur le 1er
+      // caractère accentué — `@café/foo.ts` était matché comme `@caf`
+      // et le reste du chemin restait dans le prompt non résolu.
+      // \p{L} couvre toutes les lettres unicode, \p{N} les chiffres,
+      // _ et - explicites pour les noms de symboles.
+      const re = /@([\p{L}_][\p{L}\p{N}_-]*|[^\s@\n]+)/gu;
       const matches = [...raw.matchAll(re)];
       if (matches.length === 0) return { cleaned: raw, attachments: [] };
       const attachments: { path: string; content: string }[] = [];
@@ -1837,10 +1843,37 @@ export function AIPanel() {
             // v0.13.6 — full content of every currently open tab.
             // Useful for asks like "@open-tabs réorganise ces fichiers
             // en suivant la convention X" without manually @-ing each.
+            // v0.13.8 — cap per-file size to 200 KB and total to 1 MB
+            // so a 100 MB log file doesn't blow the request payload.
             if (openFiles.length > 0) {
-              const blocks = openFiles.map(
-                (f) => `<file path="${f.path}">\n${f.content}\n</file>`,
-              );
+              const PER_FILE_CAP = 200_000;
+              const TOTAL_CAP = 1_000_000;
+              let total = 0;
+              const blocks: string[] = [];
+              for (const f of openFiles) {
+                if (total >= TOTAL_CAP) {
+                  blocks.push(
+                    `<!-- Skipped ${openFiles.length - blocks.length} more files: total cap reached. Use specific @path to include them. -->`,
+                  );
+                  break;
+                }
+                const safePath = f.path.replace(/"/g, '&quot;');
+                let body = f.content;
+                let suffix = '';
+                if (body.length > PER_FILE_CAP) {
+                  suffix = `\n[truncated — file is ${body.length} bytes, kept first ${PER_FILE_CAP}]`;
+                  body = body.slice(0, PER_FILE_CAP);
+                }
+                const block = `<file path="${safePath}">\n${body}${suffix}\n</file>`;
+                if (total + block.length > TOTAL_CAP) {
+                  blocks.push(
+                    `<!-- ${f.path} omitted: would exceed total cap of ${TOTAL_CAP} bytes. -->`,
+                  );
+                  break;
+                }
+                blocks.push(block);
+                total += block.length;
+              }
               resolved = {
                 path: '@open-tabs',
                 content: `${openFiles.length} open tab${openFiles.length > 1 ? 's' : ''}:\n\n${blocks.join('\n\n')}`,
@@ -1903,15 +1936,28 @@ export function AIPanel() {
           }
           default: {
             // File mention — try open files first, then read from disk.
+            // v0.13.8 — cap per-file size to 500 KB so a multi-MB log
+            // file or generated bundle attached as @<path> doesn't
+            // explode the request payload. Truncated with a clear
+            // marker so the model knows to ask for a specific range.
+            const FILE_MENTION_CAP = 500_000;
+            const truncate = (content: string): string => {
+              if (content.length <= FILE_MENTION_CAP) return content;
+              const dropped = content.length - FILE_MENTION_CAP;
+              return (
+                content.slice(0, FILE_MENTION_CAP) +
+                `\n\n[truncated — ${dropped} more bytes (~${Math.round(dropped / 1000)} KB) not shown — re-mention with a tighter range or use read_file for line-bounded access]`
+              );
+            };
             const open = openFiles.find(
               (f) => f.path.endsWith(ref) || f.name === ref,
             );
             if (open) {
-              resolved = { path: open.path, content: open.content };
+              resolved = { path: open.path, content: truncate(open.content) };
             } else {
               try {
                 const r = await window.suxai.fs.readFile(ref);
-                resolved = r;
+                resolved = { path: r.path, content: truncate(r.content) };
               } catch {
                 /* unresolved — leave the @mention in the prompt as-is */
               }
@@ -1926,9 +1972,16 @@ export function AIPanel() {
       // Strip ONLY the mentions we successfully resolved; unresolved
       // ones stay in the prompt as the user typed them, in case the
       // model can still make sense of them.
+      // v0.13.8 fix : .replace(c, '') ne supprimait que la 1ère
+      // occurrence — un user qui répétait `@git check then @git log`
+      // gardait un `@git` orphelin dans le prompt après resolution.
+      // split/join supprime toutes les occurrences sans regex escape.
       let cleaned = raw;
+      const seenStrings = new Set<string>();
       for (const c of consumed) {
-        cleaned = cleaned.replace(c, '');
+        if (seenStrings.has(c)) continue;
+        seenStrings.add(c);
+        cleaned = cleaned.split(c).join('');
       }
       cleaned = cleaned.replace(/\s+/g, ' ').trim();
       return { cleaned, attachments };

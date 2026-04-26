@@ -673,8 +673,12 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       const command = expectString(args, 'command');
       const cwd = typeof args.cwd === 'string' ? (args.cwd as string) : undefined;
       const timeout_ms = typeof args.timeout_ms === 'number' ? (args.timeout_ms as number) : undefined;
-      const ok = await opts.approve(call);
-      if (!ok) return `User rejected the command: ${command}`;
+      // v0.13.8 fix CRITICAL : opts.approve() retourne soit boolean soit
+      // ApproveResult ({ ok, written?, finalContent? }). Le check `if (!ok)`
+      // évaluait l'objet truthy → bypass d'approbation systématique sur
+      // shell commands. normalizeApprove() unifie en ApproveResult.
+      const approval = normalizeApprove(await opts.approve(call));
+      if (!approval.ok) return `User rejected the command: ${command}`;
       if (!window.suxai.terminal?.runOnce) {
         throw new ToolExecutionError('run_command', 'Terminal IPC unavailable');
       }

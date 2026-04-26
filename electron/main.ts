@@ -994,9 +994,19 @@ function registerIpc() {
   });
 
   ipcMain.handle('terminal:write', (_e, id: string, data: string) => {
+    // v0.13.8 — typeof guards. A malicious or buggy renderer could send
+    // a non-string `data` (Buffer, null, object) which would crash the
+    // child process or get serialised oddly. Return false on bad input
+    // instead of throwing so the renderer sees a clean rejection.
+    if (typeof id !== 'string' || id.length === 0) return false;
+    if (typeof data !== 'string') return false;
     const s = sessions.get(id);
     if (!s) return false;
-    s.proc.stdin.write(data);
+    try {
+      s.proc.stdin.write(data);
+    } catch {
+      return false;
+    }
     return true;
   });
 

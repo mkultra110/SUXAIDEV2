@@ -3,6 +3,29 @@ import { contextBridge, ipcRenderer } from 'electron';
 type FileEntry = { name: string; path: string; isDirectory: boolean };
 type OpenFileResult = { path: string; content: string } | null;
 
+/**
+ * v0.12.1 (audit #29): freeze the bridged API recursively before
+ * exposing it. Prevents a renderer with eval-power (XSS) from
+ * monkey-patching, e.g., `window.suxai.fs.writeFile = () => {}` to
+ * silently no-op disk writes. contextBridge already prevents
+ * prototype-chain pollution, but the leaf method references are
+ * mutable references on the exposed object.
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+    return value;
+  }
+  if (Object.isFrozen(value)) return value;
+  Object.freeze(value);
+  for (const key of Object.getOwnPropertyNames(value)) {
+    const child = (value as Record<string, unknown>)[key];
+    if (child && (typeof child === 'object' || typeof child === 'function')) {
+      deepFreeze(child);
+    }
+  }
+  return value;
+}
+
 const api = {
   app: {
     getVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
@@ -151,6 +174,6 @@ const api = {
   },
 };
 
-contextBridge.exposeInMainWorld('suxai', api);
+contextBridge.exposeInMainWorld('suxai', deepFreeze(api));
 
 export type SuxaiApi = typeof api;

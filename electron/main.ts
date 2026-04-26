@@ -1291,7 +1291,34 @@ app.on('window-all-closed', () => {
 app.on('web-contents-created', (_e, contents) => {
   contents.on('will-navigate', (event, url) => {
     if (VITE_DEV_SERVER_URL && url.startsWith(VITE_DEV_SERVER_URL)) return;
+    // v0.12.1 (audit #14): only hand http(s) and mailto links off to
+    // the system. Anything else (file:, chrome:, javascript:, custom
+    // schemes that shell handlers might honour) is silently denied —
+    // a malicious markdown anchor in chat output cannot escape the
+    // app via will-navigate anymore.
     event.preventDefault();
-    shell.openExternal(url);
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return;
+    }
+    const allowed = parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:';
+    if (allowed) shell.openExternal(url);
+  });
+  // v0.12.1 (audit #14): same allowlist when any web contents in the
+  // app tries to spawn a new window. We never want a popup; routing
+  // safe URLs to the OS browser is the documented Electron pattern.
+  contents.setWindowOpenHandler(({ url }) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { action: 'deny' };
+    }
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:') {
+      shell.openExternal(url).catch(() => { /* */ });
+    }
+    return { action: 'deny' };
   });
 });

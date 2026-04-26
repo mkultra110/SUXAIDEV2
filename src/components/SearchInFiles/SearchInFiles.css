@@ -10,21 +10,25 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 12vh;
-  background: rgba(5, 7, 12, 0.42);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  padding-top: 11vh;
+  background: rgba(5, 7, 12, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   animation: suxai-fade-in var(--dur-base) var(--ease-out);
 }
 
 .sif {
-  width: min(720px, 92vw);
+  width: min(740px, 92vw);
   padding: 6px;
   border-radius: var(--radius-xl);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-  animation: suxai-fade-in 200ms var(--ease-out);
+  animation: sif-in 220ms var(--ease-out);
   display: flex;
   flex-direction: column;
+}
+
+@keyframes sif-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
 }
 
 .sif__bar {
@@ -160,20 +164,21 @@
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 6px 14px 6px 28px;
+  padding: 7px 14px 7px 30px;
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
   color: var(--color-text);
   font-size: 12.5px;
-  font-family: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  font-family: var(--font-mono);
   text-align: left;
   cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out),
+  transition:
+    background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
 .sif__hit:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-hover-soft);
 }
 .sif__hit--active {
   background: rgba(125, 130, 248, 0.16);

@@ -26,7 +26,8 @@ body {
   user-select: none;
 }
 
-/* Ambient backdrop — subtle radial gradients for depth */
+/* Ambient backdrop — subtle radial gradients for depth.
+   v0.15.3 : tuned + subtle slow drift so the surface never feels static. */
 body::before {
   content: '';
   position: fixed;
@@ -34,9 +35,21 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1200px 600px at 0% 0%, rgba(99, 102, 241, 0.08), transparent 60%),
-    radial-gradient(1000px 500px at 100% 100%, rgba(34, 197, 94, 0.05), transparent 60%),
-    radial-gradient(800px 400px at 50% 0%, rgba(125, 211, 252, 0.05), transparent 60%);
+    radial-gradient(1200px 600px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
+    radial-gradient(1000px 500px at 100% 100%, rgba(34, 197, 94, 0.06), transparent 60%),
+    radial-gradient(800px 400px at 50% 0%, rgba(125, 211, 252, 0.06), transparent 60%);
+  animation: suxai-ambient-drift 22s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes suxai-ambient-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(0, -10px, 0); }
+}
+
+/* Native text selection — match accent palette. */
+::selection {
+  background: rgba(125, 130, 248, 0.34);
+  color: #ffffff;
 }
 
 #root {
@@ -74,7 +87,7 @@ pre {
   font-size: 12.5px;
 }
 
-/* Scrollbars */
+/* Scrollbars — thin VS Code-style, transparent until hover. */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -83,21 +96,24 @@ pre {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.18);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
+::-webkit-scrollbar-corner { background: transparent; }
 
-/* Focus ring */
+/* Focus ring — uses the v0.15.0 token so any future palette
+   change cascades. */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-accent-soft), 0 0 0 1px var(--color-accent);
+  box-shadow: var(--focus-ring), 0 0 0 1px var(--color-accent);
   border-radius: var(--radius-sm);
 }
 

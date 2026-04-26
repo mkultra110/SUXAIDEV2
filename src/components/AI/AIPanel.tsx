@@ -271,6 +271,13 @@ interface AgentLoopArgs {
     lazy_edit: string;
     instruction?: string;
   }) => Promise<string | null>;
+  /** v0.13.2 — current approval mode (auto/step/yolo). Read fresh
+   *  per turn via this getter so a mid-run setting change takes
+   *  effect on the next batch. In `step` mode, every non-write
+   *  tool also requires explicit user approval (defeats the purpose
+   *  of parallelism but useful for paranoid debugging or first runs
+   *  on a sensitive codebase). */
+  getApprovalMode?: () => 'auto' | 'step' | 'yolo';
 }
 
 async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
@@ -573,6 +580,26 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
             },
             status: 'error',
           };
+        }
+        // v0.13.2 — step mode: prompt the user for EVERY non-write
+        // tool. Write tools (edit_file/write_file) already require
+        // explicit accept via the inline diff, so adding a second
+        // prompt would just be noise.
+        const mode = args.getApprovalMode?.() ?? 'auto';
+        const isWrite = call.name === 'edit_file' || call.name === 'write_file';
+        if (mode === 'step' && !isWrite) {
+          const stepOk = await args.requestApproval(call);
+          if (!stepOk.ok) {
+            return {
+              call,
+              result: {
+                tool_use_id: call.id,
+                content: `User skipped ${call.name} in step mode.`,
+                is_error: false,
+              },
+              status: 'rejected',
+            };
+          }
         }
         try {
           const result = await executeTool(call, {
@@ -2035,6 +2062,7 @@ export function AIPanel() {
           toast,
           requestApproval,
           applyLazyEdit: applyLazyEditBridge,
+          getApprovalMode: () => approvalModeRef.current,
         }).catch((err) => {
           console.error('[agent] loop failed:', err);
           setMessages((m) =>

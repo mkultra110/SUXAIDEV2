@@ -155,3 +155,70 @@
   padding: 12px 20px;
   border-top: 1px solid var(--color-border);
 }
+
+/* v0.13.5 — Memory manager section. List of stored memories per
+   workspace with a per-row delete button. Empty state shows a
+   short hint with the slash command syntax. */
+.settings__hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+.settings__hint code {
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+}
+.settings__memories {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.settings__memory {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.settings__memory-body {
+  flex: 1;
+  min-width: 0;
+}
+.settings__memory-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+.settings__memory-content {
+  font-size: 11.5px;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+  word-break: break-word;
+}
+.settings__memory-delete {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--color-text-dim);
+  font-size: 16px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+.settings__memory-delete:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.3);
+}

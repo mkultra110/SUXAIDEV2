@@ -3,11 +3,15 @@ import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
 import { useSettings } from '../../lib/settings';
 import { AI_MODELS } from '../../config';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useMemories, deleteMemory } from '../../lib/memories';
 import './SettingsDialog.css';
 
 export function SettingsDialog() {
   const [open, setOpen] = useState(false);
   const [settings, update] = useSettings();
+  const { workspaceRoot } = useWorkspace();
+  const memories = useMemories(workspaceRoot);
 
   useEffect(() => {
     const onOpen = () => setOpen(true);
@@ -125,6 +129,35 @@ export function SettingsDialog() {
                 <option value="yolo">YOLO (auto-approve commands)</option>
               </select>
             </Row>
+          </Section>
+
+          <Section title={`Memories (${memories.length})`}>
+            {memories.length === 0 ? (
+              <div className="settings__hint">
+                Aucune mémoire pour ce workspace. Utilise <code>/memory Title: content</code> dans le chat,
+                ou laisse l'extraction automatique tourner après quelques messages.
+              </div>
+            ) : (
+              <div className="settings__memories">
+                {memories.map((m) => (
+                  <div key={m.id} className="settings__memory">
+                    <div className="settings__memory-body">
+                      <div className="settings__memory-title">{m.title}</div>
+                      <div className="settings__memory-content">{m.content}</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="settings__memory-delete"
+                      onClick={() => deleteMemory(workspaceRoot, m.id)}
+                      title="Supprimer cette mémoire"
+                      aria-label={`Supprimer ${m.title}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Section>
         </div>
 

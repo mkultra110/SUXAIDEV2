@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
-import { streamAi, buildCommandPrompt, type AiCommand } from '../../api/quatarly';
+import { streamAi, buildCommandPrompt, countTokens, type AiCommand } from '../../api/quatarly';
 import { AI_MODELS, DEFAULT_MODEL_ID } from '../../config';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
@@ -820,6 +820,11 @@ export function AIPanel() {
   // Read by compactConversation to short-circuit a re-trigger that
   // would loop on a still-saturated context.
   const lastCompactAtRef = useRef<number>(0);
+  // v0.12.8: cache the most recent count_tokens response so we don't
+  // re-query Anthropic on every state change. Refreshed only when the
+  // heuristic crosses 80 % of the warn threshold AND the cache is
+  // older than 30 s. Cleared on conversation switch.
+  const tokenCountRef = useRef<{ convId: string; tokens: number; at: number } | null>(null);
   useEffect(() => {
     if (!activeConv) return;
     const totalChars = activeConv.messages.reduce(
@@ -838,17 +843,49 @@ export function AIPanel() {
     };
     const ctxWindow = ctxByModel[modelId] ?? 200_000;
     const WARN_AT = Math.floor(ctxWindow * 0.7);
-    if (approxTokens > WARN_AT && warnedAtRef.current < WARN_AT) {
-      warnedAtRef.current = approxTokens;
+
+    // Pick the best estimate available: cached server measurement
+    // (same conv, < 60 s old) wins over the heuristic. The fetch
+    // below refreshes the cache when we approach the threshold.
+    const cached = tokenCountRef.current;
+    const cachedFresh =
+      cached && cached.convId === activeConv.id && Date.now() - cached.at < 60_000;
+    const tokens = cachedFresh ? cached.tokens : approxTokens;
+
+    if (tokens > WARN_AT && warnedAtRef.current < WARN_AT) {
+      warnedAtRef.current = tokens;
       toast.info(
-        `Conversation getting long (~${Math.round(approxTokens / 1000)}K tokens)`,
+        `Conversation getting long (~${Math.round(tokens / 1000)}K tokens)`,
         'Type /compact to summarise older messages and free up context.',
       );
     }
-    // Reset the guard when the conversation shrinks (e.g. after
-    // /compact runs).
-    if (approxTokens < WARN_AT * 0.8) warnedAtRef.current = 0;
-  }, [activeConv, modelId, toast]);
+    if (tokens < WARN_AT * 0.8) warnedAtRef.current = 0;
+
+    // v0.12.8: refresh the real token count only when the heuristic
+    // says we're approaching the threshold AND the cache is stale.
+    // Anthropic bills count_tokens as input — keep the call rate low.
+    const provider = modelProviderForId(modelId);
+    if (
+      provider === 'anthropic' &&
+      token &&
+      approxTokens > WARN_AT * 0.8 &&
+      (!cached || cached.convId !== activeConv.id || Date.now() - cached.at > 30_000)
+    ) {
+      const convId = activeConv.id;
+      // Build a representative messages array — the same one the
+      // agent loop would send. We don't pass tools because tools-
+      // only counting on a non-agent chat would skew estimates.
+      const baseMessages = chatToAgentMessages(activeConv.messages);
+      const trimmed = trimAgentMessages(baseMessages);
+      countTokens(token, modelId, trimmed).then((real) => {
+        if (real == null) return;
+        // Conv may have changed by the time the response lands;
+        // discard stale results.
+        if (tokenCountRef.current && tokenCountRef.current.convId !== convId) return;
+        tokenCountRef.current = { convId, tokens: real, at: Date.now() };
+      }).catch(() => { /* network failure — heuristic stays */ });
+    }
+  }, [activeConv, modelId, token, toast]);
 
   // Mutate the active conversation's messages array.
   const setMessages = useCallback(

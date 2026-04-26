@@ -250,3 +250,37 @@ export function buildCommandPrompt(command: AiCommand, userText: string): string
       return userText;
   }
 }
+
+/**
+ * v0.12.8: count input tokens for a prospective Anthropic request.
+ * Hits the VPS /ai/count-tokens proxy which forwards to
+ * `/v1/messages/count_tokens`. Returns `null` on any failure (network,
+ * upstream not supporting the endpoint, malformed response) so the
+ * caller can fall back to its own heuristic without surfacing errors.
+ *
+ * Don't call on every keystroke — Anthropic bills count_tokens as
+ * input. The compaction trigger debounces at 30 s + only fires above
+ * an 80 % heuristic threshold, so the budget stays minimal.
+ */
+export async function countTokens(
+  token: string,
+  modelId: string,
+  agentMessages: AgentMessage[],
+  tools?: { name: string; description: string; input_schema: unknown }[],
+): Promise<number | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/ai/count-tokens`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ modelId, agentMessages, tools }),
+    });
+    if (!res.ok) return null;
+    const obj = (await res.json()) as { input_tokens?: number | null };
+    return typeof obj.input_tokens === 'number' ? obj.input_tokens : null;
+  } catch {
+    return null;
+  }
+}

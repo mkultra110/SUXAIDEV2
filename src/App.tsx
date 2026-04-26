@@ -8,6 +8,7 @@ import { UpdateDialog, WhatsNewDialog } from './components/UpdateDialog/UpdateDi
 import { CommandPalette } from './components/CommandPalette/CommandPalette';
 import { SettingsDialog } from './components/Settings/SettingsDialog';
 import { QuickOpen } from './components/QuickOpen/QuickOpen';
+import { SearchInFiles } from './components/SearchInFiles/SearchInFiles';
 import { Spinner } from './components/ui/Spinner';
 
 /** v0.11.13: bridge between AuthContext (which dispatches a window
@@ -48,6 +49,7 @@ function Root() {
       <CommandPalette />
       <SettingsDialog />
       <QuickOpen />
+      <SearchInFiles />
       <StorageWarningBridge />
     </>
   );

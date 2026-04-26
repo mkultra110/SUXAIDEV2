@@ -9,6 +9,7 @@ import { emitAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
 import { useEditorContextTracker } from '../../lib/editor-context-tracker';
 import { registerTabCompletion } from '../../lib/tab-completion';
+import { consumePendingReveal } from '../../lib/reveal';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
@@ -394,6 +395,34 @@ export function EditorPanel() {
   useEffect(() => {
     setActionBar(null);
   }, [activePath]);
+
+  // v0.13.13 — consume any pending "jump to line" stamped by a
+  // cross-component navigator (SearchInFiles for now). Triggered on
+  // every active-file change since the <Editor key={path}> remounts
+  // and editorRef may briefly be null during the transition. We
+  // retry on rAF a few frames until Monaco is mounted, then bail.
+  useEffect(() => {
+    if (!activeFile) return;
+    const pending = consumePendingReveal(activeFile.path);
+    if (!pending) return;
+    let tries = 0;
+    let cancelled = false;
+    const tryReveal = () => {
+      if (cancelled) return;
+      const ed = editorRef.current;
+      if (ed) {
+        try {
+          ed.setPosition({ lineNumber: pending.line, column: pending.column ?? 1 });
+          ed.revealLineInCenter(pending.line);
+          ed.focus();
+        } catch { /* bad line number — swallow */ }
+        return;
+      }
+      if (tries++ < 12) requestAnimationFrame(tryReveal);
+    };
+    tryReveal();
+    return () => { cancelled = true; };
+  }, [activeFile]);
 
   return (
     <section className="editor">

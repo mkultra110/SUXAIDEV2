@@ -601,6 +601,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const acceptDiff = useCallback(() => {
+    // v0.15.5 (audit #4) — read the workspaceRoot OUTSIDE the setState
+    // updater. Side-effects inside setState callbacks fire twice under
+    // React 18 Strict Mode and can race with subsequent renders.
+    const ws = stateRef.current.workspaceRoot;
     setState((s) => {
       const d = s.pendingDiff;
       if (!d) return s;
@@ -608,11 +612,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         f.path === d.path ? { ...f, content: d.proposed, dirty: true } : f,
       );
       const [nextDiff, ...rest] = s.pendingDiffQueue;
-      // v0.15.4 — accepting a diff dirties the file but doesn't write
-      // to disk yet, so the working tree is unchanged. We still
-      // refresh in case the agent already wrote the file via a
-      // separate path (skipMtimeCheck save).
-      if (s.workspaceRoot) invalidateGitStatus(s.workspaceRoot);
       return {
         ...s,
         openFiles: nextOpenFiles,
@@ -621,6 +620,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         activePath: d.path,
       };
     });
+    // Refresh badges in case the agent already wrote the file via
+    // skipMtimeCheck. Pure call here, no Strict-Mode hazard.
+    if (ws) invalidateGitStatus(ws);
   }, []);
 
   // v0.12.10: bulk-reject diffs matching a predicate. Each matched

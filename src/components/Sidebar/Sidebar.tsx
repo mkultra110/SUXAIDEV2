@@ -3,7 +3,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { useToast } from '../ui/Toast';
-import { useGitStatus, type GitStatusCode } from '../../lib/git';
+import { useGitStatus, normalizeGitPath, type GitStatusCode } from '../../lib/git';
 import './Sidebar.css';
 
 interface TreeEntry {
@@ -313,15 +313,24 @@ function TreeList({
                 )}
               </span>
               <span className="sidebar__entry-name">{e.name}</span>
-              {!e.isDirectory && gitStatus[e.path] && (
-                <span
-                  className={`sidebar__entry-badge sidebar__entry-badge--${gitStatus[e.path]}`}
-                  title={GIT_BADGE_TITLES[gitStatus[e.path]]}
-                  aria-label={GIT_BADGE_TITLES[gitStatus[e.path]]}
-                >
-                  {gitStatus[e.path]}
-                </span>
-              )}
+              {(() => {
+                if (e.isDirectory) return null;
+                // v0.15.5 (audit #7) — readDir returns native paths
+                // (Windows backslashes, possibly NFD on macOS); the
+                // git IPC normalised everything to forward-slash NFC.
+                // Normalise the lookup key so badges actually match.
+                const code = gitStatus[normalizeGitPath(e.path)];
+                if (!code) return null;
+                return (
+                  <span
+                    className={`sidebar__entry-badge sidebar__entry-badge--${code}`}
+                    title={GIT_BADGE_TITLES[code]}
+                    aria-label={GIT_BADGE_TITLES[code]}
+                  >
+                    {code}
+                  </span>
+                );
+              })()}
             </button>
             {e.isDirectory && e.expanded && e.children && (
               <TreeList

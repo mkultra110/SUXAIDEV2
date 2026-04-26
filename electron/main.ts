@@ -1248,8 +1248,15 @@ function registerIpc() {
   // Returns absolute paths keyed in `statuses` so the renderer can
   // match without further normalisation. If `git` isn't on PATH, the
   // workspace isn't a repo, or anything fails → returns ok:false and
-  // the sidebar simply skips badges. Cap at 5000 entries so a giant
-  // dirty repo can't swamp the IPC channel.
+  // the sidebar simply skips badges.
+  // v0.15.5 (audit #1, #2, #3, #8, #12) :
+  //   - per-spawn timeout (8s) — prevents NFS / huge-repo hangs
+  //   - stdout buffer cap (32 MB) — kills the child if exceeded
+  //   - sanitizeFsPath on the rev-parse output before joining
+  //   - reject paths with `..` segments or absolute `/` prefix
+  //   - propagate stderr on rev-parse failure (not_a_repo vs no-git)
+  const GIT_SPAWN_TIMEOUT_MS = 8_000;
+  const GIT_MAX_STDOUT_BYTES = 32 * 1024 * 1024;
   ipcMain.handle('git:status', async (_e, input: { cwd: string }) => {
     let safeCwd: string;
     try {
@@ -1261,23 +1268,53 @@ function registerIpc() {
       new Promise((resolve) => {
         let stdout = '';
         let stderr = '';
+        let settled = false;
+        const settle = (r: { code: number; stdout: string; stderr: string }) => {
+          if (settled) return;
+          settled = true;
+          resolve(r);
+        };
         let child: ChildProcessWithoutNullStreams;
         try {
           child = spawn('git', args, { cwd: safeCwd });
         } catch (err) {
-          resolve({ code: -1, stdout: '', stderr: (err as Error).message });
+          settle({ code: -1, stdout: '', stderr: (err as Error).message });
           return;
         }
-        child.stdout.on('data', (c) => { stdout += c.toString(); });
+        const killTimer = setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch { /* already gone */ }
+          settle({ code: -1, stdout, stderr: stderr + '\n[timeout]' });
+        }, GIT_SPAWN_TIMEOUT_MS);
+        child.stdout.on('data', (c) => {
+          stdout += c.toString();
+          if (stdout.length > GIT_MAX_STDOUT_BYTES) {
+            try { child.kill('SIGKILL'); } catch { /* */ }
+            clearTimeout(killTimer);
+            settle({ code: -1, stdout, stderr: stderr + '\n[output_too_large]' });
+          }
+        });
         child.stderr.on('data', (c) => { stderr += c.toString(); });
-        child.on('error', (err) => resolve({ code: -1, stdout, stderr: stderr + err.message }));
-        child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }));
+        child.on('error', (err) => {
+          clearTimeout(killTimer);
+          settle({ code: -1, stdout, stderr: stderr + err.message });
+        });
+        child.on('close', (code) => {
+          clearTimeout(killTimer);
+          settle({ code: code ?? -1, stdout, stderr });
+        });
       });
     const toplevel = await runGit(['rev-parse', '--show-toplevel']);
     if (toplevel.code !== 0) {
-      return { ok: false, error: 'not_a_git_repo' };
+      return { ok: false, error: toplevel.stderr.trim() || 'not_a_git_repo' };
     }
-    const root = toplevel.stdout.trim();
+    let root: string;
+    try {
+      // Re-validate the repo root through sanitizeFsPath so a symlinked
+      // toplevel that escapes FS_DENY can't sneak through.
+      root = sanitizeFsPath(toplevel.stdout.trim(), { mustExist: true });
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
     if (!root) return { ok: false, error: 'not_a_git_repo' };
     const status = await runGit([
       '-c', 'core.quotepath=false',
@@ -1298,6 +1335,10 @@ function registerIpc() {
       const y = entry[1];
       // Skip the space at index 2.
       const rel = entry.slice(3);
+      // Defensive: refuse traversal segments / absolute paths from git
+      // output (would only happen on a broken repo or a hostile
+      // submodule, but the cost of the check is zero).
+      if (rel.includes('..') || rel.startsWith('/') || rel.startsWith('\\')) continue;
       // Pick the most-meaningful char :
       //   - '?' (untracked) wins over anything (X='?' Y='?')
       //   - conflict markers ('U', 'A' on both sides, etc.) → 'C'
@@ -1310,11 +1351,13 @@ function registerIpc() {
       } else if (y !== ' ' && y !== '') code = y;     // worktree change
       else if (x !== ' ' && x !== '') code = x;       // staged-only change
       else continue;
-      const abs = path.isAbsolute(rel) ? rel : path.join(root, rel);
+      // Normalise to forward slashes + NFC so the renderer can match
+      // against fs:read-dir output regardless of platform/Unicode form.
+      const abs = path.join(root, rel).replace(/\\/g, '/').normalize('NFC');
       statuses[abs] = code;
       count++;
     }
-    return { ok: true, root, statuses };
+    return { ok: true, root: root.replace(/\\/g, '/').normalize('NFC'), statuses };
   });
 }
 

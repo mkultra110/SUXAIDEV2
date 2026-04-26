@@ -242,8 +242,10 @@
 }
 
 /* Slightly tint the filename to match the badge — mirrors VSCode's
-   git-decoration look. Falls back gracefully if :has() isn't
-   supported (older Electron / Chromium < 105). */
+   git-decoration look. Requires :has() (Chromium 105+, shipped in
+   Electron 27+). v0.15.5 (audit #11) : Electron 30 ships Chromium
+   124 so we are safe ; on older builds the badge still shows but
+   the name stays the default colour. */
 .sidebar__entry:has(.sidebar__entry-badge--M) .sidebar__entry-name,
 .sidebar__entry:has(.sidebar__entry-badge--U) .sidebar__entry-name {
   color: #fde68a;

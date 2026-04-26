@@ -20,7 +20,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  /* v0.14.1 — gap bumped 16→20 between header-main and header-actions
+     to restore the breathing room v0.13.9 had. v0.14.0's 16px was
+     too tight: on a 420px AI panel the conversation pill literally
+     touched the model pill (user-reported regression). */
+  gap: 20px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--color-border);
   background:
@@ -33,7 +37,10 @@
 .ai__header-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* v0.14.1 — between cswitch and model pill, 14px was the v0.13.9
+     value that user-tested OK. v0.14.0's 10px brought back the
+     "they touch each other" complaint. */
+  gap: 14px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;

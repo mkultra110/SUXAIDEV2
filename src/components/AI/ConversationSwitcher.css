@@ -20,18 +20,26 @@
   color: var(--color-text);
   font-size: 12px;
   cursor: pointer;
-  max-width: 180px;
+  /* v0.14.1 — defensive overflow clamp so the inner refresh icon /
+     name / chevron can't visually escape the trigger when the
+     parent header-main shrinks below the trigger's natural size. */
+  overflow: hidden;
+  /* v0.14.1 — capped 180→130 because the AI panel is 420px wide by
+     default. Both pills (cswitch 180 + model 140) + actions cluster
+     could not coexist on the line and overlapped. Container queries
+     (@container) would be the proper fix; for now the static caps
+     are tight enough to fit. */
+  max-width: 130px;
   min-width: 0;
   transition:
     background var(--dur-base) var(--ease-out),
     border-color var(--dur-base) var(--ease-out);
 }
-@media (max-width: 540px) {
-  .cswitch__trigger { max-width: 120px; }
-}
-@media (max-width: 420px) {
-  .cswitch__trigger { max-width: 80px; }
-}
+/* v0.14.1 — viewport media queries are useless for an embedded panel
+   (the AI panel is always 420px regardless of viewport). Keeping
+   them only as a defensive lower bound. */
+@media (max-width: 540px) { .cswitch__trigger { max-width: 110px; } }
+@media (max-width: 420px) { .cswitch__trigger { max-width: 80px; } }
 .cswitch__trigger:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: var(--color-border-strong);

@@ -19,6 +19,10 @@
   border: 1px solid var(--color-border);
   color: var(--color-text);
   font-size: 12px;
+  /* v0.14.1 — same defensive overflow clamp as cswitch (audit
+     screenshot showed the dot + label leaking past the trigger
+     boundary when header-main was tight). */
+  overflow: hidden;
   transition:
     background var(--dur-base) var(--ease-out),
     border-color var(--dur-base) var(--ease-out),
@@ -37,27 +41,22 @@
 .model-sel__dot--openai    { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 0 6px rgba(16, 185, 129, 0.45); }
 
 .model-sel__name {
-  /* v0.12.11: tightened from 170 → 140 so the model pill never pushes
-     into the action-cluster gap. The full label is still visible in
-     the dropdown menu and on hover (browser tooltip via title attr).
-     Combined with the wrapper's flex-shrink: 1 and min-width: 0, the
-     pill collapses gracefully on narrow panels rather than clipping
-     the Plan / Agent buttons. */
-  max-width: 140px;
+  /* v0.14.1 — tightened 140 → 110 so cswitch (130) + gap (14) + model
+     (110) + gap (20) + actions cluster all fit inside the 420px AI
+     panel without overlap. The full label remains visible in the
+     dropdown + on hover via title attribute. */
+  max-width: 110px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex-shrink: 1;
   min-width: 0;
 }
-/* On narrower windows (< 540px panel width), shrink the model label
-   even further so the Agent + new-conv buttons stay fully visible. */
-@media (max-width: 540px) {
-  .model-sel__name { max-width: 90px; }
-}
-@media (max-width: 420px) {
-  .model-sel__name { max-width: 60px; }
-}
+/* Defensive lower bounds for very narrow viewports (kept although
+   AI panel width is fixed by var(--ai-panel-width); future container
+   queries will replace these). */
+@media (max-width: 540px) { .model-sel__name { max-width: 80px; } }
+@media (max-width: 420px) { .model-sel__name { max-width: 60px; } }
 
 .model-sel__menu {
   position: fixed;

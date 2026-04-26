@@ -546,6 +546,14 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
       status: ToolCallSnapshot['status'];
     };
 
+    // v0.12.12 — fresh per-turn map of path locks. Threaded into every
+    // executeTool call so parallel edit_file/write_file on the same
+    // path serialise rather than race. Critical for data-integrity:
+    // without it, edit N silently overwrites edits 1..N-1 (their
+    // changes vanish from disk after the user accepts the cascade
+    // of diffs).
+    const pathLocks = new Map<string, Promise<unknown>>();
+
     const outcomes: ExecOutcome[] = await Promise.all(
       collectedTools.map(async (call): Promise<ExecOutcome> => {
         const key = repeatKey(call);
@@ -569,6 +577,14 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
             approve: (c, preview) => args.requestApproval(c, preview),
             workspaceRoot: args.workspaceRoot ?? null,
             applyLazyEdit: args.applyLazyEdit,
+            pathLocks,
+            notifyEdit: ({ path, added, removed, partial }) => {
+              const name = path.split(/[\\/]/).pop() ?? path;
+              toast.info(
+                `Edited ${name}`,
+                `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
+              );
+            },
           });
           const status: ToolCallSnapshot['status'] = result.is_error
             ? 'error'

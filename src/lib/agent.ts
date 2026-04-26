@@ -492,6 +492,23 @@ export interface ExecuteOptions {
     lazy_edit: string;
     instruction?: string;
   }) => Promise<string | null>;
+  /** v0.12.12 — per-path serialization lock for write tools. Without
+   *  this, N parallel `edit_file` calls on the same path race: each
+   *  reads the SAME pre-write content, computes its own `proposed`,
+   *  the user accepts in sequence, and edit N silently overwrites
+   *  edits 1..N-1 (their changes are gone — pure data loss).
+   *
+   *  The agent loop creates one fresh Map per turn and threads it
+   *  here. Each edit_file/write_file chains its work after the
+   *  previous task on the same path resolves, so by the time edit N
+   *  reads the file it sees edits 1..N-1 already applied. If edit N's
+   *  search no longer matches in that fresh content (because edit 1
+   *  altered the targeted region), the tool surfaces a clear error
+   *  back to the model so it can retry with up-to-date context. */
+  pathLocks?: Map<string, Promise<unknown>>;
+  /** v0.12.12 — UX bridge. After a successful write, agent.ts calls
+   *  this so AIPanel can flash a "Edited foo.cpp +12 −3" toast. */
+  notifyEdit?: (msg: { path: string; added: number; removed: number; partial?: boolean }) => void;
 }
 
 export async function executeTool(
@@ -559,49 +576,76 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       const path = expectString(args, 'path');
       const search = expectString(args, 'search');
       const replace = typeof args.replace === 'string' ? (args.replace as string) : '';
-      const f = await window.suxai.fs.readFile(path);
-      const occurrences = countOccurrences(f.content, search);
-      if (occurrences === 0) {
-        throw new ToolExecutionError(
-          'edit_file',
-          `The 'search' string was not found in ${path}. Re-read the file and try again with the exact text.`,
+      // v0.12.12 — chain after the previous write on this path. The
+      // file is re-read AFTER the lock is acquired so we see post-prior-
+      // edit content. Without the lock, parallel `edit_file` calls
+      // racing on the same path silently overwrote each other.
+      return await runUnderPathLock(opts.pathLocks, path, async () => {
+        const f = await window.suxai.fs.readFile(path);
+        const matchInfo = locateSearch(f.content, search);
+        if (matchInfo.kind === 'none') {
+          throw new ToolExecutionError(
+            'edit_file',
+            buildSearchNotFoundError(path, search, f.content),
+          );
+        }
+        if (matchInfo.kind === 'multiple') {
+          throw new ToolExecutionError(
+            'edit_file',
+            `The 'search' string appears ${matchInfo.count} times in ${path}. Make it unique by including more surrounding context (a few extra lines above or below).`,
+          );
+        }
+        // matchInfo.kind === 'exact' | 'whitespace-tolerant' — produce the
+        // proposed by replacing the actual matched range, not the
+        // model's literal search (which may have stale whitespace).
+        const proposed =
+          f.content.slice(0, matchInfo.start) + replace + f.content.slice(matchInfo.end);
+        const fuzzy =
+          matchInfo.kind === 'whitespace-tolerant'
+            ? ' (matched after whitespace normalisation — your `search` had different indent/EOL than the file)'
+            : '';
+        const approval = normalizeApprove(
+          await opts.approve(call, {
+            path,
+            original: f.content,
+            proposed,
+          }),
         );
-      }
-      if (occurrences > 1) {
-        throw new ToolExecutionError(
-          'edit_file',
-          `The 'search' string appears ${occurrences} times in ${path}. Make it unique by including more surrounding context.`,
+        if (!approval.ok) {
+          return `User rejected the edit to ${path}.`;
+        }
+        // If the approval UI (inline diff) already wrote the user's
+        // hunk-by-hunk decisions to disk, don't re-write — the user may
+        // have intentionally rejected some hunks. Otherwise, fall back
+        // to writing the model's full proposed text.
+        const finalText = approval.finalContent ?? proposed;
+        if (!approval.written) {
+          await window.suxai.fs.writeFile(path, finalText);
+        }
+        const stats = computeLineDelta(f.content, finalText);
+        const partial = !!(
+          approval.finalContent && approval.finalContent !== proposed
         );
-      }
-      const proposed = f.content.replace(search, replace);
-      const approval = normalizeApprove(
-        await opts.approve(call, {
+        opts.notifyEdit?.({
           path,
-          original: f.content,
-          proposed,
-        }),
-      );
-      if (!approval.ok) {
-        return `User rejected the edit to ${path}.`;
-      }
-      // If the approval UI (inline diff) already wrote the user's
-      // hunk-by-hunk decisions to disk, don't re-write — the user may
-      // have intentionally rejected some hunks. Otherwise, fall back
-      // to writing the model's full proposed text.
-      const finalText = approval.finalContent ?? proposed;
-      if (!approval.written) {
-        await window.suxai.fs.writeFile(path, finalText);
-      }
-      const lines = finalText.split('\n').length - f.content.split('\n').length;
-      const partial =
-        approval.finalContent && approval.finalContent !== proposed
-          ? ' (some hunks were rejected by the user)'
-          : '';
-      return `Edit applied to ${path}. Net line delta: ${lines >= 0 ? `+${lines}` : lines}.${partial}`;
+          added: stats.added,
+          removed: stats.removed,
+          partial,
+        });
+        const partialMsg = partial ? ' (some hunks were rejected by the user)' : '';
+        return `Edit applied to ${path}. Lines +${stats.added} −${stats.removed}.${partialMsg}${fuzzy}`;
+      });
     }
     case 'write_file': {
       const path = expectString(args, 'path');
       const content = typeof args.content === 'string' ? (args.content as string) : '';
+      // v0.12.12 — same per-path lock as edit_file. write_file is a
+      // full overwrite so it doesn't lose data the way edit_file does,
+      // but two parallel write_file on the same path would queue two
+      // diffs and overwrite each other; the lock makes the order
+      // deterministic and lets the second call see the freshly-written
+      // content as `original` for its diff preview.
+      return await runUnderPathLock(opts.pathLocks, path, async () => {
       let original = '';
       try {
         original = (await window.suxai.fs.readFile(path)).content;
@@ -620,7 +664,10 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       if (!approval.written) {
         await window.suxai.fs.writeFile(path, finalText);
       }
+      const stats = computeLineDelta(original, finalText);
+      opts.notifyEdit?.({ path, added: stats.added, removed: stats.removed });
       return `Wrote ${finalText.length} bytes to ${path}.`;
+      });
     }
     case 'run_command': {
       const command = expectString(args, 'command');
@@ -885,5 +932,143 @@ function countOccurrences(haystack: string, needle: string): number {
     if (idx < 0) return count;
     count++;
     from = idx + needle.length;
+  }
+}
+
+/**
+ * v0.12.12 — locate `search` in `content` with progressively looser
+ * matching. Models often hallucinate trailing whitespace, mismatched
+ * indentation (tabs vs spaces) or different line endings (CRLF vs
+ * LF), and the strict `indexOf` approach fails the edit despite the
+ * intent being unambiguous. We try:
+ *   1. Exact match (cheapest, deterministic).
+ *   2. Whitespace-tolerant match: collapse runs of whitespace to a
+ *      single space on both sides and re-locate. We then re-derive
+ *      the actual byte range from the original content so the splice
+ *      preserves the file's real characters.
+ * Returns 'multiple' when the search hits >1 places (under either
+ * matcher) so the model can disambiguate; 'none' if neither matcher
+ * locates anything.
+ */
+type SearchMatch =
+  | { kind: 'exact'; start: number; end: number }
+  | { kind: 'whitespace-tolerant'; start: number; end: number }
+  | { kind: 'multiple'; count: number }
+  | { kind: 'none' };
+
+function locateSearch(content: string, search: string): SearchMatch {
+  if (!search) return { kind: 'none' };
+  // Exact match first.
+  const exactCount = countOccurrences(content, search);
+  if (exactCount === 1) {
+    const start = content.indexOf(search);
+    return { kind: 'exact', start, end: start + search.length };
+  }
+  if (exactCount > 1) return { kind: 'multiple', count: exactCount };
+
+  // Whitespace-tolerant fallback. Build a regex from the search where
+  // every run of whitespace becomes \s+, and every literal regex
+  // metachar is escaped. Then look for unique matches in `content`.
+  const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = escaped.replace(/\s+/g, '\\s+');
+  let re: RegExp;
+  try {
+    re = new RegExp(pattern, 'g');
+  } catch {
+    return { kind: 'none' };
+  }
+  const hits: Array<{ start: number; end: number }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    hits.push({ start: m.index, end: m.index + m[0].length });
+    if (hits.length > 5) break; // bail early on pathological inputs
+  }
+  if (hits.length === 0) return { kind: 'none' };
+  if (hits.length === 1) return { kind: 'whitespace-tolerant', ...hits[0] };
+  return { kind: 'multiple', count: hits.length };
+}
+
+/**
+ * Build an actionable error when `search` doesn't match. We surface a
+ * tail snippet of the file (last 30 lines) so the model can re-emit
+ * `edit_file` with grounded context on the next turn — without this,
+ * the model just retries the same wrong search and burns turns.
+ */
+function buildSearchNotFoundError(
+  path: string,
+  search: string,
+  content: string,
+): string {
+  const lines = content.split('\n');
+  const lastN = Math.min(30, lines.length);
+  const snippet = lines.slice(-lastN).join('\n');
+  const startLine = lines.length - lastN + 1;
+  const searchHead = search.slice(0, 80).replace(/\n/g, '\\n');
+  return (
+    `The 'search' string was not found in ${path}. ` +
+    `Whitespace-tolerant fallback also failed. ` +
+    `Re-read the file (read_file) and try again with the EXACT text — ` +
+    `pay attention to indentation (tabs vs spaces), line endings (CRLF vs LF), and trailing whitespace. ` +
+    `\nYour search began with: \`${searchHead}\`` +
+    `\nThe file currently ends with (lines ${startLine}-${lines.length}):\n` +
+    snippet
+  );
+}
+
+/** Per-line +/-/= count between original and final text. */
+function computeLineDelta(
+  original: string,
+  finalText: string,
+): { added: number; removed: number } {
+  const a = original ? original.split('\n') : [];
+  const b = finalText ? finalText.split('\n') : [];
+  // Fast path: identical → 0/0.
+  if (original === finalText) return { added: 0, removed: 0 };
+  // Approximation good enough for the toast — the inline diff already
+  // shows the precise hunks. We treat the file-level delta as
+  // (max - common-prefix - common-suffix) on each side.
+  let prefix = 0;
+  while (prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
+  let suffix = 0;
+  while (
+    suffix < a.length - prefix &&
+    suffix < b.length - prefix &&
+    a[a.length - 1 - suffix] === b[b.length - 1 - suffix]
+  ) suffix++;
+  return {
+    removed: Math.max(0, a.length - prefix - suffix),
+    added: Math.max(0, b.length - prefix - suffix),
+  };
+}
+
+/**
+ * v0.12.12 — chain the given task after the previous one queued for
+ * the same path, so two parallel edit_file/write_file on the same
+ * file run in order rather than racing. Returns the task's result.
+ *
+ * If `locks` is undefined (older callers), the task runs immediately
+ * without locking — backwards compatible.
+ */
+async function runUnderPathLock<T>(
+  locks: Map<string, Promise<unknown>> | undefined,
+  path: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  if (!locks) return await task();
+  const prev = locks.get(path) ?? Promise.resolve();
+  let release: () => void = () => {};
+  const next = new Promise<void>((resolve) => { release = resolve; });
+  locks.set(path, next);
+  try {
+    // Wait for the previous edit on this path. Swallow its rejection
+    // here — we don't care if the previous task failed; we still need
+    // to run ours against the (possibly unchanged) file state.
+    try { await prev; } catch { /* */ }
+    return await task();
+  } finally {
+    release();
+    // If we're still the head of the chain, clear the entry so the
+    // map doesn't grow without bound across long sessions.
+    if (locks.get(path) === next) locks.delete(path);
   }
 }

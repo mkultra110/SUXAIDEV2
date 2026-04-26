@@ -86,6 +86,10 @@ export function EditorPanel() {
   useEffect(() => {
     activeFileRef.current = activeFile;
   }, [activeFile]);
+  const openFilesRef = useRef(openFiles);
+  useEffect(() => {
+    openFilesRef.current = openFiles;
+  }, [openFiles]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -109,8 +113,43 @@ export function EditorPanel() {
         return;
       }
 
+      // Tab navigation — handled BEFORE the shift early-return so
+      // Ctrl+Shift+Tab (reverse cycle) works. PageDown/PageUp mirrors
+      // VSCode's alternate binding.
+      if (e.key === 'Tab' || e.key === 'PageDown' || e.key === 'PageUp') {
+        const tabs = openFilesRef.current;
+        if (tabs.length < 2) return;
+        e.preventDefault();
+        const cur = tabs.findIndex((f) => f.path === activeFileRef.current?.path);
+        const reverse = (e.key === 'Tab' && e.shiftKey) || e.key === 'PageUp';
+        const dir = reverse ? -1 : 1;
+        const base = cur < 0 ? 0 : cur;
+        const next = tabs[(base + dir + tabs.length) % tabs.length];
+        if (next) setActive(next.path);
+        return;
+      }
+
       if (e.shiftKey) return;
       const k = e.key.toLowerCase();
+
+      // Ctrl/Cmd+W — close active tab.
+      if (k === 'w') {
+        if (!activeFileRef.current) return;
+        e.preventDefault();
+        closeFile(activeFileRef.current.path);
+        return;
+      }
+
+      // Ctrl/Cmd+1..9 — jump to tab N (9 = last, VSCode behaviour).
+      if (k >= '1' && k <= '9') {
+        const tabs = openFilesRef.current;
+        if (tabs.length === 0) return;
+        e.preventDefault();
+        const n = Number(k);
+        const target = n === 9 ? tabs[tabs.length - 1] : tabs[n - 1];
+        if (target) setActive(target.path);
+        return;
+      }
 
       if (k === 's') {
         // Universal save shortcut. Works on every file in the editor —
@@ -196,7 +235,7 @@ export function EditorPanel() {
     // sometimes still be eaten by Monaco even though we preventDefault.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newUntitled, saveActiveFile, toast]);
+  }, [newUntitled, saveActiveFile, setActive, closeFile, toast]);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {

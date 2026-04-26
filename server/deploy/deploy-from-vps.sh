@@ -76,10 +76,20 @@ $SUDO chown -R suxai:suxai "$SUXAI_ROOT/app"
 
 # ── Install deps + build ────────────────────────────────────────────────────
 echo "==> Installing deps + building (as 'suxai' user)"
-if [[ -f "$SUXAI_ROOT/app/package-lock.json" ]]; then
-  $SUDO -u suxai -H bash -lc "cd $SUXAI_ROOT/app && npm ci && npm run build"
+# Drop to the suxai user. `sudo -u suxai` works whether the script runs as
+# root or via sudo; `runuser` is the no-sudo fallback (always present in
+# Debian's util-linux). We need an array form because `$SUDO -u suxai ...`
+# breaks when $SUDO is empty (the leading space makes bash try to execute
+# `-u` as a command).
+if command -v sudo >/dev/null; then
+  AS_SUXAI=(sudo -u suxai -H bash -lc)
 else
-  $SUDO -u suxai -H bash -lc "cd $SUXAI_ROOT/app && npm install --no-audit --no-fund && npm run build"
+  AS_SUXAI=(runuser -u suxai -- bash -lc)
+fi
+if [[ -f "$SUXAI_ROOT/app/package-lock.json" ]]; then
+  "${AS_SUXAI[@]}" "cd $SUXAI_ROOT/app && npm ci && npm run build"
+else
+  "${AS_SUXAI[@]}" "cd $SUXAI_ROOT/app && npm install --no-audit --no-fund && npm run build"
 fi
 
 # ── Restart systemd unit ────────────────────────────────────────────────────

@@ -81,6 +81,12 @@ async function hashKey(s: string): Promise<string> {
 const PREFIX_LOOKBACK = 4_000;
 const SUFFIX_LOOKAHEAD = 2_000;
 
+// v0.12.3 (audit #28): on 429, all in-flight + future autocomplete
+// requests back off until `rateLimitedUntil`. The provider returns
+// empty during the window so the user keeps typing without
+// hammering the server. Cleared once the timestamp passes.
+let rateLimitedUntil = 0;
+
 export function registerTabCompletion(args: RegisterArgs): monaco.IDisposable {
   // We register one provider matching ALL languages. Monaco resolves
   // language-specific providers per-language; passing { language: '*' }
@@ -149,12 +155,28 @@ export function registerTabCompletion(args: RegisterArgs): monaco.IDisposable {
           signal: ac.signal,
         });
 
+      // v0.12.3 (audit #28): respect rate-limit cool-off. Cheaper than
+      // letting the request fly and catching the 429 — saves a round-
+      // trip per keystroke for ~5 seconds after a burst.
+      if (Date.now() < rateLimitedUntil) return { items: [] };
       try {
         let res = await doFetch(auth);
         if (res.status === 401) {
           try { await res.text(); } catch { /* drain */ }
           const fresh = await tryRefreshToken();
           if (fresh) res = await doFetch(fresh);
+        }
+        if (res.status === 429) {
+          // v0.12.3: 5-second cool-off + jitter on 429. Honour
+          // Retry-After header if the server set one (server emits
+          // it via express-rate-limit standardHeaders:'draft-7').
+          const retryAfter = parseInt(res.headers.get('retry-after') ?? '', 10);
+          const coolMs = Number.isFinite(retryAfter) && retryAfter > 0
+            ? retryAfter * 1000
+            : 5_000 + Math.floor(Math.random() * 2_000);
+          rateLimitedUntil = Date.now() + coolMs;
+          try { await res.text(); } catch { /* drain */ }
+          return { items: [] };
         }
         if (!res.ok) return { items: [] };
         const obj = (await res.json()) as { completion?: string };

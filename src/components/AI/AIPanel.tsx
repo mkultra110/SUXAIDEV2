@@ -453,9 +453,51 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
       );
       break;
     }
+    if (stopReason === 'model_context_window_exceeded') {
+      // v0.12.3 (audit #18): Sonnet/Opus 4.x emit this when the
+      // request itself overflows the context window. Looping would
+      // hit the same wall — surface a clear actionable error so the
+      // user can /compact or pick a bigger model.
+      setMessages((m) =>
+        m.map((msg) =>
+          msg.id === currentAssistantId
+            ? {
+                ...msg,
+                streaming: false,
+                error: 'Contexte saturé. Lance /compact ou choisis un modèle à plus large fenêtre (Opus 4.6 thinking).',
+              }
+            : msg,
+        ),
+      );
+      break;
+    }
+    if (stopReason === 'pause_turn') {
+      // v0.12.3 (audit #10): Anthropic emits pause_turn when a
+      // long-running server-side tool (web_search, container) needs
+      // to suspend the turn but isn't done. Spec says: re-send the
+      // assistant content verbatim and continue the loop. Our
+      // chatToAgentMessages already round-trips assistantBlocks +
+      // text + tool_use byte-for-byte, so we just spawn a fresh
+      // assistant turn and loop without executing tools (there are
+      // none to execute — pause_turn never coexists with tool_use).
+      const nextPause: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        modelId,
+      };
+      setMessages((m) => {
+        const updated = [...m, nextPause];
+        working = updated;
+        return updated;
+      });
+      currentAssistantId = nextPause.id;
+      continue;
+    }
     if (collectedTools.length === 0 || stopReason !== 'tool_use') {
-      // Conversation ended naturally (end_turn / pause_turn /
-      // stop_sequence / unknown future reason).
+      // Conversation ended naturally (end_turn / stop_sequence /
+      // unknown future reason — treat as end_turn for forward compat).
       break;
     }
 

@@ -345,12 +345,28 @@ function deobfuscateShell(cmd: string): string {
   return s;
 }
 
+// v0.12.3 (audit #20): chained-tail catcher. The DANGER_PATTERNS list
+// matches whole tokens but misses the trailing half of a compound
+// command — `npm test && rm -rf /`, `git status; mkfs.ext4 /dev/sda`,
+// `make build || dd if=/dev/zero of=$HOME/disk`. These strings would
+// be approved if the prefix is on the allowlist and the dangerous
+// verb sits after a chain operator. We post-pass the (already
+// de-obfuscated) command for any `[;|&]{1,2}` separator followed by
+// a destructive verb. Keeps false positives low — the pattern only
+// fires when the verb is preceded by a chain, not in normal flag
+// arguments like `--remove`.
+const CHAINED_DANGER_TAIL = /[;|&]{1,2}\s*(?:sudo\s+)?(?:doas\s+)?\b(?:rm|mkfs|dd|chmod|chown|shutdown|reboot|halt)\b/i;
+
 export function detectDangerousCommand(cmd: string): boolean {
   // Two-pass: raw command first (catches obvious cases unaltered),
   // then de-obfuscated (catches `'r''m' -rf /` etc).
   if (DANGER_PATTERNS.some((re) => re.test(cmd))) return true;
+  if (CHAINED_DANGER_TAIL.test(cmd)) return true;
   const cleaned = deobfuscateShell(cmd);
-  if (cleaned !== cmd && DANGER_PATTERNS.some((re) => re.test(cleaned))) return true;
+  if (cleaned !== cmd) {
+    if (DANGER_PATTERNS.some((re) => re.test(cleaned))) return true;
+    if (CHAINED_DANGER_TAIL.test(cleaned)) return true;
+  }
   return false;
 }
 

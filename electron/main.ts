@@ -712,6 +712,38 @@ function registerIpc() {
     if (q.bom) out = '﻿' + out;
     return out;
   }
+  // v0.12.3 (audit #19): opportunistic cleanup of leftover atomicWrite
+  // tmp files. Pattern: `<basename>.<pid>.<timestamp>.<8-char>.tmp`.
+  // We can't run a global boot-time scan (atomicWrite drops tmp files
+  // anywhere in the user's workspace), but every successful rename is
+  // a chance to sweep the same parent dir of orphans older than 24h —
+  // a sane atomicWrite finishes in milliseconds, so anything older is
+  // guaranteed to be from a crashed prior process.
+  const TMP_NAME_PATTERN = /^.+\.\d+\.\d+\.[a-z0-9]+\.tmp$/i;
+  const TMP_ORPHAN_AGE_MS = 24 * 60 * 60 * 1000;
+  async function sweepTmpOrphans(parentDir: string): Promise<void> {
+    let entries: string[];
+    try {
+      entries = await fs.readdir(parentDir);
+    } catch {
+      return;
+    }
+    const cutoff = Date.now() - TMP_ORPHAN_AGE_MS;
+    await Promise.all(
+      entries
+        .filter((name) => TMP_NAME_PATTERN.test(name))
+        .map(async (name) => {
+          const full = path.join(parentDir, name);
+          try {
+            const st = await fs.stat(full);
+            if (st.isFile() && st.mtimeMs < cutoff) {
+              await fs.unlink(full);
+            }
+          } catch { /* */ }
+        }),
+    );
+  }
+
   async function atomicWrite(safe: string, content: string): Promise<void> {
     // v0.11.12: round-trip the file's original BOM + CRLF marks
     // before the actual write. Renderer always passes a clean LF
@@ -727,6 +759,8 @@ function registerIpc() {
         await fh.close();
       }
       await fs.rename(tmp, safe);
+      // Fire-and-forget orphan sweep — never blocks the write path.
+      sweepTmpOrphans(path.dirname(safe)).catch(() => { /* */ });
     } catch (err) {
       try { await fs.unlink(tmp); } catch { /* */ }
       if ((err as NodeJS.ErrnoException).code === 'EXDEV') {

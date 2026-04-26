@@ -237,13 +237,39 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
   //      to alternating user/assistant turns.
   const isAgent = Array.isArray(req.agentMessages) && req.agentMessages.length > 0;
 
+  // v0.12.3 (audit #7): the schema accepts `cache_control` on every
+  // block so client-supplied hints aren't rejected at parse time, but
+  // the server is the single authority over cache breakpoints. We
+  // strip any client-provided hint here before adding our own — that
+  // way a buggy or malicious client can't push the request past the
+  // 4-breakpoint Anthropic cap.
+  function stripClientCacheControl(messages: unknown[]): unknown[] {
+    return messages.map((m) => {
+      if (!m || typeof m !== 'object') return m;
+      const msg = m as { role: string; content: unknown };
+      if (typeof msg.content === 'string') return msg;
+      if (!Array.isArray(msg.content)) return msg;
+      const cleaned = (msg.content as Array<Record<string, unknown>>).map((b) => {
+        if (!b || typeof b !== 'object' || !('cache_control' in b)) return b;
+        const { cache_control: _drop, ...rest } = b;
+        return rest;
+      });
+      return { ...msg, content: cleaned };
+    });
+  }
+
   // Attach an ephemeral cache breakpoint to the last content block of
   // the last message so Anthropic keeps the whole prefix
   // (system + tools + prior messages) hot. Writes cost 1.25× input once;
   // every subsequent turn reads the cache at 0.10× input.
   //
-  // We only touch the LAST message's LAST block. Earlier cache_control
-  // hints inside agentMessages passed by the client are left alone.
+  // v0.12.3 (audit #8): when the last message contains ONLY
+  // `tool_result` blocks (synthetic user response to a parallel tool
+  // batch), skip the rolling breakpoint. Tagging a tool_result is a
+  // cache write on volatile content that won't be hit on the next
+  // turn anyway — the cache_control on system + tools already covers
+  // the stable prefix. Saves the 1.25× write multiplier on every
+  // multi-tool agent turn.
   function markRollingCache(
     messages: unknown[],
   ): unknown[] {
@@ -263,10 +289,15 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         },
       ];
     } else if (Array.isArray(last.content)) {
+      const blocks = last.content.slice() as Array<Record<string, unknown>>;
+      // v0.12.3: skip tool_result-only synthetic user turns.
+      const allToolResults = blocks.length > 0 && blocks.every(
+        (b) => b && b.type === 'tool_result',
+      );
+      if (allToolResults) return messages;
       // Mutate a shallow copy of the blocks, tag only the last text-like
       // block with cache_control. We skip tool_use blocks because they
       // carry no `text` field.
-      const blocks = last.content.slice() as Array<Record<string, unknown>>;
       for (let i = blocks.length - 1; i >= 0; i--) {
         const b = blocks[i];
         if (b && (b.type === 'text' || b.type === 'tool_result')) {
@@ -339,7 +370,7 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
       max_tokens: max,
       stream: true,
       system: cachedSystem(buildSystemPrompt(req.command, true, req.mode)),
-      messages: markRollingCache(req.agentMessages ?? []),
+      messages: markRollingCache(stripClientCacheControl(req.agentMessages ?? [])),
       tools: cachedTools(req.tools ?? []),
     };
     if (isThinking) body.thinking = thinkingParam(max);
@@ -383,7 +414,14 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         // forwards headers it doesn't know about, so if the provider
         // doesn't support them the request still succeeds (just no
         // cache hit). We're graceful.
-        'anthropic-beta': 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11',
+        // v0.12.3 (audit #6): when the model is a `*-thinking`
+        // variant, also enable interleaved-thinking-2025-05-14 so
+        // the model can emit thinking blocks BETWEEN parallel
+        // tool_uses of the same turn. Without it, Anthropic returns
+        // 400 the moment a thinking block appears mid-tool-chain.
+        'anthropic-beta': isThinking
+          ? 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11,interleaved-thinking-2025-05-14'
+          : 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11',
         authorization: `Bearer ${env.QUATARLY_API_KEY}`,
         'x-api-key': env.QUATARLY_API_KEY,
         apiKey: env.QUATARLY_API_KEY,

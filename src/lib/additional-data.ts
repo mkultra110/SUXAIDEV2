@@ -119,10 +119,14 @@ export function buildAdditionalDataXml(input: BuildAdditionalDataInput): string 
 
   if (ctx.recentEdits.length > 0) {
     lines.push('  <recent_edits>');
+    // v0.12.3 (audit #11): no `seconds_ago` field — it changes on every
+    // turn even when the underlying state hasn't, busting Anthropic's
+    // prefix cache (cache_read_input_tokens=0 systematically). Order
+    // (most-recent first, capped to 5) is enough signal for the model
+    // to resolve "le précédent" / "the file I just edited".
     for (const e of ctx.recentEdits) {
-      const ago = Math.max(1, Math.round((Date.now() - e.ts) / 1000));
       lines.push(
-        `    <edit path="${xmlEscape(shortPath(e.path, workspaceRoot))}" line="${e.line}" seconds_ago="${ago}" />`,
+        `    <edit path="${xmlEscape(shortPath(e.path, workspaceRoot))}" line="${e.line}" />`,
       );
     }
     lines.push('  </recent_edits>');

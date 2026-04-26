@@ -1323,6 +1323,13 @@ app.whenReady().then(() => {
       "frame-ancestors 'none'",
     ].join('; ');
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      // Only inject CSP on document loads — adding it to script /
+      // stylesheet / image / SSE responses is wasted bytes and could
+      // confuse devtools when inspecting non-document responses.
+      if (details.resourceType !== 'mainFrame' && details.resourceType !== 'subFrame') {
+        callback({ responseHeaders: details.responseHeaders });
+        return;
+      }
       const headers = { ...(details.responseHeaders ?? {}) };
       // Drop any CSP the loaded document set so ours is authoritative.
       for (const k of Object.keys(headers)) {

@@ -827,14 +827,12 @@ export function AIPanel() {
       0,
     );
     const approxTokens = Math.round(totalChars / 4);
-    // v0.12.5 (audit #9): per-model context window. Sonnet/Haiku 4.x
-    // = 200K tokens, Opus 4.x = 200K, but interleaved-thinking and
-    // future bumps can push to 1M. Trigger compaction at 70 % of the
-    // *current model's* window — without this, switching to a 400K
-    // model fired the warning at 35 % usage. Keep a safe 200K
-    // default for unknown IDs.
+    // v0.12.5 (audit #9): per-model context window. Anthropic Claude
+    // 4.x ships at 200K input across Sonnet / Opus / Haiku. The map
+    // exists so a future 1M-token beta model can be wired in without
+    // touching the loop logic. Unknown IDs fall back to 200K.
     const ctxByModel: Record<string, number> = {
-      'claude-opus-4-6-thinking': 400_000,
+      'claude-opus-4-6-thinking': 200_000,
       'claude-sonnet-4-6-thinking': 200_000,
       'claude-haiku-4-5-20251001': 200_000,
     };

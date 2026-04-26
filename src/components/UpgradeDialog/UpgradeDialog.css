@@ -1,22 +1,26 @@
+/* ============================================================
+   UpgradeDialog — redeem code / pro upgrade
+   v0.15.1 — visual refresh.
+   ============================================================ */
+
 .upg__overlay {
   position: fixed;
   inset: 0;
   z-index: 10000;
   display: grid;
   place-items: center;
-  background: rgba(5, 7, 12, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(5, 7, 12, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   animation: suxai-fade-in var(--dur-base) var(--ease-out);
   padding: 24px;
 }
 
 .upg__card {
   width: 100%;
-  max-width: 440px;
-  padding: 24px;
+  max-width: 460px;
+  padding: 26px 26px 22px;
   border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
   animation: suxai-fade-in var(--dur-slow) var(--ease-out);
 }
 
@@ -24,30 +28,36 @@
   display: flex;
   align-items: flex-start;
   gap: 14px;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
 .upg__icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-md);
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(99, 102, 241, 0.05));
-  border: 1px solid var(--color-border-accent);
-  color: var(--color-accent);
+  width: 44px; height: 44px;
+  border-radius: 14px;
+  display: grid; place-items: center;
+  background:
+    radial-gradient(80% 80% at 30% 20%, rgba(255, 199, 44, 0.32), transparent 70%),
+    rgba(255, 199, 44, 0.16);
+  border: 1px solid rgba(255, 199, 44, 0.42);
+  color: #ffe2a3;
+  box-shadow:
+    0 8px 22px rgba(255, 199, 44, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
 }
 
 .upg__title {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--color-text);
 }
 
 .upg__sub {
   font-size: 12.5px;
   color: var(--color-text-muted);
-  margin-top: 2px;
+  margin-top: 4px;
+  line-height: 1.5;
 }
 
 .upg__form {
@@ -59,8 +69,8 @@
 .upg__error {
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.28);
   color: #fca5a5;
   font-size: 12.5px;
 }
@@ -68,7 +78,7 @@
 .upg__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 10px;
   margin-top: 4px;
 }
 

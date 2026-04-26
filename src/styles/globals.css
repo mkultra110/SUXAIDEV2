@@ -103,17 +103,31 @@ pre {
 
 /* Utility primitives */
 .glass {
-  background: var(--color-glass);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background:
+    linear-gradient(180deg, rgba(28, 36, 56, 0.58), rgba(22, 28, 44, 0.62));
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
   border: 1px solid var(--color-border);
 }
 
+/* v0.15.1 — premium modal surface used by every dialog/palette.
+   Tuning:
+   - bicouche gradient (haut clair → bas plus dense) pour donner
+     du volume sans peser
+   - blur 24 + saturate 160 pour fondre l'arrière-plan tout en
+     préservant la lisibilité
+   - inset highlight 1px en haut → effet "verre épais" Apple-like
+   - shadow lg + halo accent très soft → ancre la fenêtre */
 .glass-strong {
-  background: var(--color-glass-strong);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  background:
+    linear-gradient(180deg, rgba(34, 42, 64, 0.78), rgba(22, 28, 44, 0.86));
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
   border: 1px solid var(--color-border-strong);
+  box-shadow:
+    0 28px 64px rgba(0, 0, 0, 0.55),
+    0 0 80px rgba(99, 102, 241, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .stack {

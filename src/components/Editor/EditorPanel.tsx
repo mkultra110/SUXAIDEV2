@@ -635,15 +635,68 @@ export function EditorPanel() {
 }
 
 function EditorWelcome() {
+  const { setWorkspaceRoot, newUntitled, workspaceRoot } = useWorkspace();
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+  const Mod = isMac ? '⌘' : 'Ctrl';
+  const Shift = isMac ? '⇧' : 'Shift';
+
+  const onOpenFolder = async () => {
+    try {
+      const root = await window.suxai.fs.openFolder();
+      if (root) setWorkspaceRoot(root);
+    } catch { /* user cancelled */ }
+  };
+
   return (
     <div className="editor__welcome">
       <div className="editor__welcome-card">
         <div className="editor__welcome-brand">SUXAI</div>
         <h2>Start coding with an AI pair</h2>
-        <p>Open a folder or drop a file anywhere to get started. Select code and ask the AI to explain, refactor, or fix.</p>
-        <div className="editor__welcome-shortcuts">
-          <kbd>Drag &amp; drop</kbd>
-          <span>any file into this window</span>
+        <p>
+          {workspaceRoot
+            ? 'Open a file from the sidebar — or drop one anywhere — to get started.'
+            : 'Open a folder, create a new file, or drop a file anywhere in this window.'}
+        </p>
+        <div className="editor__welcome-actions">
+          <button type="button" className="editor__welcome-btn" onClick={onOpenFolder}>
+            Open folder
+          </button>
+          <button type="button" className="editor__welcome-btn" onClick={newUntitled}>
+            New file
+            <kbd>{Mod}+N</kbd>
+          </button>
+        </div>
+        <div className="editor__welcome-grid">
+          <div className="editor__welcome-col">
+            <h3>Navigation</h3>
+            <ul>
+              <li><kbd>{Mod}+P</kbd><span>Quick open file</span></li>
+              <li><kbd>{Mod}+{Shift}+F</kbd><span>Search in files</span></li>
+              <li><kbd>{Mod}+{Shift}+P</kbd><span>Command palette</span></li>
+              <li><kbd>{Mod}+Tab</kbd><span>Cycle tabs</span></li>
+              <li><kbd>{Mod}+1..9</kbd><span>Jump to tab</span></li>
+              <li><kbd>{Mod}+W</kbd><span>Close tab</span></li>
+            </ul>
+          </div>
+          <div className="editor__welcome-col">
+            <h3>Edit & AI</h3>
+            <ul>
+              <li><kbd>{Mod}+S</kbd><span>Save file</span></li>
+              <li><kbd>{Mod}+K</kbd><span>Inline edit (selection)</span></li>
+              <li><kbd>{Mod}+L</kbd><span>Add selection to chat</span></li>
+              <li><kbd>{Mod}+,</kbd><span>Settings</span></li>
+              <li><kbd>{Mod}+= / -</kbd><span>Zoom editor</span></li>
+            </ul>
+          </div>
+          <div className="editor__welcome-col">
+            <h3>Panels</h3>
+            <ul>
+              <li><kbd>{Mod}+B</kbd><span>Toggle sidebar</span></li>
+              <li><kbd>{Mod}+E</kbd><span>Toggle AI panel</span></li>
+              <li><kbd>{Mod}+J</kbd> / <kbd>{Mod}+`</kbd><span>Toggle terminal</span></li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

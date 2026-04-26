@@ -90,7 +90,7 @@
 }
 
 .editor__welcome-card {
-  max-width: 480px;
+  max-width: 720px;
   text-align: center;
   animation: suxai-fade-in var(--dur-slow) var(--ease-out);
 }
@@ -133,6 +133,89 @@
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: 12.5px;
+}
+
+/* v0.13.14 — actionable Welcome view (open folder / new file) +
+   keyboard cheatsheet so the v0.13.11/12/13 additions are
+   discoverable at first launch. */
+.editor__welcome-actions {
+  margin: 24px 0 28px;
+  display: inline-flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.editor__welcome-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: var(--radius-md);
+  background: rgba(125, 130, 248, 0.14);
+  border: 1px solid rgba(125, 130, 248, 0.32);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.editor__welcome-btn:hover {
+  background: rgba(125, 130, 248, 0.22);
+  border-color: var(--color-accent);
+}
+.editor__welcome-btn:active {
+  transform: translateY(1px);
+}
+.editor__welcome-btn kbd {
+  font-size: 10.5px;
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.editor__welcome-grid {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 18px;
+  text-align: left;
+}
+.editor__welcome-col {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+.editor__welcome-col h3 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-dim);
+}
+.editor__welcome-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.editor__welcome-col li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.editor__welcome-col li kbd {
+  flex-shrink: 0;
+  font-size: 10.5px;
+}
+.editor__welcome-col li span {
+  flex: 1;
 }
 
 kbd {

@@ -11,7 +11,7 @@ import { ConversationSwitcher } from './ConversationSwitcher';
 import { ApprovalDialog, type ApprovalRequest } from './ApprovalDialog';
 import { onAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
-import { loadMemories, formatMemories } from '../../lib/memories';
+import { loadMemories, formatMemories, addMemory, deleteMemory } from '../../lib/memories';
 import {
   emptyConversation,
   deriveTitle,
@@ -1496,6 +1496,67 @@ export function AIPanel() {
           // v0.13.0 — same as the + button, creates a fresh thread.
           setInput('');
           newConversation();
+          return true;
+        }
+        case 'memory':
+        case 'remember': {
+          // v0.13.2 — save a manual memory.
+          // Syntax: /memory Title: content sentence.
+          //         /remember Use Tailwind v4 in this project
+          // The first colon (if any) splits title from content.
+          // Without a colon, the whole arg becomes both title (60c
+          // truncated) and content.
+          const trimmed = arg.trim();
+          if (!trimmed) {
+            toast.error('Usage', '/memory <Title>: <content sentence>');
+            return true;
+          }
+          const colonIdx = trimmed.indexOf(':');
+          const title = colonIdx > 0 ? trimmed.slice(0, colonIdx).trim() : trimmed.slice(0, 60);
+          const content = colonIdx > 0 ? trimmed.slice(colonIdx + 1).trim() : trimmed;
+          if (!title || !content) {
+            toast.error('Memory rejected', 'Title and content cannot be empty.');
+            return true;
+          }
+          addMemory(workspaceRoot, { title, content });
+          setInput('');
+          toast.info('Memory saved', `"${title}" — apparaît dans le préambule des prochains tours`);
+          return true;
+        }
+        case 'memories': {
+          // v0.13.2 — list all stored memories for the current workspace.
+          const list = loadMemories(workspaceRoot);
+          const body =
+            list.length === 0
+              ? '_No memories stored for this workspace yet._\n\nUse `/memory Title: content` to save one. They appear in the AI preamble alongside `AGENTS.md` so the model has them on every turn.'
+              : `**${list.length} memor${list.length > 1 ? 'ies' : 'y'} for this workspace:**\n\n` +
+                list
+                  .map((m) => `- **${m.title}** — ${m.content}\n  _id: \`${m.id}\` — \`/memory-delete ${m.id}\` to remove_`)
+                  .join('\n');
+          const helpMsg: ChatMessage = {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            modelId: 'system',
+            streaming: false,
+            content: body,
+          };
+          setMessages((m) => [...m, helpMsg]);
+          setInput('');
+          return true;
+        }
+        case 'memory-delete': {
+          // v0.13.2 — delete a memory by id (returned by /memories).
+          const id = arg.trim();
+          if (!id) {
+            toast.error('Usage', '/memory-delete <id>  (run /memories to see ids)');
+            return true;
+          }
+          const before = loadMemories(workspaceRoot).length;
+          deleteMemory(workspaceRoot, id);
+          const after = loadMemories(workspaceRoot).length;
+          setInput('');
+          if (after < before) toast.info('Memory deleted');
+          else toast.error('Memory not found', `No memory with id "${id}"`);
           return true;
         }
       }

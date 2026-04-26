@@ -1389,12 +1389,30 @@ export function AIPanel() {
             streaming: false,
             content:
               '**Built-in slash commands:**\n\n' +
-              '- `/clear` — wipe this conversation\n' +
-              '- `/help` — this list\n' +
+              '_Conversation:_\n' +
+              '- `/clear`, `/reset` — wipe this conversation (reset = also resets mode/agent flags)\n' +
+              '- `/new` — fresh thread\n' +
+              '- `/compact`, `/summarize` — résume les anciens messages pour libérer du contexte\n' +
+              '- `/export` — sauve la conversation en `.md` dans `.suxai/exports/`\n\n' +
+              '_Modes & model:_\n' +
               '- `/plan` — toggle Plan mode (read-only investigation, produces a markdown plan)\n' +
               '- `/agent` — toggle Agent mode (lets Claude read/edit your files)\n' +
-              '- `/model` — open the model selector\n' +
-              '- `/explain`, `/refactor`, `/fix`, `/optimize` — task shortcuts on the current file/selection\n\n' +
+              '- `/model` — hint pour ouvrir le model selector\n\n' +
+              '_Memories (faits durables sur le projet):_\n' +
+              '- `/memory <Title>: <content>` — sauve une mémoire manuelle\n' +
+              '- `/memories` — liste les mémoires du workspace\n' +
+              '- `/memory-delete <id>` — supprime une mémoire (ids visibles via `/memories`)\n\n' +
+              '_Tâches:_\n' +
+              '- `/explain`, `/refactor`, `/fix`, `/optimize` — task shortcuts on the current file/selection\n' +
+              '- `/init` — génère AGENTS.md depuis le repo map\n\n' +
+              '**@-mentions** (dans le chat) :\n\n' +
+              '- `@<path>` — fichier (auto-completion fuzzy)\n' +
+              '- `@selection`, `@cursor` — code sélectionné / autour du curseur\n' +
+              '- `@open-tabs`, `@tabs` — tous les fichiers ouverts\n' +
+              '- `@problems`, `@lint` — diagnostics du fichier actif\n' +
+              '- `@recent_changes`, `@recent_edits` — derniers edits\n' +
+              '- `@git`, `@diff` — git diff du working tree\n' +
+              '- `@memories` — dump les mémoires courantes\n\n' +
               '**Editor shortcuts:**\n\n' +
               '- `Cmd/Ctrl+S` — save file\n' +
               '- `Cmd/Ctrl+K` — inline AI edit on selection\n' +
@@ -1586,6 +1604,66 @@ export function AIPanel() {
             `/${cmd} arrives in v0.14+`,
             'Cette commande nécessite des sub-agents cloud — pas encore implémenté. Suis la roadmap dans le repo.',
           );
+          return true;
+        }
+        case 'export': {
+          // v0.13.7 — export current conversation to markdown.
+          // Saves to <workspace>/.suxai/exports/<title>-<date>.md
+          // (or just downloads if no workspace open).
+          const conv = activeConv;
+          if (!conv || conv.messages.length === 0) {
+            toast.error('Nothing to export', 'Conversation is empty.');
+            setInput('');
+            return true;
+          }
+          const date = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+          const slug = (conv.title || 'conversation')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+            .slice(0, 40) || 'conversation';
+          const md =
+            `# ${conv.title}\n\n` +
+            `_Exported ${new Date().toLocaleString()} — model ${conv.messages[0]?.modelId ?? 'unknown'}_\n\n` +
+            conv.messages
+              .map((m) => {
+                const role = m.role === 'user' ? '👤 **User**' : '🤖 **Assistant**';
+                const meta = m.modelId ? ` (${m.modelId})` : '';
+                const tools =
+                  m.toolCalls && m.toolCalls.length > 0
+                    ? '\n\n_Tools used: ' +
+                      m.toolCalls.map((tc) => `\`${tc.name}\``).join(', ') +
+                      '_'
+                    : '';
+                return `## ${role}${meta}\n\n${m.content || '_(empty)_'}${tools}`;
+              })
+              .join('\n\n---\n\n');
+          setInput('');
+          if (workspaceRoot && window.suxai.fs.writeFile) {
+            const path = `${workspaceRoot}/.suxai/exports/${slug}-${date}.md`;
+            (async () => {
+              try {
+                await window.suxai.fs.writeFile(path, md, { skipMtimeCheck: true });
+                toast.info('Conversation exported', `Saved to ${path}`);
+              } catch (err) {
+                toast.error('Export failed', (err as Error).message);
+              }
+            })();
+          } else {
+            // No workspace — download via Blob.
+            try {
+              const blob = new Blob([md], { type: 'text/markdown' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${slug}-${date}.md`;
+              a.click();
+              URL.revokeObjectURL(url);
+              toast.info('Conversation exported', 'Downloaded as .md file.');
+            } catch (err) {
+              toast.error('Export failed', (err as Error).message);
+            }
+          }
           return true;
         }
         case 'memory-delete': {

@@ -15,6 +15,14 @@
   border-right: 1px solid var(--color-border);
 }
 
+/* v0.15.9 — pushes the trailing button cluster (Settings cog) to the
+   bottom of the rail, leaving the top three view-switcher icons
+   anchored at the top. */
+.actbar__spacer {
+  flex: 1;
+  min-height: 4px;
+}
+
 .actbar__btn {
   position: relative;
   width: 40px;

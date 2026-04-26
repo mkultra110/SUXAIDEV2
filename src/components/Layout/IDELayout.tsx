@@ -136,13 +136,53 @@ function PanelToggleHotkeys({
   return null;
 }
 
+// v0.15.9 — persist layout preferences in localStorage so the user
+// keeps their last view + open/closed state across reloads. Falls
+// back to defaults if the key is missing or malformed.
+const LAYOUT_KEY = 'suxai.layout.v1';
+
+interface PersistedLayout {
+  sidebarOpen: boolean;
+  aiOpen: boolean;
+  sidebarView: SidebarView;
+}
+
+function loadLayout(): PersistedLayout {
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY);
+    if (!raw) return { sidebarOpen: true, aiOpen: true, sidebarView: 'files' };
+    const parsed = JSON.parse(raw) as Partial<PersistedLayout>;
+    return {
+      sidebarOpen: typeof parsed.sidebarOpen === 'boolean' ? parsed.sidebarOpen : true,
+      aiOpen: typeof parsed.aiOpen === 'boolean' ? parsed.aiOpen : true,
+      sidebarView:
+        parsed.sidebarView === 'files' || parsed.sidebarView === 'changes'
+          ? parsed.sidebarView
+          : 'files',
+    };
+  } catch {
+    return { sidebarOpen: true, aiOpen: true, sidebarView: 'files' };
+  }
+}
+
+function persistLayout(layout: PersistedLayout): void {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); }
+  catch { /* quota / disabled — silent */ }
+}
+
 export function IDELayout() {
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [aiOpen, setAiOpen] = useState(true);
+  const initialLayout = loadLayout();
+  const [sidebarOpen, setSidebarOpen] = useState(initialLayout.sidebarOpen);
+  const [aiOpen, setAiOpen] = useState(initialLayout.aiOpen);
   // v0.15.8 — sidebar view state lives here so the ActivityBar (a
   // sibling, not a parent of Sidebar) can drive it without a context.
-  const [sidebarView, setSidebarView] = useState<SidebarView>('files');
+  // v0.15.9 — initial value comes from localStorage.
+  const [sidebarView, setSidebarView] = useState<SidebarView>(initialLayout.sidebarView);
+  // v0.15.9 — persist whenever any of the three change.
+  useEffect(() => {
+    persistLayout({ sidebarOpen, aiOpen, sidebarView });
+  }, [sidebarOpen, aiOpen, sidebarView]);
   const { workspaceRoot } = useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
   const dirtyCount = Object.keys(gitStatus).length;

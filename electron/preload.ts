@@ -119,6 +119,17 @@ const api = {
       error?: string;
     }> => ipcRenderer.invoke('search:grep', input),
   },
+  git: {
+    /** v0.15.4 — porcelain git status for sidebar badges. Returns
+     *  absolute-path → status-letter map (M/A/D/U/R/C). Bails with
+     *  ok:false when `git` is missing or the cwd isn't a repo — the
+     *  sidebar then just hides every badge. */
+    status: (input: { cwd: string }): Promise<{
+      ok: true;
+      root: string;
+      statuses: Record<string, string>;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:status', input),
+  },
   checkpoint: {
     create: (workspaceRoot: string, turnId: string, files: string[]): Promise<{ id: string }> =>
       ipcRenderer.invoke('checkpoint:create', workspaceRoot, turnId, files),

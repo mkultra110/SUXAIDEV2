@@ -3,6 +3,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { useToast } from '../ui/Toast';
+import { useGitStatus, type GitStatusCode } from '../../lib/git';
 import './Sidebar.css';
 
 interface TreeEntry {
@@ -14,9 +15,20 @@ interface TreeEntry {
   expanded?: boolean;
 }
 
+// v0.15.4 — git badge tooltips. Keys must match GitStatusCode.
+const GIT_BADGE_TITLES: Record<GitStatusCode, string> = {
+  M: 'Modified',
+  A: 'Added (staged)',
+  D: 'Deleted',
+  U: 'Untracked',
+  R: 'Renamed',
+  C: 'Conflict',
+};
+
 export function Sidebar() {
   const { workspaceRoot, setWorkspaceRoot, openFile, activePath, closeFile, renameFile } =
     useWorkspace();
+  const gitStatus = useGitStatus(workspaceRoot);
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: TreeEntry } | null>(null);
@@ -218,6 +230,7 @@ export function Sidebar() {
               depth={0}
               onToggle={toggleDir}
               activePath={activePath}
+              gitStatus={gitStatus}
               onContextMenu={(entry, e) => {
                 e.preventDefault();
                 setMenu({ x: e.clientX, y: e.clientY, entry });
@@ -244,12 +257,14 @@ function TreeList({
   depth,
   onToggle,
   activePath,
+  gitStatus,
   onContextMenu,
 }: {
   entries: TreeEntry[];
   depth: number;
   onToggle: (e: TreeEntry) => void;
   activePath: string | null;
+  gitStatus: Record<string, GitStatusCode>;
   onContextMenu: (entry: TreeEntry, e: React.MouseEvent) => void;
 }) {
   return (
@@ -298,6 +313,15 @@ function TreeList({
                 )}
               </span>
               <span className="sidebar__entry-name">{e.name}</span>
+              {!e.isDirectory && gitStatus[e.path] && (
+                <span
+                  className={`sidebar__entry-badge sidebar__entry-badge--${gitStatus[e.path]}`}
+                  title={GIT_BADGE_TITLES[gitStatus[e.path]]}
+                  aria-label={GIT_BADGE_TITLES[gitStatus[e.path]]}
+                >
+                  {gitStatus[e.path]}
+                </span>
+              )}
             </button>
             {e.isDirectory && e.expanded && e.children && (
               <TreeList
@@ -305,6 +329,7 @@ function TreeList({
                 depth={depth + 1}
                 onToggle={onToggle}
                 activePath={activePath}
+                gitStatus={gitStatus}
                 onContextMenu={onContextMenu}
               />
             )}

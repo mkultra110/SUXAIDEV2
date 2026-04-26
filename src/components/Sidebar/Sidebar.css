@@ -208,3 +208,51 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* v0.15.4 — Git status badges (M/A/D/U/R/C).
+   VSCode-style : single character, color-coded by code, parked on
+   the right edge of the entry. We keep the badge small (10px) and
+   bold so it reads cleanly even when the entry is half-occluded by
+   the active-state border-left accent. */
+.sidebar__entry-badge {
+  flex-shrink: 0;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  margin-right: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  letter-spacing: 0;
+  border-radius: 3px;
+  line-height: 1;
+}
+.sidebar__entry-badge--M { color: #fbbf24; }   /* modified — orange  */
+.sidebar__entry-badge--A { color: #86efac; }   /* added (staged)     */
+.sidebar__entry-badge--U { color: #6ee497; }   /* untracked — green  */
+.sidebar__entry-badge--D { color: #fca5a5; }   /* deleted — red      */
+.sidebar__entry-badge--R { color: #93c5fd; }   /* renamed — blue     */
+.sidebar__entry-badge--C {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* Slightly tint the filename to match the badge — mirrors VSCode's
+   git-decoration look. Falls back gracefully if :has() isn't
+   supported (older Electron / Chromium < 105). */
+.sidebar__entry:has(.sidebar__entry-badge--M) .sidebar__entry-name,
+.sidebar__entry:has(.sidebar__entry-badge--U) .sidebar__entry-name {
+  color: #fde68a;
+}
+.sidebar__entry:has(.sidebar__entry-badge--D) .sidebar__entry-name {
+  color: #fca5a5;
+  text-decoration: line-through;
+  text-decoration-color: rgba(239, 68, 68, 0.45);
+}
+.sidebar__entry:has(.sidebar__entry-badge--C) .sidebar__entry-name {
+  color: #fca5a5;
+}

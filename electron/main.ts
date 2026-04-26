@@ -1238,6 +1238,84 @@ function registerIpc() {
       return { hits: nodeHits, source: 'node-fallback', rgError };
     },
   );
+
+  // v0.15.4 — git status badges for the sidebar. Spawns `git` twice :
+  //   1) `git rev-parse --show-toplevel` to find the repo root (the
+  //      workspace can be a sub-directory of the repo).
+  //   2) `git status --porcelain=v1 -z -uall --no-renames` to list
+  //      every dirty path. -z is NUL-separated so spaces / unicode
+  //      paths parse without quoting headaches.
+  // Returns absolute paths keyed in `statuses` so the renderer can
+  // match without further normalisation. If `git` isn't on PATH, the
+  // workspace isn't a repo, or anything fails → returns ok:false and
+  // the sidebar simply skips badges. Cap at 5000 entries so a giant
+  // dirty repo can't swamp the IPC channel.
+  ipcMain.handle('git:status', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try {
+      safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true });
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+    const runGit = (args: string[]): Promise<{ code: number; stdout: string; stderr: string }> =>
+      new Promise((resolve) => {
+        let stdout = '';
+        let stderr = '';
+        let child: ChildProcessWithoutNullStreams;
+        try {
+          child = spawn('git', args, { cwd: safeCwd });
+        } catch (err) {
+          resolve({ code: -1, stdout: '', stderr: (err as Error).message });
+          return;
+        }
+        child.stdout.on('data', (c) => { stdout += c.toString(); });
+        child.stderr.on('data', (c) => { stderr += c.toString(); });
+        child.on('error', (err) => resolve({ code: -1, stdout, stderr: stderr + err.message }));
+        child.on('close', (code) => resolve({ code: code ?? -1, stdout, stderr }));
+      });
+    const toplevel = await runGit(['rev-parse', '--show-toplevel']);
+    if (toplevel.code !== 0) {
+      return { ok: false, error: 'not_a_git_repo' };
+    }
+    const root = toplevel.stdout.trim();
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const status = await runGit([
+      '-c', 'core.quotepath=false',
+      'status', '--porcelain=v1', '-z', '-uall', '--no-renames',
+    ]);
+    if (status.code !== 0) {
+      return { ok: false, error: status.stderr.trim() || 'git_status_failed' };
+    }
+    const statuses: Record<string, string> = {};
+    let count = 0;
+    // -z output: each entry is `XY <space> <path>\0`. Split on NUL,
+    // drop the trailing empty entry.
+    const entries = status.stdout.split('\0').filter((e) => e.length > 0);
+    for (const entry of entries) {
+      if (count >= 5000) break;
+      if (entry.length < 4) continue;
+      const x = entry[0];
+      const y = entry[1];
+      // Skip the space at index 2.
+      const rel = entry.slice(3);
+      // Pick the most-meaningful char :
+      //   - '?' (untracked) wins over anything (X='?' Y='?')
+      //   - conflict markers ('U', 'A' on both sides, etc.) → 'C'
+      //   - else worktree change Y, falling back to index change X
+      let code: string;
+      if (x === '?' || y === '?') code = 'U';        // untracked
+      else if (x === '!' || y === '!') continue;       // ignored — skip
+      else if (x === 'U' || y === 'U' || (x === 'A' && y === 'A') || (x === 'D' && y === 'D')) {
+        code = 'C';                                   // conflict
+      } else if (y !== ' ' && y !== '') code = y;     // worktree change
+      else if (x !== ' ' && x !== '') code = x;       // staged-only change
+      else continue;
+      const abs = path.isAbsolute(rel) ? rel : path.join(root, rel);
+      statuses[abs] = code;
+      count++;
+    }
+    return { ok: true, root, statuses };
+  });
 }
 
 /**

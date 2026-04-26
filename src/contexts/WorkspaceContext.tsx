@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { pushRecent } from '../lib/recent';
+import { invalidateGitStatus } from '../lib/git';
 
 export interface OpenFile {
   path: string;
@@ -425,6 +426,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       if (!alreadyWritten) {
         await window.suxai.fs.writeFile(targetPath, toSave.content);
       }
+      // v0.15.4 — refresh git badges after every disk write. Cheap
+      // (re-spawns `git status` once per save) and keeps the sidebar
+      // in sync with the working tree without a polling loop.
+      const ws = stateRef.current.workspaceRoot;
+      if (ws) invalidateGitStatus(ws);
       setState((prev) => {
         // The user may have closed the tab between when we started
         // the write and when it resolved. Don't resurrect a closed
@@ -602,6 +608,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         f.path === d.path ? { ...f, content: d.proposed, dirty: true } : f,
       );
       const [nextDiff, ...rest] = s.pendingDiffQueue;
+      // v0.15.4 — accepting a diff dirties the file but doesn't write
+      // to disk yet, so the working tree is unchanged. We still
+      // refresh in case the agent already wrote the file via a
+      // separate path (skipMtimeCheck save).
+      if (s.workspaceRoot) invalidateGitStatus(s.workspaceRoot);
       return {
         ...s,
         openFiles: nextOpenFiles,

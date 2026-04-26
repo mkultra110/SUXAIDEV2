@@ -2571,21 +2571,80 @@ export function AIPanel() {
   }, []);
 
   const onApplyCode = useCallback(
-    (code: string) => {
+    async (code: string) => {
       if (!activeFile) return;
-      // Open the diff view instead of overwriting the buffer outright.
-      // The model usually returns just the modified snippet — replacing
-      // the whole file with that snippet would silently delete every
-      // surrounding line. The diff view lets the user accept hunks
-      // individually (or hit "Accept all" to replace fully on purpose).
-      openDiff({
-        path: activeFile.path,
-        original: activeFile.content,
-        proposed: code,
-        label: `apply · ${modelId}`,
-      });
+      if (!token) {
+        toast.error('Not signed in', 'Open the menu and log in again');
+        return;
+      }
+      // v0.13.10 fix DATA-LOSS : avant, on routait `code` directement comme
+      // `proposed` du diff. Si l'IA n'avait renvoyé que le snippet modifié
+      // (5 lignes au lieu du fichier complet de 500), un Accept-all
+      // remplaçait toutes les 500 lignes par les 5. Pure data loss.
+      //
+      // Maintenant : le snippet est traité comme un "lazy edit", on
+      // appelle /ai/apply (Haiku 4.5) qui le fusionne dans le fichier
+      // complet en respectant les marqueurs `// ... existing code ...`
+      // ou en infierant les zones inchangées. On ouvre alors le diff
+      // avec le RÉSULTAT MERGÉ comme `proposed` — le user voit les
+      // vraies modifs ligne par ligne, le reste du fichier intact.
+      //
+      // Si /ai/apply échoue (network, 502, marker leakage, truncation),
+      // on surface une vraie erreur au lieu d'ouvrir un diff dangereux.
+      toast.info('Application en cours…', 'Fusion du snippet dans le fichier via Haiku 4.5');
+      try {
+        const { API_BASE_URL } = await import('../../config');
+        const { tryRefreshToken } = await import('../../api/client');
+        const doFetch = async (jwt: string) =>
+          fetch(`${API_BASE_URL}/ai/apply`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              authorization: `Bearer ${jwt}`,
+            },
+            body: JSON.stringify({
+              original: activeFile.content,
+              lazy_edit: code,
+              instruction: 'Apply this code snippet from the chat to the active file. Preserve all unchanged lines verbatim.',
+              path: activeFile.path,
+            }),
+          });
+        let res = await doFetch(token);
+        if (res.status === 401) {
+          try { await res.text(); } catch { /* */ }
+          const fresh = await tryRefreshToken();
+          if (fresh) res = await doFetch(fresh);
+        }
+        if (!res.ok) {
+          const code502 = res.status === 502;
+          toast.error(
+            'Apply failed',
+            code502
+              ? 'Le modèle apply n\'a pas pu fusionner proprement (truncation ou marker leakage détecté). Réessaie ou édite manuellement.'
+              : `HTTP ${res.status} sur /ai/apply. Vérifie ton quota / ta connexion.`,
+          );
+          return;
+        }
+        const data = (await res.json()) as { result?: string | null };
+        const merged = data.result;
+        if (typeof merged !== 'string' || merged.length === 0) {
+          toast.error(
+            'Apply failed',
+            'Réponse vide du modèle apply. Le snippet est peut-être trop ambigu — ajoute des markers `// ... existing code ...` autour des zones non modifiées et ré-essaie.',
+          );
+          return;
+        }
+        openDiff({
+          path: activeFile.path,
+          original: activeFile.content,
+          proposed: merged,
+          label: `apply · haiku-4-5`,
+        });
+      } catch (err) {
+        toast.error('Apply failed', (err as Error).message);
+      }
     },
-    [activeFile, openDiff, modelId],
+    [activeFile, openDiff, token, toast],
   );
 
   const onDiffCode = useCallback(

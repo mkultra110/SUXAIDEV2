@@ -9,14 +9,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--color-border);
 }
 
 .sidebar__label {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
@@ -27,15 +27,15 @@
 }
 
 .sidebar__iconbtn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
   color: var(--color-text-muted);
-  border-radius: var(--radius-xs);
-  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  border-radius: 4px;
+  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-.sidebar__iconbtn:hover { background: rgba(255, 255, 255, 0.06); color: var(--color-text); }
+.sidebar__iconbtn:hover { background: rgba(255, 255, 255, 0.07); color: var(--color-text); }
 
 .sidebar__empty {
   display: flex;
@@ -62,13 +62,29 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px 0 16px;
+  padding: 4px 0 16px;
+  /* v0.13.10 — VS Code-style scrollbar : thin, transparent track,
+     visible only on hover. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+.sidebar__tree::-webkit-scrollbar { width: 10px; }
+.sidebar__tree::-webkit-scrollbar-track { background: transparent; }
+.sidebar__tree::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.sidebar__tree:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  background-clip: padding-box;
 }
 
 .sidebar__root {
-  padding: 6px 12px;
-  font-size: 11px;
-  font-weight: 600;
+  padding: 6px 10px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--color-text-dim);
@@ -83,37 +99,108 @@
   margin: 0;
 }
 
+.sidebar__list .sidebar__list {
+  /* v0.13.10 — indent guide vertical line for nested levels.
+     A 1px column rendered via background-image so it scrolls with
+     the content. Position computed off the chevron offset. */
+  position: relative;
+}
+.sidebar__list .sidebar__list::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* aligns with the chevron of the parent's children — chevron is
+     at padding-left + a bit, so 14px in the first nest level */
+  left: 14px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  pointer-events: none;
+}
+
 .sidebar__entry {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px 4px 8px;
+  gap: 4px;
+  /* v0.13.10 — tighter VS Code-style line height (22px) and font (12px).
+     padding-left is overridden inline per depth. */
+  height: 22px;
+  padding: 0 8px 0 4px;
   color: var(--color-text);
-  font-size: 12.5px;
+  font-size: 12px;
+  line-height: 1;
   border-radius: 0;
   border-left: 2px solid transparent;
-  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
   text-align: left;
+  position: relative;
 }
-.sidebar__entry:hover { background: rgba(255, 255, 255, 0.04); }
+.sidebar__entry:hover {
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--color-text);
+}
 .sidebar__entry--active {
-  background: var(--color-accent-soft);
+  background: rgba(99, 102, 241, 0.16);
   border-left-color: var(--color-accent);
+  color: #ffffff;
 }
+.sidebar__entry--active:hover { background: rgba(99, 102, 241, 0.22); }
 
 .sidebar__chev {
-  width: 10px;
+  width: 12px;
   display: inline-flex;
   justify-content: center;
+  align-items: center;
   color: var(--color-text-dim);
+  flex-shrink: 0;
 }
 
 .sidebar__entry-icon {
-  width: 14px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   justify-content: center;
+  align-items: center;
+  flex-shrink: 0;
+  /* default colour for the universal document outline */
+  color: #8a93a8;
 }
+
+/* v0.13.10 — colour-coded icons by file kind (VS Code Material).
+   The SVG uses currentColor so we just override --color- via class. */
+.sidebar__entry-icon--folder,
+.sidebar__entry-icon--folder-open {
+  color: #d4a64a;
+}
+.sidebar__entry-icon--ts        { color: #3b8eea; }
+.sidebar__entry-icon--js        { color: #e9c452; }
+.sidebar__entry-icon--json      { color: #cfa856; }
+.sidebar__entry-icon--md        { color: #8b9bb4; }
+.sidebar__entry-icon--css       { color: #7faad6; }
+.sidebar__entry-icon--html      { color: #e36f3a; }
+.sidebar__entry-icon--image     { color: #8e7fd5; }
+.sidebar__entry-icon--shell     { color: #6ec068; }
+.sidebar__entry-icon--lock      { color: #c75a5a; }
+.sidebar__entry-icon--config    { color: #909090; }
+.sidebar__entry-icon--lua       { color: #4f7eff; }
+.sidebar__entry-icon--cpp       { color: #5e9bd3; }
+.sidebar__entry-icon--python    { color: #ffd83a; }
+.sidebar__entry-icon--rust      { color: #d2754f; }
+.sidebar__entry-icon--go        { color: #5acded; }
+.sidebar__entry-icon--java      { color: #e17a52; }
+.sidebar__entry-icon--csharp    { color: #6f4cb0; }
+.sidebar__entry-icon--php       { color: #8a93c8; }
+.sidebar__entry-icon--ruby      { color: #c33038; }
+.sidebar__entry-icon--sql       { color: #d49860; }
+.sidebar__entry-icon--yaml      { color: #d6a26a; }
+.sidebar__entry-icon--xml       { color: #c0925e; }
+.sidebar__entry-icon--pdf       { color: #d05050; }
+.sidebar__entry-icon--archive   { color: #c08e58; }
+.sidebar__entry-icon--binary    { color: #777e8c; }
+.sidebar__entry-icon--plain     { color: #8a93a8; }
 
 .sidebar__entry-name {
   flex: 1;

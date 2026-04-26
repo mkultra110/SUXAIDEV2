@@ -224,6 +224,15 @@ export function Message({
           </div>
         </div>
         <div className="msg__content">
+          {/* v0.12.2: extended-thinking summary. The *-thinking models
+              emit one or more thinking blocks before any text/tool_use;
+              showing them collapsed lets the user audit the reasoning
+              without flooding the chat. Redacted blocks render as a
+              short placeholder — Anthropic ships them when the chain
+              of thought is too sensitive to disclose. */}
+          {message.assistantBlocks && message.assistantBlocks.length > 0 && (
+            <ThinkingPanel blocks={message.assistantBlocks} />
+          )}
           {empty && message.streaming && (
             <div className="msg__thinking" aria-live="polite">
               <span className="msg__thinking-dot" />
@@ -290,6 +299,57 @@ export function Message({
   );
 }
 
+
+/**
+ * Collapsible reasoning panel for *-thinking models. Defaults to
+ * collapsed — once the user has acted on the assistant's tool calls
+ * the chain-of-thought is rarely interesting again, but a click
+ * away if they want to inspect it.
+ */
+function ThinkingPanel({
+  blocks,
+}: {
+  blocks: NonNullable<ChatMessage['assistantBlocks']>;
+}) {
+  const [open, setOpen] = useState(false);
+  const thinking = blocks.filter((b) => b.type === 'thinking') as Array<{
+    type: 'thinking';
+    thinking: string;
+    signature: string;
+  }>;
+  const redactedCount = blocks.filter((b) => b.type === 'redacted_thinking').length;
+  if (thinking.length === 0 && redactedCount === 0) return null;
+  const totalChars = thinking.reduce((acc, b) => acc + b.thinking.length, 0);
+  return (
+    <div className={`msg__reasoning ${open ? 'msg__reasoning--open' : ''}`}>
+      <button
+        type="button"
+        className="msg__reasoning-toggle"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <span aria-hidden>{open ? '▾' : '▸'}</span>
+        <span>
+          🧠 Réflexion
+          {totalChars > 0 ? ` (${Math.max(1, Math.round(totalChars / 1000))}K caractères)` : ''}
+          {redactedCount > 0 ? ` · ${redactedCount} bloc${redactedCount > 1 ? 's' : ''} censuré${redactedCount > 1 ? 's' : ''}` : ''}
+        </span>
+      </button>
+      {open && (
+        <div className="msg__reasoning-body">
+          {thinking.map((b, i) => (
+            <pre key={i} className="msg__reasoning-text">{b.thinking}</pre>
+          ))}
+          {redactedCount > 0 && (
+            <div className="msg__reasoning-redacted">
+              {redactedCount} bloc{redactedCount > 1 ? 's' : ''} de réflexion masqué{redactedCount > 1 ? 's' : ''} par Anthropic (politique de sûreté).
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function DivertedChip({ path }: { path: string }) {
   const name = path.split(/[\\/]/).pop() ?? path;

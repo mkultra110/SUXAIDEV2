@@ -348,6 +348,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const closeFile = useCallback((path: string) => {
     // Guard against silently discarding unsaved changes — for both
     // disk-backed dirty files and untitled buffers with content.
+    // window.confirm is synchronous + blocking so it must stay
+    // outside setState (which has to be pure under Strict Mode).
     const target = stateRef.current.openFiles.find((f) => f.path === path);
     if (target) {
       const hasContent = target.untitled
@@ -362,11 +364,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (!ok) return;
       }
     }
+    // v0.15.11 (audit-5 #4) — re-validate the path still exists at
+    // the time of the actual update. Between the confirm() and the
+    // setState callback, the user could have closed the same tab via
+    // another path (Ctrl+W, drag-drop replacement, etc.) — bail
+    // cleanly if the tab vanished. This also makes the activePath
+    // recomputation atomic with the filter step.
     setState((s) => {
+      const idx = s.openFiles.findIndex((f) => f.path === path);
+      if (idx < 0) return s;
       const filtered = s.openFiles.filter((f) => f.path !== path);
       let nextActive = s.activePath;
       if (s.activePath === path) {
-        const idx = s.openFiles.findIndex((f) => f.path === path);
         nextActive = filtered[idx]?.path ?? filtered[idx - 1]?.path ?? filtered[0]?.path ?? null;
       }
       return { ...s, openFiles: filtered, activePath: nextActive };

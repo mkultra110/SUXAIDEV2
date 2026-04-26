@@ -40,8 +40,11 @@ export function CommandPalette() {
       }
       if (e.key === 'Escape' && open) close();
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    // v0.15.11 (audit-5 #1) — capture phase to match every other
+    // hotkey listener in the app. Bubble phase let Monaco grab
+    // Cmd+Shift+P first when the editor was focused.
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   }, [open, close]);
 
   // Focus input when opened.

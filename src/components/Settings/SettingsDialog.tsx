@@ -24,10 +24,13 @@ export function SettingsDialog() {
       }
     };
     window.addEventListener('suxai:open-settings', onOpen);
-    window.addEventListener('keydown', onKey);
+    // v0.15.11 (audit-5 #3) — capture phase parity with the rest of
+    // the app's hotkey handlers. Without it, Monaco could claim
+    // Cmd+, first if the editor had focus.
+    window.addEventListener('keydown', onKey, true);
     return () => {
       window.removeEventListener('suxai:open-settings', onOpen);
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
     };
   }, [open]);
 

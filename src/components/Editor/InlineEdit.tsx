@@ -67,8 +67,11 @@ export function InlineEdit({ top, left, width, selectedText, file, onClose }: Pr
         onClose();
       }
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // v0.15.11 (audit-5 #2) — capture phase so Monaco can't claim
+    // Escape first when its widget (find/replace, suggestion popup)
+    // is open inside the editor underneath InlineEdit.
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
   const submit = async () => {

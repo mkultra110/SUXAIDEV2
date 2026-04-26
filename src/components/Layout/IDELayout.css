@@ -8,9 +8,14 @@
 
 .ide__body {
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) var(--ai-panel-width);
+  /* v0.15.8 — 4-column layout : ActivityBar | Sidebar | Editor | AIPanel */
+  grid-template-columns:
+    var(--activity-bar-width)
+    var(--sidebar-width)
+    minmax(0, 1fr)
+    var(--ai-panel-width);
   height: calc(100% - var(--titlebar-height));
-  gap: 1px;
+  gap: 0;
   background: var(--color-border);
   border-top: 1px solid var(--color-border);
 }
@@ -21,22 +26,34 @@
   min-width: 0;
 }
 
-/* v0.13.12 — collapsible side panels (Cmd/Ctrl+B sidebar, Cmd/Ctrl+E AI).
-   Children stay mounted (preserves their internal state — Monaco models,
-   AI conversation buffer) and we just collapse the column to 0 plus
-   hide the child. */
+/* v0.13.12 / v0.15.8 — collapsible side panels (Cmd/Ctrl+B sidebar,
+   Cmd/Ctrl+E AI). The Activity Bar stays visible always — Cmd+B only
+   collapses the file/SC sidebar, matching VSCode. Children stay
+   mounted (preserves Monaco models, AI conversation buffer). */
 .ide__body--no-sidebar {
-  grid-template-columns: 0 minmax(0, 1fr) var(--ai-panel-width);
+  grid-template-columns:
+    var(--activity-bar-width)
+    0
+    minmax(0, 1fr)
+    var(--ai-panel-width);
 }
-.ide__body--no-sidebar > :nth-child(1) {
+.ide__body--no-sidebar > :nth-child(2) {
   display: none;
 }
 .ide__body--no-ai {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 0;
+  grid-template-columns:
+    var(--activity-bar-width)
+    var(--sidebar-width)
+    minmax(0, 1fr)
+    0;
 }
-.ide__body--no-ai > :nth-child(3) {
+.ide__body--no-ai > :nth-child(4) {
   display: none;
 }
 .ide__body--no-sidebar.ide__body--no-ai {
-  grid-template-columns: 0 minmax(0, 1fr) 0;
+  grid-template-columns:
+    var(--activity-bar-width)
+    0
+    minmax(0, 1fr)
+    0;
 }

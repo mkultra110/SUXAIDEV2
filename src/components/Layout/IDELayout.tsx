@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useGitStatus } from '../../lib/git';
 import { useToast } from '../ui/Toast';
 import { TitleBar } from './TitleBar';
 import { StatusBar } from './StatusBar';
 import { WindowState } from './WindowState';
+import { ActivityBar, type SidebarView } from './ActivityBar';
 import { Sidebar } from '../Sidebar/Sidebar';
 import { EditorPanel } from '../Editor/EditorPanel';
 import { AIPanel } from '../AI/AIPanel';
@@ -138,6 +140,12 @@ export function IDELayout() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [aiOpen, setAiOpen] = useState(true);
+  // v0.15.8 — sidebar view state lives here so the ActivityBar (a
+  // sibling, not a parent of Sidebar) can drive it without a context.
+  const [sidebarView, setSidebarView] = useState<SidebarView>('files');
+  const { workspaceRoot } = useWorkspace();
+  const gitStatus = useGitStatus(workspaceRoot);
+  const dirtyCount = Object.keys(gitStatus).length;
   const bodyClass =
     'ide__body' +
     (sidebarOpen ? '' : ' ide__body--no-sidebar') +
@@ -153,7 +161,14 @@ export function IDELayout() {
       />
       <TitleBar />
       <div className={bodyClass}>
-        <Sidebar />
+        <ActivityBar
+          view={sidebarView}
+          setView={setSidebarView}
+          sidebarOpen={sidebarOpen}
+          setSidebarOpen={setSidebarOpen}
+          dirtyCount={dirtyCount}
+        />
+        <Sidebar view={sidebarView} setView={setSidebarView} />
         <EditorPanel />
         <AIPanel />
       </div>

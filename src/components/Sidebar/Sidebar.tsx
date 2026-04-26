@@ -26,16 +26,22 @@ const GIT_BADGE_TITLES: Record<GitStatusCode, string> = {
   C: 'Conflict',
 };
 
-export function Sidebar() {
+export interface SidebarProps {
+  /** v0.15.8 — view is owned by IDELayout so the ActivityBar (a
+   *  sibling) can drive it. Optional for backwards compatibility ;
+   *  if absent, the sidebar manages an internal state and shows the
+   *  legacy header toggle. */
+  view?: 'files' | 'changes';
+  setView?: (v: 'files' | 'changes') => void;
+}
+
+export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps = {}) {
   const { workspaceRoot, setWorkspaceRoot, openFile, activePath, closeFile, renameFile } =
     useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
-  // v0.15.6 — sidebar can switch between the file tree and the
-  // git source-control list. Default 'files' ; toggled via the
-  // header icon. Persisted across renders only ; intentionally not
-  // saved to localStorage so the user always lands in the file
-  // tree on app start.
-  const [view, setView] = useState<'files' | 'changes'>('files');
+  const [internalView, setInternalView] = useState<'files' | 'changes'>('files');
+  const view = viewProp ?? internalView;
+  const setView = setViewProp ?? setInternalView;
   const dirtyCount = Object.keys(gitStatus).length;
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -212,7 +218,7 @@ export function Sidebar() {
               shows the dirty-file count when not zero. */}
           <button
             className={`sidebar__iconbtn ${view === 'changes' ? 'sidebar__iconbtn--active' : ''}`}
-            onClick={() => setView((v) => (v === 'files' ? 'changes' : 'files'))}
+            onClick={() => setView(view === 'files' ? 'changes' : 'files')}
             title={view === 'files' ? 'Source Control' : 'File explorer'}
           >
             {view === 'files' ? (

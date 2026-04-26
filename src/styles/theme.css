@@ -81,4 +81,6 @@
   --titlebar-height: 36px;
   --sidebar-width: 260px;
   --ai-panel-width: 420px;
+  /* v0.15.8 — Activity Bar (left rail with view-switcher icons). */
+  --activity-bar-width: 48px;
 }

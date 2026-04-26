@@ -10,7 +10,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  /* v0.12.11: 16px gap between the left group (cswitch + model) and
+     the right action cluster (Plan / Agent / +). Previously 8px which
+     made the model pill visually touch the Plan button on narrower
+     panels — looked like overlap even when technically there was a
+     2-3px gap. */
+  gap: 16px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
 }
@@ -18,7 +23,7 @@
 .ai__header-main {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
@@ -27,7 +32,7 @@
    the right-side action group (Agent / + new) off-screen. The model
    pill in particular has a long label like "Claude Sonnet 4.6
    (thinking)" that used to overlap the Agent button. */
-.ai__header-main > * { min-width: 0; }
+.ai__header-main > * { min-width: 0; flex-shrink: 1; }
 /* Right-side actions never shrink — they stay fully visible. */
 .ai__header-actions { flex-shrink: 0; }
 

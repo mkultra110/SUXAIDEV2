@@ -37,7 +37,13 @@
 .model-sel__dot--openai    { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 0 6px rgba(16, 185, 129, 0.45); }
 
 .model-sel__name {
-  max-width: 170px;
+  /* v0.12.11: tightened from 170 → 140 so the model pill never pushes
+     into the action-cluster gap. The full label is still visible in
+     the dropdown menu and on hover (browser tooltip via title attr).
+     Combined with the wrapper's flex-shrink: 1 and min-width: 0, the
+     pill collapses gracefully on narrow panels rather than clipping
+     the Plan / Agent buttons. */
+  max-width: 140px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -47,7 +53,10 @@
 /* On narrower windows (< 540px panel width), shrink the model label
    even further so the Agent + new-conv buttons stay fully visible. */
 @media (max-width: 540px) {
-  .model-sel__name { max-width: 100px; }
+  .model-sel__name { max-width: 90px; }
+}
+@media (max-width: 420px) {
+  .model-sel__name { max-width: 60px; }
 }
 
 .model-sel__menu {

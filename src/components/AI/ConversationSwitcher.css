@@ -1,4 +1,12 @@
-.cswitch { position: relative; }
+.cswitch {
+  position: relative;
+  /* v0.12.11: allow the switcher to shrink inside the header flex row
+     when the conversation title is long. Without min-width: 0 the
+     trigger stays at 180px and pushes the model pill into the action
+     cluster on narrow panels. */
+  min-width: 0;
+  flex-shrink: 1;
+}
 
 .cswitch__trigger {
   display: inline-flex;
@@ -13,9 +21,16 @@
   font-size: 12px;
   cursor: pointer;
   max-width: 180px;
+  min-width: 0;
   transition:
     background var(--dur-base) var(--ease-out),
     border-color var(--dur-base) var(--ease-out);
+}
+@media (max-width: 540px) {
+  .cswitch__trigger { max-width: 120px; }
+}
+@media (max-width: 420px) {
+  .cswitch__trigger { max-width: 80px; }
 }
 .cswitch__trigger:hover {
   background: rgba(255, 255, 255, 0.06);

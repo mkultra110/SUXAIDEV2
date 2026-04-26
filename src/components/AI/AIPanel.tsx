@@ -1575,6 +1575,19 @@ export function AIPanel() {
           setInput('');
           return true;
         }
+        case 'multitask':
+        case 'worktree':
+        case 'best-of-n': {
+          // v0.13.6 — placeholders. Phase 3 features (sub-agents
+          // async, git worktrees, parallel best-of-N) need cloud
+          // infra not yet wired. Toast tells the user where we are.
+          setInput('');
+          toast.info(
+            `/${cmd} arrives in v0.14+`,
+            'Cette commande nécessite des sub-agents cloud — pas encore implémenté. Suis la roadmap dans le repo.',
+          );
+          return true;
+        }
         case 'memory-delete': {
           // v0.13.2 — delete a memory by id (returned by /memories).
           const id = arg.trim();
@@ -1737,6 +1750,76 @@ export function AIPanel() {
                 path: '@workspace',
                 content: `Workspace root: ${workspaceRoot}`,
               };
+            }
+            break;
+          }
+          case 'tabs':
+          case 'open-tabs':
+          case 'open_tabs': {
+            // v0.13.6 — full content of every currently open tab.
+            // Useful for asks like "@open-tabs réorganise ces fichiers
+            // en suivant la convention X" without manually @-ing each.
+            if (openFiles.length > 0) {
+              const blocks = openFiles.map(
+                (f) => `<file path="${f.path}">\n${f.content}\n</file>`,
+              );
+              resolved = {
+                path: '@open-tabs',
+                content: `${openFiles.length} open tab${openFiles.length > 1 ? 's' : ''}:\n\n${blocks.join('\n\n')}`,
+              };
+            }
+            break;
+          }
+          case 'memories': {
+            // v0.13.6 — dump current memories as context. Lets the
+            // user remind the model "what do you remember about
+            // this project ?" without leaving the conv.
+            const list = loadMemories(workspaceRoot);
+            if (list.length > 0) {
+              resolved = {
+                path: '@memories',
+                content:
+                  `${list.length} stored memor${list.length > 1 ? 'ies' : 'y'} for this workspace:\n\n` +
+                  list.map((m) => `- **${m.title}**: ${m.content}`).join('\n'),
+              };
+            }
+            break;
+          }
+          case 'git':
+          case 'diff': {
+            // v0.13.6 — git diff of unstaged + staged changes via
+            // run-once. Cap output to keep the context tight.
+            if (workspaceRoot && window.suxai.terminal?.runOnce) {
+              try {
+                const r = await window.suxai.terminal.runOnce({
+                  command: 'git -c core.pager=cat diff HEAD',
+                  cwd: workspaceRoot,
+                  timeout_ms: 10_000,
+                });
+                if (r.stdout && r.stdout.trim()) {
+                  // Cap at 24 KB so a multi-thousand-line diff doesn't
+                  // blow the request size.
+                  const capped =
+                    r.stdout.length > 24_000
+                      ? r.stdout.slice(0, 24_000) +
+                        '\n\n[…diff truncated, ' + (r.stdout.length - 24_000) + ' more bytes]'
+                      : r.stdout;
+                  resolved = {
+                    path: '@git',
+                    content:
+                      'Working-tree diff (`git diff HEAD`, includes both staged and unstaged):\n\n```diff\n' +
+                      capped +
+                      '\n```',
+                  };
+                } else if (r.exit_code === 0) {
+                  resolved = {
+                    path: '@git',
+                    content: 'Working tree is clean — no diff against HEAD.',
+                  };
+                }
+              } catch {
+                /* not a git repo / git missing — leave unresolved */
+              }
             }
             break;
           }

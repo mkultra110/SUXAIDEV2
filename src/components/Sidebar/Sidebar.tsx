@@ -4,6 +4,7 @@ import { Button } from '../ui/Button';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { useToast } from '../ui/Toast';
 import { useGitStatus, normalizeGitPath, type GitStatusCode } from '../../lib/git';
+import { SourceControlPanel } from './SourceControlPanel';
 import './Sidebar.css';
 
 interface TreeEntry {
@@ -29,6 +30,13 @@ export function Sidebar() {
   const { workspaceRoot, setWorkspaceRoot, openFile, activePath, closeFile, renameFile } =
     useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
+  // v0.15.6 — sidebar can switch between the file tree and the
+  // git source-control list. Default 'files' ; toggled via the
+  // header icon. Persisted across renders only ; intentionally not
+  // saved to localStorage so the user always lands in the file
+  // tree on app start.
+  const [view, setView] = useState<'files' | 'changes'>('files');
+  const dirtyCount = Object.keys(gitStatus).length;
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; entry: TreeEntry } | null>(null);
@@ -195,8 +203,34 @@ export function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar__header">
-        <span className="sidebar__label">Explorer</span>
+        <span className="sidebar__label">
+          {view === 'files' ? 'Explorer' : 'Source Control'}
+        </span>
         <div className="sidebar__header-actions">
+          {/* v0.15.6 — view toggle. Branch icon = source control,
+              file-stack icon = files. The badge on the SC icon
+              shows the dirty-file count when not zero. */}
+          <button
+            className={`sidebar__iconbtn ${view === 'changes' ? 'sidebar__iconbtn--active' : ''}`}
+            onClick={() => setView((v) => (v === 'files' ? 'changes' : 'files'))}
+            title={view === 'files' ? 'Source Control' : 'File explorer'}
+          >
+            {view === 'files' ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.8" />
+                <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.8" />
+                <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7z M13 2v7h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+            {view === 'files' && dirtyCount > 0 && (
+              <span className="sidebar__iconbtn-badge">{dirtyCount}</span>
+            )}
+          </button>
           <button className="sidebar__iconbtn" onClick={onOpenFile} title="Open file">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
               <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7z M13 2v7h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -217,6 +251,8 @@ export function Sidebar() {
           <Button variant="ghost" size="sm" onClick={onOpenFile}>Open file…</Button>
           <div className="sidebar__hint">or drag &amp; drop a file here</div>
         </div>
+      ) : view === 'changes' ? (
+        <SourceControlPanel />
       ) : (
         <div className="sidebar__tree" role="tree">
           <div className="sidebar__root" title={workspaceRoot}>

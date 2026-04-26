@@ -100,7 +100,12 @@ function WorkspaceHotkeys() {
 function TerminalHotkey({ onToggle }: { onToggle: () => void }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === '`') {
+      // Ctrl+` (backtick) — primary VSCode binding.
+      // Ctrl+J — secondary VSCode binding for the bottom panel.
+      const isToggleKey =
+        e.key === '`' ||
+        (!e.shiftKey && !e.altKey && e.key.toLowerCase() === 'j');
+      if ((e.metaKey || e.ctrlKey) && isToggleKey) {
         e.preventDefault();
         onToggle();
       }
@@ -111,15 +116,60 @@ function TerminalHotkey({ onToggle }: { onToggle: () => void }) {
   return null;
 }
 
+function PanelToggleHotkeys({
+  onToggleSidebar,
+  onToggleAi,
+}: {
+  onToggleSidebar: () => void;
+  onToggleAi: () => void;
+}) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.altKey || e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      // Cmd/Ctrl+B — toggle file sidebar (VSCode parity).
+      if (k === 'b') {
+        e.preventDefault();
+        onToggleSidebar();
+        return;
+      }
+      // Cmd/Ctrl+E — toggle AI panel. Picked because it has no
+      // existing binding in our app and doesn't collide with
+      // Monaco's defaults outside of macOS where Cmd+E is "use
+      // selection for find" — but our editor-scoped handler runs
+      // first in capture phase so this stays safe.
+      if (k === 'e') {
+        e.preventDefault();
+        onToggleAi();
+      }
+    };
+    // Capture phase so Monaco can't claim Cmd+B / Cmd+E first.
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [onToggleSidebar, onToggleAi]);
+  return null;
+}
+
 export function IDELayout() {
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [aiOpen, setAiOpen] = useState(true);
+  const bodyClass =
+    'ide__body' +
+    (sidebarOpen ? '' : ' ide__body--no-sidebar') +
+    (aiOpen ? '' : ' ide__body--no-ai');
   return (
     <div className="ide">
       <WorkspaceHotkeys />
       <WindowState />
       <TerminalHotkey onToggle={() => setTerminalOpen((o) => !o)} />
+      <PanelToggleHotkeys
+        onToggleSidebar={() => setSidebarOpen((o) => !o)}
+        onToggleAi={() => setAiOpen((o) => !o)}
+      />
       <TitleBar />
-      <div className="ide__body">
+      <div className={bodyClass}>
         <Sidebar />
         <EditorPanel />
         <AIPanel />

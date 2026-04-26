@@ -20,3 +20,23 @@
   min-height: 0;
   min-width: 0;
 }
+
+/* v0.13.12 — collapsible side panels (Cmd/Ctrl+B sidebar, Cmd/Ctrl+E AI).
+   Children stay mounted (preserves their internal state — Monaco models,
+   AI conversation buffer) and we just collapse the column to 0 plus
+   hide the child. */
+.ide__body--no-sidebar {
+  grid-template-columns: 0 minmax(0, 1fr) var(--ai-panel-width);
+}
+.ide__body--no-sidebar > :nth-child(1) {
+  display: none;
+}
+.ide__body--no-ai {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr) 0;
+}
+.ide__body--no-ai > :nth-child(3) {
+  display: none;
+}
+.ide__body--no-sidebar.ide__body--no-ai {
+  grid-template-columns: 0 minmax(0, 1fr) 0;
+}

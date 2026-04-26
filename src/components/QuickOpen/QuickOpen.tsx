@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
-import { useRecent, removeRecent, type RecentFile } from '../../lib/recent';
+import { useRecent, removeRecentIfMissing, type RecentFile } from '../../lib/recent';
 import './QuickOpen.css';
 
 interface WalkedFile {
@@ -171,8 +171,10 @@ export function QuickOpen() {
         const content = await window.suxai.fs.readFile(target.path);
         openFile({ path: content.path, name: target.name, content: content.content });
       } catch (err) {
-        // Drop a vanished recent entry so it doesn't keep showing up.
-        if (item.kind === 'recent') removeRecent(item.recent.path);
+        // v0.13.16 (audit #10): only drop the recent entry when the
+        // file is genuinely gone — a transient permission error
+        // shouldn't cost the user their recent-list entry.
+        if (item.kind === 'recent') removeRecentIfMissing(item.recent.path, err);
         console.error('Failed to open file:', err);
       }
     },

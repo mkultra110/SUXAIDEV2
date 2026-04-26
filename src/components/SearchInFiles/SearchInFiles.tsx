@@ -167,11 +167,14 @@ export function SearchInFiles() {
       if (!row) return;
       const fullPath = row.hit.path;
       const name = fullPath.split(/[\\/]/).pop() ?? fullPath;
-      // Stamp the reveal BEFORE openFile so EditorPanel sees it on
-      // the very first effect run after the tab activates.
-      setPendingReveal(fullPath, row.hit.line, 1);
       try {
         const file = await window.suxai.fs.readFile(fullPath);
+        // v0.13.16 (audit #5): stamp the reveal AFTER readFile resolves
+        // but BEFORE openFile fires the React state update. If we
+        // stamped before readFile and the read failed, the pending
+        // reveal would persist forever and apply to a future,
+        // unrelated open of the same path.
+        setPendingReveal(file.path, row.hit.line, 1);
         openFile({ path: file.path, name, content: file.content });
         close();
       } catch (err) {

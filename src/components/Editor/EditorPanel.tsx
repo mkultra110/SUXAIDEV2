@@ -10,7 +10,7 @@ import { useSettings } from '../../lib/settings';
 import { useEditorContextTracker } from '../../lib/editor-context-tracker';
 import { registerTabCompletion } from '../../lib/tab-completion';
 import { consumePendingReveal } from '../../lib/reveal';
-import { useRecent, removeRecent } from '../../lib/recent';
+import { useRecent, removeRecentIfMissing } from '../../lib/recent';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
@@ -158,13 +158,19 @@ export function EditorPanel() {
         // dirty or not — so the user has a one-handed way to flush
         // changes to disk. Untitled files trigger Save As via
         // saveActiveFile's internal fallback.
+        // v0.13.16 (audit #1): single authority for Cmd/Ctrl+S — the
+        // duplicate handler in IDELayout's WorkspaceHotkeys was removed.
         if (!activeFileRef.current) return;
         e.preventDefault();
         saveActiveFile()
           .then((res) => {
-            if (res === 'saved') toast.info('Saved', activeFileRef.current?.name);
-            else if (res === 'unchanged') {
-              /* no-op — silently ignore */
+            const name = activeFileRef.current?.name;
+            if (res === 'saved') toast.success('Saved', name);
+            else if (res === 'error') toast.error('Save failed', name);
+            else if (res === 'cancelled') {
+              /* user dismissed Save-As dialog — silent */
+            } else if (res === 'unchanged') {
+              /* nothing to write — silent */
             }
           })
           .catch((err) => toast.error('Save failed', (err as Error).message));
@@ -654,9 +660,11 @@ function EditorWelcome() {
     try {
       const file = await window.suxai.fs.readFile(path);
       openFile({ path: file.path, name, content: file.content });
-    } catch {
-      // File vanished — drop from the recent list so it stops appearing.
-      removeRecent(path);
+    } catch (err) {
+      // v0.13.16 (audit #10): drop the recent entry only when the file
+      // is genuinely missing — keep it on transient errors so the user
+      // doesn't lose their list to a one-off read failure.
+      removeRecentIfMissing(path, err);
     }
   };
 

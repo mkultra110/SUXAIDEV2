@@ -77,6 +77,26 @@ export function removeRecent(path: string): void {
   persist(filtered);
 }
 
+/**
+ * v0.13.16 (audit #10) — helper for callers that want to drop a
+ * recent entry only when the file is genuinely gone (ENOENT / "does
+ * not exist"). A transient permission error or read-failure during
+ * a save shouldn't cost the user their recent-list entry.
+ *
+ * Electron's IPC serialises errors as plain Error objects so the
+ * Node `code` property is lost — we sniff the message instead.
+ */
+export function removeRecentIfMissing(path: string, err: unknown): void {
+  const msg = String((err as Error)?.message ?? err);
+  if (
+    msg.includes('does not exist') ||
+    msg.includes('ENOENT') ||
+    msg.includes('no such file')
+  ) {
+    removeRecent(path);
+  }
+}
+
 /** React hook — returns the live list, auto-rerendering on push/clear. */
 export function useRecent(): RecentFile[] {
   const [list, setList] = useState<RecentFile[]>(load);

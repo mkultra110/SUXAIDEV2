@@ -14,7 +14,6 @@ function WorkspaceHotkeys() {
   const {
     openFile,
     setWorkspaceRoot,
-    saveActiveFile,
     reloadActiveFromDisk,
     activeFile,
   } = useWorkspace();
@@ -50,28 +49,11 @@ function WorkspaceHotkeys() {
         if (parent) setWorkspaceRoot(parent);
       }
     };
-    const onKeyDown = async (e: KeyboardEvent) => {
-      // Ctrl+S on Windows/Linux, Cmd+S on macOS
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        if (!activeFile) return;
-        const outcome = await saveActiveFile();
-        switch (outcome) {
-          case 'saved':
-            toast.success('Saved', activeFile.name);
-            break;
-          case 'error':
-            toast.error('Save failed', activeFile.name);
-            break;
-          case 'cancelled':
-            // User dismissed the Save-As dialog — silent, no toast.
-            break;
-          case 'unchanged':
-            // Nothing to write; no toast either.
-            break;
-        }
-      }
-    };
+    // v0.13.16 (audit #1) — Cmd/Ctrl+S used to be handled here AND in
+    // EditorPanel. Both fired (capture + bubble), causing a duplicate
+    // saveActiveFile() round-trip. EditorPanel is now the single
+    // authority for the save shortcut.
+    //
     // When the user comes back to the window after editing the file in
     // another app, refresh the active buffer from disk (only if it has
     // no unsaved changes locally — never overwrite the user's edits).
@@ -84,15 +66,13 @@ function WorkspaceHotkeys() {
     };
     window.addEventListener('dragover', onDragOver);
     window.addEventListener('drop', onDrop);
-    window.addEventListener('keydown', onKeyDown);
     window.addEventListener('focus', onFocus);
     return () => {
       window.removeEventListener('dragover', onDragOver);
       window.removeEventListener('drop', onDrop);
-      window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('focus', onFocus);
     };
-  }, [openFile, setWorkspaceRoot, saveActiveFile, reloadActiveFromDisk, activeFile, toast]);
+  }, [openFile, setWorkspaceRoot, reloadActiveFromDisk, activeFile, toast]);
 
   return null;
 }
@@ -110,8 +90,11 @@ function TerminalHotkey({ onToggle }: { onToggle: () => void }) {
         onToggle();
       }
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    // v0.13.16 (audit #6) — capture phase so Monaco can't claim
+    // Ctrl+J first if the editor has focus (Monaco doesn't bind it
+    // by default, but a user setting or extension could).
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
   }, [onToggle]);
   return null;
 }

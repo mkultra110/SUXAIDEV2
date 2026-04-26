@@ -614,6 +614,32 @@ function registerIpc() {
     if (mustExist && !fsSync.existsSync(normalized)) {
       throw new Error(`Path does not exist: ${normalized}`);
     }
+    // v0.12.6 (audit #31): if the path is a symlink, resolve it and
+    // re-check the FS_DENY allowlist against the real target. Without
+    // this, a symlink at `~/repo/notes -> /etc/passwd` would slip
+    // through the deny check (the link itself is in $HOME) and the
+    // subsequent read would happily return /etc/passwd content.
+    // realpath also collapses any chain so loops throw ELOOP from
+    // the OS — we let that bubble up as "Access denied".
+    if (mustExist) {
+      try {
+        const real = fsSync.realpathSync.native(normalized);
+        if (real !== normalized) {
+          for (const deny of FS_DENY) {
+            if (real === deny || real.startsWith(deny + path.sep)) {
+              throw new Error('Access denied (symlink target in deny list)');
+            }
+          }
+        }
+      } catch (err) {
+        // ELOOP / EACCES / ENOENT — refuse to operate.
+        throw new Error(
+          (err as NodeJS.ErrnoException).code === 'ELOOP'
+            ? 'Access denied (symlink loop)'
+            : (err as Error).message,
+        );
+      }
+    }
     return normalized;
   }
 

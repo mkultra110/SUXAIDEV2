@@ -893,3 +893,57 @@ export async function applyLazyEdit(input: import('../schemas/ai.js').AiApplyInp
   }
 }
 
+/**
+ * v0.12.6: count tokens for an Anthropic-shaped request without
+ * actually generating. Powers the client's compaction trigger so we
+ * stop relying on the 4 chars/token heuristic. Returns
+ * `{ input_tokens: number }` on success, `null` if the upstream
+ * doesn't support count_tokens (Quatarly may forward it or 404).
+ *
+ * Caller is responsible for caching — this hits the network every
+ * call. Server-side caching is risky because the agentMessages
+ * payload changes shape every turn anyway.
+ */
+export async function countTokens(
+  input: import('../schemas/ai.js').AiCountTokensInput,
+): Promise<{ input_tokens: number } | null> {
+  const model = findModel(input.modelId);
+  if (!model || model.provider !== 'anthropic') return null;
+  if (!env.QUATARLY_API_KEY) return null;
+  const url = `${env.QUATARLY_BASE_URL.replace(/\/$/, '')}/v1/messages/count_tokens`;
+  const isThinking = input.modelId.endsWith('-thinking');
+  const body: Record<string, unknown> = {
+    model: input.modelId,
+    messages: input.agentMessages,
+    system: buildSystemPrompt('chat', true, 'composer'),
+  };
+  if (input.tools && input.tools.length > 0) body.tools = input.tools;
+  if (isThinking) {
+    // Anthropic requires the same `thinking` shape as the actual
+    // request — mirroring 32K/2 = 16K matches our agent-mode default.
+    body.thinking = { type: 'enabled', budget_tokens: 16000 };
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'anthropic-version': '2023-06-01',
+        'anthropic-beta': isThinking
+          ? 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11,interleaved-thinking-2025-05-14'
+          : 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11',
+        authorization: `Bearer ${env.QUATARLY_API_KEY}`,
+        'x-api-key': env.QUATARLY_API_KEY,
+        apiKey: env.QUATARLY_API_KEY,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const obj = (await res.json()) as { input_tokens?: number };
+    if (typeof obj.input_tokens !== 'number') return null;
+    return { input_tokens: obj.input_tokens };
+  } catch {
+    return null;
+  }
+}
+

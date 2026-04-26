@@ -46,7 +46,19 @@ const loginUserLimiter = rateLimit({
   message: { message: 'Too many login attempts on this account', code: 'RATE_LIMIT_USER' },
 });
 
-router.post('/register', authLimiter, validateBody(registerSchema), authController.register);
+// v0.12.6 (audit #15 ext): registration is much rarer than login, so
+// the per-IP cap can be aggressive. 3 new accounts per IP per hour
+// stops botnets enumerating throwaway accounts to bypass per-account
+// rate limits or burn the free-tier quota.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Too many registrations from this IP', code: 'RATE_LIMIT' },
+});
+
+router.post('/register', authLimiter, registerLimiter, validateBody(registerSchema), authController.register);
 router.post('/login', authLimiter, validateBody(loginSchema), loginUserLimiter, authController.login);
 router.post('/refresh', authLimiter, validateBody(refreshSchema), authController.refresh);
 router.get('/me', requireAuth, authController.me);

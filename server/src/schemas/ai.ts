@@ -156,6 +156,33 @@ export const aiRequestSchema = z
 export type AiRequestInput = z.infer<typeof aiRequestSchema>;
 
 /**
+ * v0.12.6: count-tokens request schema. Forwarded to Anthropic's
+ * `/v1/messages/count_tokens` to give the client an accurate token
+ * estimate (compaction trigger, repo-map budget) instead of the
+ * 4 chars/token heuristic. Same shape as `aiRequestSchema` but
+ * stripped of streaming / output-only fields.
+ */
+export const aiCountTokensSchema = z.object({
+  modelId: z.string().refine((v) => SUPPORTED_MODELS.some((m) => m.id === v), {
+    message: 'Unsupported model',
+  }),
+  // Same content blocks as agent mode — accept text, tool_use,
+  // tool_result, thinking. Keep the cap conservative to limit cost
+  // (count_tokens charges as input).
+  agentMessages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.union([z.string(), z.array(contentBlock).max(200)]),
+      }),
+    )
+    .max(200),
+  tools: z.array(toolDefinition).max(30).optional(),
+});
+
+export type AiCountTokensInput = z.infer<typeof aiCountTokensSchema>;
+
+/**
  * Inline completion (Tab autocomplete) request schema. Powers
  * /ai/complete which forwards to a fast model (Haiku 4.5) with an
  * FIM-style prompt. Kept lean: 8 KB prefix / 8 KB suffix max so the

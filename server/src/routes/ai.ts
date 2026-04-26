@@ -2,8 +2,8 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
-import { aiRequestSchema, aiCompleteSchema, aiApplySchema, SUPPORTED_MODELS } from '../schemas/ai.js';
-import { streamCompletion, completeFIM, applyLazyEdit } from '../services/quatarly.service.js';
+import { aiRequestSchema, aiCompleteSchema, aiApplySchema, aiCountTokensSchema, SUPPORTED_MODELS } from '../schemas/ai.js';
+import { streamCompletion, completeFIM, applyLazyEdit, countTokens } from '../services/quatarly.service.js';
 import { userStore } from '../store/users.js';
 import { env } from '../config/env.js';
 
@@ -226,6 +226,34 @@ router.post(
       return;
     }
     res.json({ result });
+  },
+);
+
+// v0.12.6: count-tokens proxy for accurate compaction triggers and
+// repo-map budgeting. Cheap on Anthropic's side (input-only billing,
+// no generation), but we still rate-limit to deter abuse.
+const countLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'count-tokens rate limit exceeded', code: 'RATE_LIMIT' },
+});
+
+router.post(
+  '/count-tokens',
+  requireAuth,
+  countLimiter,
+  validateBody(aiCountTokensSchema),
+  async (req, res) => {
+    const result = await countTokens(req.body);
+    if (result == null) {
+      // Upstream doesn't support count_tokens or the request failed.
+      // Return 200 with null so the client falls back gracefully.
+      res.json({ input_tokens: null });
+      return;
+    }
+    res.json(result);
   },
 );
 

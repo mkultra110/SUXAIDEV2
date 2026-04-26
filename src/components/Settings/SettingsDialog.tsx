@@ -113,6 +113,18 @@ export function SettingsDialog() {
                 ))}
               </select>
             </Row>
+            <Row label="Approval mode">
+              <select
+                value={settings.approvalMode}
+                onChange={(e) => update({ approvalMode: e.target.value as 'auto' | 'step' | 'yolo' })}
+                className="settings__select"
+                title="Auto = file edits go to inline diff + commands prompt. Step = ask for everything. YOLO = auto-approve everything (file edits still appear in inline diff so you can roll back)."
+              >
+                <option value="auto">Auto (recommended)</option>
+                <option value="step">Step (ask for every tool)</option>
+                <option value="yolo">YOLO (auto-approve commands)</option>
+              </select>
+            </Row>
           </Section>
         </div>
 

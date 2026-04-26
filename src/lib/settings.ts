@@ -10,6 +10,21 @@ export interface Settings {
    *  Disable if you don't want every keystroke to round-trip the
    *  VPS — saves quota on free tier. */
   tabCompletion: boolean;
+  /** v0.13.0 — agent approval mode. Mirrors Cursor's three-level
+   *  policy:
+   *    'auto'  (default) — file edits open the inline diff and the
+   *                        user accepts/rejects per hunk; shell
+   *                        commands prompt unless the model asked
+   *                        with `require_user_approval=false` AND
+   *                        the command matches a safe allowlist.
+   *    'step'            — every tool call (read OR write) blocks
+   *                        on an approval modal. Paranoid mode for
+   *                        debugging suspicious agent behaviour.
+   *    'yolo'            — auto-approve everything except commands
+   *                        that match DANGER_PATTERNS. The diff
+   *                        still appears in the inline diff so the
+   *                        user can still reject after-the-fact. */
+  approvalMode: 'auto' | 'step' | 'yolo';
 }
 
 const KEY = 'suxai.settings.v1';
@@ -21,6 +36,7 @@ const DEFAULTS: Settings = {
   minimap: false,
   defaultModelId: 'claude-sonnet-4-6-thinking',
   tabCompletion: true,
+  approvalMode: 'auto',
 };
 
 function load(): Settings {

@@ -10,6 +10,8 @@ import { ModelSelector } from './ModelSelector';
 import { ConversationSwitcher } from './ConversationSwitcher';
 import { ApprovalDialog, type ApprovalRequest } from './ApprovalDialog';
 import { onAiCommand } from '../../lib/commands';
+import { useSettings } from '../../lib/settings';
+import { loadMemories, formatMemories } from '../../lib/memories';
 import {
   emptyConversation,
   deriveTitle,
@@ -708,6 +710,11 @@ export function AIPanel() {
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
   const [approval, setApproval] = useState<ApprovalRequest | null>(null);
+  // v0.13.0 — read approval mode from settings (auto/step/yolo).
+  // Defaults to 'auto' to preserve current behaviour for existing users.
+  const [appSettings] = useSettings();
+  const approvalModeRef = useRef(appSettings.approvalMode);
+  useEffect(() => { approvalModeRef.current = appSettings.approvalMode; }, [appSettings.approvalMode]);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   // Custom slash commands loaded from <workspace>/.suxai/commands/.
@@ -748,7 +755,18 @@ export function AIPanel() {
       preview?: { path: string; original: string; proposed: string },
     ): Promise<import('../../lib/agent').ApproveResult> =>
       new Promise((resolve) => {
+        // v0.13.0 — yolo mode: auto-approve any tool whose underlying
+        // safety check has already passed (DANGER_PATTERNS catches
+        // the truly dangerous shell commands BEFORE this hook fires
+        // for run_command, so reaching here means it's already vetted).
+        // File writes still go through the inline diff so the user
+        // sees what changed and can roll back.
+        const mode = approvalModeRef.current;
         const isFileWrite = call.name === 'edit_file' || call.name === 'write_file';
+        if (mode === 'yolo' && !isFileWrite) {
+          resolve({ ok: true });
+          return;
+        }
         if (isFileWrite && preview) {
           let settled = false;
           const settle = (
@@ -1440,6 +1458,46 @@ export function AIPanel() {
           void runInitWorkflow();
           return true;
         }
+        case 'summarize':
+        case 'compact-now': {
+          // v0.13.0 — alias for /compact, matches Cursor's terminology.
+          if (!activeConv || messages.length <= 8) {
+            toast.info('Nothing to summarize', 'Conversation is too short.');
+            setInput('');
+            return true;
+          }
+          setInput('');
+          void compactConversation();
+          return true;
+        }
+        case 'reset': {
+          // v0.13.0 — like /clear but also resets the conversation
+          // mode + model to defaults. Useful when the user wants a
+          // truly fresh slate without creating a new thread.
+          if (!activeConvId) return true;
+          setConversations((list) =>
+            list.map((c) =>
+              c.id === activeConvId
+                ? {
+                    ...c,
+                    messages: [],
+                    title: 'New conversation',
+                    mode: 'composer',
+                    agentMode: true,
+                  }
+                : c,
+            ),
+          );
+          setInput('');
+          toast.info('Conversation reset', 'Cleared + back to Agent / Composer defaults');
+          return true;
+        }
+        case 'new': {
+          // v0.13.0 — same as the + button, creates a fresh thread.
+          setInput('');
+          newConversation();
+          return true;
+        }
       }
       // Custom commands from <workspace>/.suxai/commands/<name>.md.
       // Variables substituted: {{selection}}, {{file}}, {{arg}}.
@@ -1845,6 +1903,15 @@ export function AIPanel() {
           }
           preamble = [guidance, repoMap].filter(Boolean).join('\n\n---\n\n');
           preambleRef.current = { root: workspaceRoot, preamble };
+        }
+        // v0.13.0 — append memories block. Read fresh on every turn
+        // (not cached in preambleRef) so a memory added mid-session
+        // shows up on the next message immediately.
+        const memoriesBlock = formatMemories(loadMemories(workspaceRoot));
+        if (memoriesBlock) {
+          preamble = preamble
+            ? preamble + '\n\n---\n\n' + memoriesBlock
+            : memoriesBlock;
         }
         if (preambleCancelled) {
           // User hit Stop while preamble was loading. Bail before we

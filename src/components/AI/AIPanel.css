@@ -18,6 +18,16 @@
   gap: 16px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
+  /* v0.13.0 — subtle gradient + backdrop blur for a more polished
+     look. The composer header is the first thing the user sees,
+     it deserves a touch of visual quality. */
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  backdrop-filter: saturate(140%) blur(2px);
+  -webkit-backdrop-filter: saturate(140%) blur(2px);
 }
 
 .ai__header-main {

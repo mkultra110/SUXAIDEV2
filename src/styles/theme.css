@@ -12,6 +12,17 @@
   --color-border-strong: rgba(255, 255, 255, 0.1);
   --color-border-accent: rgba(99, 102, 241, 0.45);
 
+  /* ---- Interactive surfaces (v0.15.0) ----
+     Hover-bg / press-bg / focus-ring tokens used everywhere a
+     button, item or row reacts to pointer + keyboard. Centralizing
+     them means a future palette tweak doesn't require touching 30
+     CSS files. */
+  --color-hover-soft: rgba(255, 255, 255, 0.045);
+  --color-hover: rgba(255, 255, 255, 0.07);
+  --color-press: rgba(255, 255, 255, 0.1);
+  --focus-ring: 0 0 0 3px rgba(99, 102, 241, 0.32);
+  --focus-ring-soft: 0 0 0 2px rgba(99, 102, 241, 0.22);
+
   /* ---- Text ---- */
   --color-text: #e8ecf4;
   --color-text-muted: #8a95aa;

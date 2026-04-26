@@ -1,22 +1,19 @@
+/* ============================================================
+   TitleBar — top window chrome
+   v0.15.0 — visual refresh, class names stable for JSX.
+   ============================================================ */
+
 .titlebar {
   height: var(--titlebar-height);
   display: flex;
   align-items: stretch;
-  background: linear-gradient(180deg, rgba(15, 20, 32, 0.95), rgba(11, 15, 23, 0.95));
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background:
+    linear-gradient(180deg, rgba(17, 22, 36, 0.96), rgba(11, 15, 23, 0.96));
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
   user-select: none;
   position: relative;
-}
-
-.titlebar::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: var(--color-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .titlebar__drag {
@@ -30,19 +27,21 @@
 .titlebar__brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--color-text-muted);
+  letter-spacing: 0.06em;
+  color: var(--color-text);
 }
 
 .titlebar__dot {
-  width: 8px;
-  height: 8px;
+  width: 9px; height: 9px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #7d82f8, #5457d8);
-  box-shadow: 0 0 8px rgba(125, 130, 248, 0.6);
+  background:
+    radial-gradient(120% 120% at 30% 25%, #9ea0fc, #5457d8 70%);
+  box-shadow:
+    0 0 10px rgba(125, 130, 248, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset;
 }
 
 .titlebar__version {
@@ -50,17 +49,17 @@
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--color-text-dim);
-  margin-left: 6px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.03);
+  margin-left: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--color-border);
 }
 
 .titlebar__actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding-right: 8px;
   -webkit-app-region: no-drag;
 }
@@ -69,26 +68,33 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 8px 4px 4px;
-  border-radius: var(--radius-sm);
+  padding: 4px 10px 4px 4px;
+  border-radius: 999px;
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
   font-size: 11.5px;
   color: var(--color-text-muted);
-  transition: background var(--dur-base) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
-.titlebar__user:hover { background: rgba(255, 255, 255, 0.04); }
+.titlebar__user:hover {
+  background: var(--color-hover-soft);
+  border-color: var(--color-border-strong);
+}
 
 .titlebar__avatar {
-  width: 22px;
-  height: 22px;
+  width: 22px; height: 22px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #7d82f8, #5457d8);
+  background:
+    radial-gradient(120% 120% at 30% 20%, #8b8ffb, #5457d8 70%);
   color: #fff;
   font-size: 11px;
-  font-weight: 600;
-  display: grid;
-  place-items: center;
+  font-weight: 700;
+  display: grid; place-items: center;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
+    0 1px 4px rgba(84, 87, 216, 0.45);
 }
 
 .titlebar__email {
@@ -102,9 +108,14 @@
   color: var(--color-text-muted);
   padding: 4px;
   border-radius: var(--radius-xs);
-  transition: color var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
-.titlebar__logout:hover { color: var(--color-text); background: rgba(255, 255, 255, 0.06); }
+.titlebar__logout:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
 
 .titlebar__controls {
   display: flex;
@@ -113,48 +124,54 @@
 }
 
 .titlebar__btn {
-  width: 28px;
-  height: 24px;
-  display: grid;
-  place-items: center;
+  width: 30px; height: 24px;
+  display: grid; place-items: center;
   color: var(--color-text-muted);
   border-radius: var(--radius-xs);
-  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
-.titlebar__btn:hover { background: rgba(255, 255, 255, 0.08); color: var(--color-text); }
+.titlebar__btn:hover { background: var(--color-hover); color: var(--color-text); }
 .titlebar__btn--close:hover { background: #e81123; color: #fff; }
 
 .titlebar__tier {
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
   border: 1px solid transparent;
   line-height: 1;
 }
 .titlebar__tier--free {
-  color: #9ea3b5;
+  color: #aab0c2;
   border-color: rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
 }
 .titlebar__tier--pro {
-  color: #ffdf91;
-  border-color: rgba(255, 199, 44, 0.35);
-  background: linear-gradient(135deg, rgba(255, 199, 44, 0.15), rgba(255, 146, 44, 0.1));
+  color: #ffe2a3;
+  border-color: rgba(255, 199, 44, 0.42);
+  background: linear-gradient(135deg, rgba(255, 199, 44, 0.18), rgba(255, 146, 44, 0.12));
+  box-shadow: 0 0 12px rgba(255, 199, 44, 0.18);
 }
 
 .titlebar__upgrade {
   font-size: 10.5px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(125, 130, 248, 0.4);
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(84, 87, 216, 0.12));
-  color: #cfd2ff;
-  transition: filter var(--dur-base) var(--ease-out);
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 130, 248, 0.45);
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.22), rgba(84, 87, 216, 0.15));
+  color: #d8dbff;
+  transition:
+    filter var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
-.titlebar__upgrade:hover:not(:disabled) { filter: brightness(1.15); }
+.titlebar__upgrade:hover:not(:disabled) {
+  filter: brightness(1.15);
+  box-shadow: 0 0 14px rgba(125, 130, 248, 0.32);
+}
 .titlebar__upgrade:disabled { opacity: 0.5; cursor: default; }
 
 .titlebar__redeem-msg {
@@ -162,19 +179,20 @@
   top: 100%;
   right: 12px;
   margin-top: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
   font-size: 11.5px;
   z-index: 20;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
+  animation: suxai-fade-in var(--dur-base) var(--ease-out);
 }
 .titlebar__redeem-msg--ok {
-  background: rgba(52, 199, 89, 0.15);
+  background: rgba(52, 199, 89, 0.16);
   color: #6ee497;
-  border: 1px solid rgba(52, 199, 89, 0.3);
+  border: 1px solid rgba(52, 199, 89, 0.34);
 }
 .titlebar__redeem-msg--err {
-  background: rgba(255, 77, 77, 0.12);
+  background: rgba(255, 77, 77, 0.13);
   color: #ff9f9f;
-  border: 1px solid rgba(255, 77, 77, 0.3);
+  border: 1px solid rgba(255, 77, 77, 0.32);
 }

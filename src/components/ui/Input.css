@@ -15,25 +15,26 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
-  height: 40px;
+  padding: 0 13px;
+  height: 42px;
   border-radius: var(--radius-md);
-  background: rgba(8, 12, 22, 0.55);
+  background: rgba(6, 10, 20, 0.55);
   border: 1px solid var(--color-border);
   transition:
-    border-color var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
-    background var(--dur-base) var(--ease-out);
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 
 .sx-field__wrap:hover {
   border-color: var(--color-border-strong);
+  background: rgba(6, 10, 20, 0.65);
 }
 
 .sx-field__wrap:focus-within {
   border-color: var(--color-border-accent);
-  box-shadow: 0 0 0 2px var(--color-accent-soft);
-  background: rgba(8, 12, 22, 0.75);
+  box-shadow: var(--focus-ring);
+  background: rgba(6, 10, 20, 0.85);
 }
 
 .sx-field__icon,

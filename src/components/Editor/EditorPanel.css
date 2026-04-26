@@ -1,3 +1,10 @@
+/* ============================================================
+   v0.15.0 — Editor tabs strip & chrome refresh.
+   Inactive tabs visibly recede ; active tab gets a subtle indigo
+   top accent + matching editor-bg. Drag-and-drop hover state and
+   close-button reveal-on-hover preserved.
+   ============================================================ */
+
 .editor {
   display: flex;
   flex-direction: column;
@@ -8,7 +15,7 @@
 .editor__tabs {
   display: flex;
   align-items: stretch;
-  gap: 1px;
+  gap: 0;
   height: 36px;
   background: var(--color-bg-1);
   border-bottom: 1px solid var(--color-border);
@@ -35,13 +42,18 @@
   padding: 0 10px 0 14px;
   font-size: 12.5px;
   color: var(--color-text-muted);
-  background: var(--color-bg-1);
+  background: transparent;
   border-right: 1px solid var(--color-border);
   cursor: pointer;
   max-width: 220px;
-  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
-.editor__tab:hover { background: var(--color-bg-2); color: var(--color-text); }
+.editor__tab:hover {
+  background: var(--color-hover-soft);
+  color: var(--color-text);
+}
 
 .editor__tab--active {
   background: var(--color-bg);
@@ -50,12 +62,14 @@
 .editor__tab--active::before {
   content: '';
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
+  left: 0; right: 0; top: 0;
   height: 2px;
   background: linear-gradient(90deg, #7d82f8, #5457d8);
-  border-radius: 0 0 2px 2px;
+  box-shadow: 0 0 8px rgba(125, 130, 248, 0.45);
+}
+
+.editor__tab--dragging {
+  opacity: 0.5;
 }
 
 .editor__tab-name {
@@ -66,12 +80,21 @@
 
 .editor__tab-close {
   color: var(--color-text-dim);
-  padding: 4px;
+  padding: 3px;
   border-radius: 4px;
-  opacity: 0.6;
-  transition: opacity var(--dur-base) var(--ease-out), background var(--dur-base) var(--ease-out);
+  opacity: 0;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
-.editor__tab-close:hover { opacity: 1; background: rgba(255, 255, 255, 0.08); }
+.editor__tab:hover .editor__tab-close,
+.editor__tab--active .editor__tab-close { opacity: 0.7; }
+.editor__tab-close:hover {
+  opacity: 1;
+  background: var(--color-hover);
+  color: var(--color-text);
+}
 
 .editor__body {
   flex: 1;

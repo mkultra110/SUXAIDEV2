@@ -471,31 +471,28 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
       );
       break;
     }
-    if (stopReason === 'pause_turn') {
-      // v0.12.3 (audit #10): Anthropic emits pause_turn when a
-      // long-running server-side tool (web_search, container) needs
-      // to suspend the turn but isn't done. Spec says: re-send the
-      // assistant content verbatim and continue the loop. Our
-      // chatToAgentMessages already round-trips assistantBlocks +
-      // text + tool_use byte-for-byte, so we just spawn a fresh
-      // assistant turn and loop without executing tools (there are
-      // none to execute — pause_turn never coexists with tool_use).
-      const nextPause: ChatMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        content: '',
-        streaming: true,
-        modelId,
-      };
-      setMessages((m) => {
-        const updated = [...m, nextPause];
-        working = updated;
-        return updated;
-      });
-      currentAssistantId = nextPause.id;
-      continue;
+    // v0.12.10 hotfix: previous pause_turn handler created an infinite
+    // loop. When the model emitted client tool_use blocks AND a
+    // pause_turn stop_reason on the same turn (rare but does happen),
+    // the old handler spawned a fresh assistant message and `continue`-d
+    // WITHOUT executing the pending tool_use calls. Those tool calls
+    // sat in 'pending' (UI: QUEUED) forever, the next turn re-emitted
+    // similar tool_use, and the loop never terminated.
+    //
+    // New strategy: if there are tools to run, fall through to the
+    // tool execution block (same as stop_reason === 'tool_use'). If
+    // there are NO tools, treat pause_turn as end_turn — break the
+    // loop and let the user reply to nudge the model forward. This
+    // matches Anthropic's spec: pause_turn is "the model paused, send
+    // the assistant content back to continue" — we already round-trip
+    // assistantBlocks via chatToAgentMessages on the next user turn.
+    if (stopReason === 'pause_turn' && collectedTools.length === 0) {
+      break;
     }
-    if (collectedTools.length === 0 || stopReason !== 'tool_use') {
+    if (
+      collectedTools.length === 0 ||
+      (stopReason !== 'tool_use' && stopReason !== 'pause_turn')
+    ) {
       // Conversation ended naturally (end_turn / stop_sequence /
       // unknown future reason — treat as end_turn for forward compat).
       break;

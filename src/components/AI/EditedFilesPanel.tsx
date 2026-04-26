@@ -36,7 +36,7 @@ interface Props {
 export function EditedFilesPanel({ message }: Props) {
   const files = useMemo(() => extractEditedFiles(message.toolCalls), [message.toolCalls]);
   const stats = useMemo(() => totalStats(files), [files]);
-  const { openFile, setActive, openFiles, pendingDiff, closeDiff } = useWorkspace();
+  const { openFile, setActive, openFiles, rejectPendingDiffs } = useWorkspace();
   const toast = useToast();
   const [activeIdx, setActiveIdx] = useState(0);
 
@@ -67,13 +67,15 @@ export function EditedFilesPanel({ message }: Props) {
   );
 
   const onRejectAll = useCallback(() => {
-    // If a diff for one of these files is open, close it.
-    if (pendingDiff && files.some((f) => f.path === pendingDiff.path)) {
-      pendingDiff.onResolve?.(false);
-      closeDiff();
-    }
+    // v0.12.10: bulk-reject every diff (active + queue) whose path
+    // belongs to this message. Without this, parallel edit_file calls
+    // queued behind the active one stayed in 'pending' forever even
+    // after the user clicked Reject all — their onResolve was never
+    // fired and the tool_use snapshots showed 'queued' indefinitely.
+    const targets = new Set(files.map((f) => f.path));
+    rejectPendingDiffs((d) => targets.has(d.path));
     toast.info('All pending edits rejected');
-  }, [pendingDiff, files, closeDiff, toast]);
+  }, [files, rejectPendingDiffs, toast]);
 
   if (files.length === 0) return null;
 

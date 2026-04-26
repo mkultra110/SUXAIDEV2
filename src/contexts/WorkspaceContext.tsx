@@ -38,6 +38,14 @@ interface WorkspaceState {
   activePath: string | null;
   selection: string;
   pendingDiff: PendingDiff | null;
+  // v0.12.10: queue of diffs waiting for user decision. When the
+  // agent loop emits N parallel edit_file / write_file calls, all
+  // call openDiff() roughly simultaneously. Without a queue, only
+  // the last one wins — the earlier ones' onResolve callbacks are
+  // dropped and their tool_use sits in `running` forever, leaving
+  // the "FILES MODIFIED · 1 pending" badge stuck on the chat panel.
+  // The queue is FIFO; closeDiff/acceptDiff promote the next item.
+  pendingDiffQueue: PendingDiff[];
 }
 
 /**
@@ -110,6 +118,14 @@ interface WorkspaceValue extends WorkspaceState {
   openDiff: (d: PendingDiff) => void;
   closeDiff: () => void;
   acceptDiff: () => void;
+  // v0.12.10: number of diffs still queued behind the active one.
+  // Surfaced to the UI so EditedFilesPanel can render "N more pending"
+  // and so a Reject-all button knows there's something to drain.
+  pendingDiffCount: number;
+  /** v0.12.10: reject the active diff AND every diff in the queue
+   *  whose path matches `predicate`. Each one's `onResolve(false)`
+   *  fires so the agent loop resolves their promises. */
+  rejectPendingDiffs: (predicate?: (d: PendingDiff) => boolean) => void;
   activeFile: OpenFile | null;
   /** Rich editor context — used by the AI panel. Never null; empty
    *  by default. Updated by `useEditorContextTracker(editor)`. */
@@ -205,6 +221,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     activePath: null,
     selection: '',
     pendingDiff: null,
+    pendingDiffQueue: [],
   });
   const [restored, setRestored] = useState(false);
   // Rich editor context lives in its own slice — updated on every
@@ -554,24 +571,80 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // v0.12.10: openDiff queues if there's already an active diff so
+  // parallel edit_file calls don't clobber each other. The user
+  // resolves them one at a time, promoting from the queue.
   const openDiff = useCallback((d: PendingDiff) => {
-    setState((s) => ({ ...s, pendingDiff: d }));
+    setState((s) => {
+      if (!s.pendingDiff) return { ...s, pendingDiff: d };
+      return { ...s, pendingDiffQueue: [...s.pendingDiffQueue, d] };
+    });
   }, []);
 
   const closeDiff = useCallback(() => {
-    setState((s) => ({ ...s, pendingDiff: null }));
+    setState((s) => {
+      const [next, ...rest] = s.pendingDiffQueue;
+      return { ...s, pendingDiff: next ?? null, pendingDiffQueue: rest };
+    });
   }, []);
 
   const acceptDiff = useCallback(() => {
     setState((s) => {
       const d = s.pendingDiff;
       if (!d) return s;
-      const next = s.openFiles.map((f) =>
+      const nextOpenFiles = s.openFiles.map((f) =>
         f.path === d.path ? { ...f, content: d.proposed, dirty: true } : f,
       );
-      return { ...s, openFiles: next, pendingDiff: null, activePath: d.path };
+      const [nextDiff, ...rest] = s.pendingDiffQueue;
+      return {
+        ...s,
+        openFiles: nextOpenFiles,
+        pendingDiff: nextDiff ?? null,
+        pendingDiffQueue: rest,
+        activePath: d.path,
+      };
     });
   }, []);
+
+  // v0.12.10: bulk-reject diffs matching a predicate. Each matched
+  // diff's `onResolve(false)` fires synchronously so the agent loop's
+  // approve() promises settle and the tool_use snapshots flip from
+  // 'pending' → 'rejected'. Without a predicate, drains everything
+  // (active + queue).
+  const rejectPendingDiffs = useCallback(
+    (predicate?: (d: PendingDiff) => boolean) => {
+      const match = predicate ?? (() => true);
+      setState((s) => {
+        const active = s.pendingDiff;
+        const queue = s.pendingDiffQueue;
+        // Build the list of diffs to reject and what to keep.
+        const toReject: PendingDiff[] = [];
+        const keptQueue: PendingDiff[] = [];
+        if (active && match(active)) toReject.push(active);
+        for (const d of queue) (match(d) ? toReject : keptQueue).push(d);
+        // Fire onResolve(false) on each. Done outside the setState
+        // closure semantically, but synchronous resolution is fine
+        // because React batches anyway.
+        for (const d of toReject) {
+          try { d.onResolve?.(false); } catch { /* */ }
+        }
+        // If the active diff was rejected, promote the next non-
+        // rejected from the original queue (already in keptQueue
+        // order), otherwise keep the active intact.
+        const stillActive = active && !match(active) ? active : null;
+        if (stillActive) {
+          return { ...s, pendingDiffQueue: keptQueue };
+        }
+        const [nextActive, ...restQueue] = keptQueue;
+        return {
+          ...s,
+          pendingDiff: nextActive ?? null,
+          pendingDiffQueue: restQueue,
+        };
+      });
+    },
+    [],
+  );
 
   const activeFile = useMemo(
     () => state.openFiles.find((f) => f.path === state.activePath) ?? null,
@@ -606,13 +679,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       openDiff,
       closeDiff,
       acceptDiff,
+      pendingDiffCount: state.pendingDiffQueue.length + (state.pendingDiff ? 1 : 0),
+      rejectPendingDiffs,
       editorContext,
       updateEditorContext,
       recordEdit,
     }),
     [
       state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
-      closeOthers, closeToTheRight, closeAll, setActive,
+      closeOthers, closeToTheRight, closeAll, setActive, rejectPendingDiffs,
       updateActiveContent, setSelection, saveActiveFile, reloadActiveFromDisk, newUntitled, reorderTab,
       togglePin, renameFile, openDiff, closeDiff, acceptDiff,
       editorContext, updateEditorContext, recordEdit,

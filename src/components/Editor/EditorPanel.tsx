@@ -450,7 +450,15 @@ export function EditorPanel() {
       )}
 
       <div className="editor__body" ref={containerRef}>
-        {pendingDiff && <InlineDiff diff={pendingDiff} />}
+        {/* v0.12.13 — only overlay InlineDiff on the tab whose path
+            matches the pending diff. Without the path guard, every tab
+            re-rendered the diff editor on top of itself — switching
+            tabs while a diff was pending showed 3WGhlw2.lua content
+            on top of, e.g., 17-OCT.txt. The diff stays in the queue
+            and reappears when the user clicks back to its file. */}
+        {pendingDiff && activeFile?.path === pendingDiff.path && (
+          <InlineDiff diff={pendingDiff} />
+        )}
         {inlineEdit && activeFile && !pendingDiff && (
           <InlineEdit
             top={inlineEdit.top}

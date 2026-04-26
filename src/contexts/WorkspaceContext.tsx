@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { pushRecent } from '../lib/recent';
 
 export interface OpenFile {
   path: string;
@@ -334,6 +335,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const next = [...s.openFiles];
       if (existingIdx >= 0) next[existingIdx] = { ...next[existingIdx], ...file, language };
       else next.push({ ...file, language });
+      // v0.13.15 — record disk-backed opens in the global Recent list.
+      // pushRecent is a no-op for untitled:// paths, so we don't need
+      // to filter here. Read workspaceRoot from the in-flight state
+      // since this runs inside the setter.
+      pushRecent({ path: file.path, name: file.name, workspace: s.workspaceRoot ?? undefined });
       return { ...s, openFiles: next, activePath: file.path };
     });
   }, []);

@@ -10,6 +10,7 @@ import { useSettings } from '../../lib/settings';
 import { useEditorContextTracker } from '../../lib/editor-context-tracker';
 import { registerTabCompletion } from '../../lib/tab-completion';
 import { consumePendingReveal } from '../../lib/reveal';
+import { useRecent, removeRecent } from '../../lib/recent';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
@@ -635,7 +636,8 @@ export function EditorPanel() {
 }
 
 function EditorWelcome() {
-  const { setWorkspaceRoot, newUntitled, workspaceRoot } = useWorkspace();
+  const { setWorkspaceRoot, newUntitled, workspaceRoot, openFile } = useWorkspace();
+  const recent = useRecent();
   const isMac =
     typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
   const Mod = isMac ? '⌘' : 'Ctrl';
@@ -647,6 +649,23 @@ function EditorWelcome() {
       if (root) setWorkspaceRoot(root);
     } catch { /* user cancelled */ }
   };
+
+  const onOpenRecent = async (path: string, name: string) => {
+    try {
+      const file = await window.suxai.fs.readFile(path);
+      openFile({ path: file.path, name, content: file.content });
+    } catch {
+      // File vanished — drop from the recent list so it stops appearing.
+      removeRecent(path);
+    }
+  };
+
+  // Scope recent to current workspace if one is open, else show all.
+  const eligibleRecent = (
+    workspaceRoot
+      ? recent.filter((r) => !r.workspace || r.workspace === workspaceRoot)
+      : recent
+  ).slice(0, 6);
 
   return (
     <div className="editor__welcome">
@@ -667,6 +686,41 @@ function EditorWelcome() {
             <kbd>{Mod}+N</kbd>
           </button>
         </div>
+        {eligibleRecent.length > 0 && (
+          <div className="editor__welcome-recent">
+            <h3>Recent</h3>
+            <ul>
+              {eligibleRecent.map((r) => {
+                const dir = (() => {
+                  if (workspaceRoot && r.path.startsWith(workspaceRoot)) {
+                    const rel = r.path
+                      .slice(workspaceRoot.length)
+                      .replace(/^[\\/]+/, '');
+                    const parts = rel.split(/[\\/]/);
+                    parts.pop();
+                    return parts.join('/');
+                  }
+                  const parts = r.path.split(/[\\/]/);
+                  parts.pop();
+                  return parts.join('/');
+                })();
+                return (
+                  <li key={r.path}>
+                    <button
+                      type="button"
+                      className="editor__welcome-recent-item"
+                      onClick={() => onOpenRecent(r.path, r.name)}
+                      title={r.path}
+                    >
+                      <span className="editor__welcome-recent-name">{r.name}</span>
+                      {dir && <span className="editor__welcome-recent-dir">{dir}</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
         <div className="editor__welcome-grid">
           <div className="editor__welcome-col">
             <h3>Navigation</h3>

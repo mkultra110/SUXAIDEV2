@@ -20,6 +20,54 @@ interface ActionBarPos {
   left: number;
 }
 
+/**
+ * v0.14.2 — Cursor-style multi-file context for tab autocomplete.
+ *
+ * Builds a small bag of code snippets from the OTHER open tabs (i.e.
+ * everything except the active file) so the FIM model has enough
+ * surrounding context to produce completions that reference imports,
+ * sibling helpers, types, etc. defined elsewhere in the project.
+ *
+ * Keeps the payload tight:
+ *   - up to 3 other tabs (most-recently opened first; openFiles[] is
+ *     ordered by tab open order and untouched on re-activation)
+ *   - 1.2 KB per file taken from the END (most recent edits land
+ *     near the bottom for the kind of code people are usually
+ *     writing)
+ *   - 4 KB total cap; anything bigger gets sliced off
+ *
+ * Returns null when there's nothing useful (only the active file
+ * open, all peers untitled-empty) so the lib can skip the field
+ * entirely.
+ */
+function buildRelatedContext(
+  openFiles: import('../../contexts/WorkspaceContext').OpenFile[],
+  activePath: string | null,
+): string | null {
+  const peers = openFiles
+    .filter((f) => f.path !== activePath && f.content && f.content.length > 0)
+    .slice(-3); // last 3 = most-recently-opened
+  if (peers.length === 0) return null;
+  const PER_FILE_CAP = 1200;
+  const TOTAL_CAP = 4000;
+  const parts: string[] = [];
+  let budget = TOTAL_CAP;
+  for (const f of peers) {
+    if (budget <= 0) break;
+    const tail = f.content.slice(-PER_FILE_CAP);
+    const header = `// File: ${f.name}\n`;
+    const block = header + tail.trimStart() + '\n';
+    if (block.length > budget) {
+      parts.push(block.slice(0, budget));
+      budget = 0;
+    } else {
+      parts.push(block);
+      budget -= block.length;
+    }
+  }
+  return parts.length > 0 ? parts.join('\n') : null;
+}
+
 export function EditorPanel() {
   const {
     openFiles,
@@ -62,6 +110,16 @@ export function EditorPanel() {
     const dispose = registerTabCompletion({
       getToken: () => tokenRef.current ?? null,
       isEnabled: () => settingsRef.current.tabCompletion !== false,
+      // v0.14.2 — Cursor-style multi-file context. Pulls snippets
+      // from up to 3 other open tabs and sends them as
+      // `related_context` to /ai/complete so Haiku can produce
+      // completions aware of the surrounding code (imports, sibling
+      // helpers, types declared in another file). Capped tightly to
+      // keep latency low.
+      getRelatedContext: () => buildRelatedContext(
+        openFilesRef.current,
+        activeFileRef.current?.path ?? null,
+      ),
     });
     return () => { try { dispose.dispose(); } catch { /* */ } };
   }, []);

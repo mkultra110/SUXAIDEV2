@@ -31,6 +31,15 @@ interface RegisterArgs {
   getToken: () => string | null;
   /** True when the feature is on. Re-evaluated per request. */
   isEnabled: () => boolean;
+  /**
+   * v0.14.1 — optional bag of nearby code (snippets from other open
+   * tabs) used to bias the completion. Returning null/undefined is
+   * fine; the request just runs single-file like before. The string
+   * is forwarded as `related_context` to /ai/complete and is
+   * included in the LRU cache key so cross-tab edits don't serve
+   * stale completions.
+   */
+  getRelatedContext?: () => string | null | undefined;
 }
 
 interface CacheEntry {
@@ -119,7 +128,15 @@ export function registerTabCompletion(args: RegisterArgs): monaco.IDisposable {
       }).slice(0, SUFFIX_LOOKAHEAD);
       const language = model.getLanguageId();
 
-      const cacheKey = `${language}${await hashKey(prefix)}${await hashKey(suffix)}`;
+      // v0.14.1 — pull a multi-file context bag from the host. Capped
+      // here at 6 KB; the server schema accepts up to 16 KB but more
+      // than that just adds latency without meaningfully better
+      // completions. Hashed into the cache key so cross-tab edits
+      // do not serve stale completions.
+      const related = (args.getRelatedContext?.() ?? '').slice(0, 6000);
+      const relatedHash = related ? await hashKey(related) : '';
+
+      const cacheKey = `${language}${await hashKey(prefix)}${await hashKey(suffix)}${relatedHash}`;
       const cached = cacheGet(cacheKey);
       if (cached) {
         return {

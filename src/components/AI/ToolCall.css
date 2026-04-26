@@ -1,16 +1,30 @@
+/* ============================================================
+   ToolCall — agent tool invocations in chat
+   v0.14.0 — total visual refresh. Compact summary line,
+   single-layer body, pill statuses.
+   ============================================================ */
+
 .toolcall {
   display: flex;
   flex-direction: column;
-  margin: 6px 0;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
   overflow: hidden;
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
+.toolcall:hover { border-color: var(--color-border-strong); }
 
-.toolcall--running { border-color: rgba(125, 130, 248, 0.4); }
+.toolcall--running {
+  border-color: rgba(125, 130, 248, 0.4);
+}
 .toolcall--running .toolcall__head {
-  background: linear-gradient(90deg, rgba(125, 130, 248, 0.05), rgba(125, 130, 248, 0.12), rgba(125, 130, 248, 0.05));
+  background: linear-gradient(
+    90deg,
+    rgba(125, 130, 248, 0.04),
+    rgba(125, 130, 248, 0.14),
+    rgba(125, 130, 248, 0.04)
+  );
   background-size: 200% 100%;
   animation: toolcall-shimmer 1.6s linear infinite;
 }
@@ -23,27 +37,36 @@
 .toolcall--error   { border-color: rgba(255, 142, 142, 0.4); background: rgba(239, 68, 68, 0.05); }
 .toolcall--rejected{ border-color: rgba(255, 199, 44, 0.3); background: rgba(255, 199, 44, 0.05); }
 
+/* ----- Head (always visible, click toggles body) ---------- */
+
 .toolcall__head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   background: transparent;
   color: var(--color-text);
   font-size: 12px;
   cursor: pointer;
   text-align: left;
+  width: 100%;
+  border: 0;
   transition: background var(--dur-fast) var(--ease-out);
 }
-.toolcall__head:hover { background: rgba(255, 255, 255, 0.03); }
+.toolcall__head:hover { background: rgba(255, 255, 255, 0.04); }
 
-.toolcall__glyph { font-size: 13px; flex-shrink: 0; }
+.toolcall__glyph {
+  font-size: 13px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
 
 .toolcall__name {
-  font-family: var(--font-mono, monospace);
-  color: var(--color-accent);
+  font-family: var(--font-mono);
+  color: var(--color-accent-hover);
   font-weight: 500;
   flex-shrink: 0;
+  font-size: 11.5px;
 }
 
 .toolcall__headline {
@@ -53,54 +76,66 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--color-text-muted);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 11.5px;
 }
 
 .toolcall__status {
   flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
 }
 .toolcall__status--pending  { background: rgba(255, 255, 255, 0.06); color: var(--color-text-dim); }
-.toolcall__status--running  { background: rgba(125, 130, 248, 0.18); color: #c9cdff; }
-.toolcall__status--done     { background: rgba(110, 228, 151, 0.18); color: #6ee497; }
-.toolcall__status--error    { background: rgba(239, 68, 68, 0.18); color: #fca5a5; }
-.toolcall__status--rejected { background: rgba(255, 199, 44, 0.18); color: #ffd28a; }
+.toolcall__status--running  { background: rgba(125, 130, 248, 0.18); color: #c9cdff; border-color: rgba(125, 130, 248, 0.32); }
+.toolcall__status--done     { background: rgba(110, 228, 151, 0.18); color: #6ee497; border-color: rgba(110, 228, 151, 0.3); }
+.toolcall__status--error    { background: rgba(239, 68, 68, 0.18);   color: #fca5a5; border-color: rgba(239, 68, 68, 0.34); }
+.toolcall__status--rejected { background: rgba(255, 199, 44, 0.18);  color: #ffd28a; border-color: rgba(255, 199, 44, 0.34); }
+
+/* ----- Body (expanded section) ---------------------------- */
 
 .toolcall__body {
-  padding: 6px 10px 10px;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--color-border);
-  background: rgba(0, 0, 0, 0.18);
+  background: rgba(8, 12, 22, 0.5);
 }
 
-.toolcall__section + .toolcall__section { margin-top: 8px; }
+.toolcall__section + .toolcall__section { margin-top: 10px; }
 
 .toolcall__section-label {
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--color-text-dim);
-  margin-bottom: 4px;
+  margin-bottom: 5px;
 }
 
 .toolcall__pre {
   margin: 0;
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.3);
+  padding: 9px 11px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 11.5px;
-  line-height: 1.45;
+  line-height: 1.55;
   color: var(--color-text);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 240px;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+.toolcall__pre::-webkit-scrollbar { width: 8px; height: 8px; }
+.toolcall__pre::-webkit-scrollbar-track { background: transparent; }
+.toolcall__pre::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
 }

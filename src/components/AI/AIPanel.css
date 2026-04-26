@@ -1,33 +1,31 @@
+/* ============================================================
+   AI Panel — chat shell
+   v0.14.0 — total visual refresh. Class names stable for JSX.
+   Goals: more breathing room, single-source dark surfaces,
+   custom thin scrollbar, refined header & composer.
+   ============================================================ */
+
 .ai {
   display: flex;
   flex-direction: column;
   background: var(--color-bg-1);
   border-left: 1px solid var(--color-border);
   overflow: hidden;
+  position: relative;
 }
+
+/* ----- Header ----------------------------------------------- */
 
 .ai__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* v0.12.11: 16px gap between the left group (cswitch + model) and
-     the right action cluster (Plan / Agent / +). Previously 8px which
-     made the model pill visually touch the Plan button on narrower
-     panels — looked like overlap even when technically there was a
-     2-3px gap.
-     v0.13.9: bumped 16 → 20 because the user STILL reported the
-     conversation pill touching the model pill on his viewport. */
-  gap: 20px;
-  padding: 10px 12px;
+  gap: 16px;
+  padding: 9px 12px;
   border-bottom: 1px solid var(--color-border);
-  /* v0.13.0 — subtle gradient + backdrop blur for a more polished
-     look. The composer header is the first thing the user sees,
-     it deserves a touch of visual quality. */
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.03) 0%,
-    rgba(255, 255, 255, 0.00) 100%
-  );
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025) 0%, rgba(255, 255, 255, 0) 100%),
+    var(--color-bg-1);
   backdrop-filter: saturate(140%) blur(2px);
   -webkit-backdrop-filter: saturate(140%) blur(2px);
 }
@@ -35,21 +33,19 @@
 .ai__header-main {
   display: flex;
   align-items: center;
-  /* v0.13.9 — espacement augmenté à 14px entre la pill conversation
-     et la pill model. À 8px les deux paraissaient se toucher (le user
-     l'a explicitement signalé). 14px laisse une vraie respiration. */
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
 }
-/* Force every direct child of header-main to shrink instead of pushing
-   the right-side action group (Agent / + new) off-screen. The model
-   pill in particular has a long label like "Claude Sonnet 4.6
-   (thinking)" that used to overlap the Agent button. */
 .ai__header-main > * { min-width: 0; flex-shrink: 1; }
-/* Right-side actions never shrink — they stay fully visible. */
-.ai__header-actions { flex-shrink: 0; }
+
+.ai__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
 
 .ai__title {
   display: flex;
@@ -61,27 +57,90 @@
   letter-spacing: 0.1em;
   color: var(--color-text-muted);
 }
-
 .ai__title-dot {
-  width: 7px;
-  height: 7px;
+  width: 7px; height: 7px;
   border-radius: 50%;
-  background: #22c55e;
-  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+  background: var(--color-success);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.55);
   animation: suxai-pulse 2.5s var(--ease-in-out) infinite;
 }
 
+/* ----- Header buttons -------------------------------------- */
+
 .ai__clear {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
   color: var(--color-text-muted);
   border-radius: var(--radius-sm);
-  transition: background var(--dur-base) var(--ease-out), color var(--dur-base) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
-.ai__clear:hover:not(:disabled) { background: rgba(255, 255, 255, 0.06); color: var(--color-text); }
+.ai__clear:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--color-text);
+}
 .ai__clear:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.ai__agent-toggle,
+.ai__plan-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+.ai__agent-toggle:hover,
+.ai__plan-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.ai__agent-toggle--on {
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.22), rgba(84, 87, 216, 0.14));
+  border-color: rgba(125, 130, 248, 0.55);
+  color: #e0e3ff;
+  box-shadow: 0 0 0 1px rgba(125, 130, 248, 0.18) inset;
+}
+.ai__plan-toggle--on {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.22), rgba(217, 119, 6, 0.12));
+  border-color: rgba(251, 191, 36, 0.6);
+  color: #fde68a;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.18) inset;
+}
+.ai__agent-toggle--on:hover,
+.ai__plan-toggle--on:hover { filter: brightness(1.08); }
+
+.ai__agent-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-dim);
+  flex-shrink: 0;
+  transition: background var(--dur-base) var(--ease-out);
+}
+.ai__agent-toggle--on .ai__agent-dot {
+  background: #86efac;
+  box-shadow: 0 0 6px rgba(134, 239, 172, 0.65);
+  animation: suxai-agent-pulse 1.6s ease-in-out infinite;
+}
+@keyframes suxai-agent-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(134, 239, 172, 0.4); }
+  50%      { box-shadow: 0 0 10px rgba(134, 239, 172, 0.85); }
+}
+
+/* ----- Quick command buttons grid -------------------------- */
 
 .ai__commands {
   display: grid;
@@ -90,71 +149,164 @@
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
 }
-
 .ai__cmd {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   height: 30px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--color-border);
   color: var(--color-text);
   font-size: 12px;
   transition:
-    background var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
 }
 .ai__cmd:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.10);
+  background: rgba(99, 102, 241, 0.1);
   border-color: var(--color-border-accent);
 }
 .ai__cmd:active:not(:disabled) { transform: translateY(1px); }
 .ai__cmd:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* ----- Messages list & scrollbar --------------------------- */
+
 .ai__messages {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 0 12px;
+  overflow-x: hidden;
+  padding: 12px 0 16px;
   min-height: 0;
   display: flex;
   flex-direction: column;
   scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
 }
+.ai__messages::-webkit-scrollbar { width: 10px; }
+.ai__messages::-webkit-scrollbar-track { background: transparent; }
+.ai__messages::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.ai__messages:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  background-clip: padding-box;
+}
+.ai__messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: padding-box;
+}
+
+/* ----- Empty state ----------------------------------------- */
 
 .ai__empty {
   margin: auto;
-  padding: 40px 28px;
+  padding: 44px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
+  gap: 10px;
   color: var(--color-text-muted);
   animation: suxai-fade-in var(--dur-slow) var(--ease-out);
 }
+.ai__empty-icon {
+  width: 56px; height: 56px;
+  display: grid; place-items: center;
+  border-radius: 16px;
+  background:
+    radial-gradient(80% 80% at 30% 20%, rgba(125, 130, 248, 0.30), transparent 70%),
+    rgba(125, 130, 248, 0.1);
+  border: 1px solid rgba(125, 130, 248, 0.32);
+  color: var(--color-accent-hover);
+  box-shadow: 0 8px 32px rgba(125, 130, 248, 0.16);
+  margin-bottom: 6px;
+}
+.ai__empty-badge {
+  display: inline-block;
+  padding: 4px 11px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+}
 .ai__empty h3 {
-  margin: 10px 0 8px;
-  font-size: 15px;
+  margin: 4px 0 4px;
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--color-text);
 }
 .ai__empty p {
   margin: 0;
   font-size: 12.5px;
-  line-height: 1.65;
+  line-height: 1.6;
+  max-width: 320px;
+}
+.ai__empty-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 14px;
+}
+.ai__empty-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.ai__empty-chip:hover {
+  background: rgba(125, 130, 248, 0.12);
+  color: var(--color-text);
+  border-color: var(--color-border-accent);
+  transform: translateY(-1px);
 }
 
-.ai__empty-badge {
-  display: inline-block;
-  padding: 4px 10px;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  margin-bottom: 8px;
+/* ----- Jump-to-latest floating button --------------------- */
+
+.ai__jump {
+  position: absolute;
+  right: 16px;
+  bottom: 130px;
+  width: 34px; height: 34px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: rgba(14, 20, 34, 0.95);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-accent);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5),
+              0 0 0 1px rgba(125, 130, 248, 0.18) inset;
+  cursor: pointer;
+  z-index: 5;
+  animation: suxai-fade-in 200ms var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
+.ai__jump:hover {
+  background: rgba(20, 26, 42, 0.98);
+  transform: translateY(-1px);
+}
+
+/* ----- Composer -------------------------------------------- */
 
 .ai__composer {
-  padding: 10px 12px 12px;
+  padding: 12px;
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-1);
   position: relative;
@@ -162,25 +314,15 @@
     box-shadow var(--dur-fast) var(--ease-out);
 }
 
-/* v0.13.1 — agent-running indicator. A single 2px gradient bar that
-   pulses while the assistant is streaming. Sits just above the
-   composer border so the user always sees that the IA is working
-   without needing to scroll up to find the spinner inside the
-   message bubble. Disappears the instant streaming stops. */
-.ai__composer--streaming {
-  box-shadow: inset 0 2px 0 0 rgba(125, 130, 248, 0.55);
-}
 .ai__composer--streaming::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  top: 0; left: 0; right: 0;
   height: 2px;
   background: linear-gradient(
     90deg,
     rgba(125, 130, 248, 0) 0%,
-    rgba(125, 130, 248, 0.95) 50%,
+    rgba(125, 130, 248, 1) 50%,
     rgba(125, 130, 248, 0) 100%
   );
   background-size: 200% 100%;
@@ -191,46 +333,53 @@
   from { background-position: 100% 50%; }
   to   { background-position: -100% 50%; }
 }
+
 .ai__composer--dragover {
-  background: rgba(125, 130, 248, 0.10);
+  background: rgba(125, 130, 248, 0.1);
   box-shadow: inset 0 0 0 1.5px rgba(125, 130, 248, 0.55);
 }
 .ai__composer--dragover::after {
   content: 'Drop to attach as context';
   position: absolute;
-  inset: 8px 12px;
-  display: grid;
-  place-items: center;
+  inset: 10px;
+  display: grid; place-items: center;
   pointer-events: none;
   border: 1.5px dashed rgba(125, 130, 248, 0.6);
   border-radius: var(--radius-md);
-  color: #b8bcff;
+  color: #c7d2fe;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  background: rgba(8, 12, 22, 0.55);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
+  background: rgba(8, 12, 22, 0.6);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 
 .ai__composer textarea {
   width: 100%;
+  min-height: 44px;
+  max-height: 240px;
   resize: none;
-  padding: 10px 12px;
+  overflow-y: auto;
+  padding: 11px 13px;
   border-radius: var(--radius-md);
-  background: rgba(8, 12, 22, 0.55);
+  background: rgba(8, 12, 22, 0.6);
   border: 1px solid var(--color-border);
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.55;
   outline: none;
-  transition: border-color var(--dur-base) var(--ease-out), box-shadow var(--dur-base) var(--ease-out);
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
+.ai__composer textarea::placeholder { color: var(--color-text-dim); }
 .ai__composer textarea:focus {
   border-color: var(--color-border-accent);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
-  background: rgba(8, 12, 22, 0.75);
+  background: rgba(8, 12, 22, 0.85);
 }
 
 .ai__composer-row {
@@ -238,9 +387,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
-
 .ai__composer-meta {
   display: flex;
   align-items: center;
@@ -248,11 +396,12 @@
   flex-wrap: wrap;
   min-width: 0;
 }
-
 .ai__composer-hint {
   font-size: 11.5px;
   color: var(--color-text-dim);
 }
+
+/* ----- Composer chips & attachments ----------------------- */
 
 .ai__chip {
   font-size: 11px;
@@ -262,7 +411,7 @@
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-family: var(--font-mono);
-  max-width: 140px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -273,8 +422,6 @@
   color: #c7d2fe;
 }
 
-/* Attachment chips above the composer. User-added via paperclip or
-   drag-drop. Included as explicit context on the next send. */
 .ai__attachments {
   display: flex;
   flex-wrap: wrap;
@@ -285,11 +432,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px 4px 8px;
+  padding: 4px 6px 4px 9px;
   border-radius: 999px;
-  background: rgba(125, 130, 248, 0.12);
-  border: 1px solid rgba(125, 130, 248, 0.3);
-  color: #d0d4ff;
+  background: rgba(125, 130, 248, 0.14);
+  border: 1px solid rgba(125, 130, 248, 0.32);
+  color: #d8dbff;
   font-size: 11.5px;
   max-width: 220px;
 }
@@ -299,29 +446,28 @@
   white-space: nowrap;
 }
 .ai__attach-x {
-  color: #a8adfc;
-  width: 16px;
-  height: 16px;
-  display: grid;
-  place-items: center;
+  color: #b3b8fc;
+  width: 16px; height: 16px;
+  display: grid; place-items: center;
   font-size: 14px;
   line-height: 1;
   border-radius: 50%;
-  transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
 }
-.ai__attach-x:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.ai__attach-x:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 
 .ai__attach-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 28px;
+  width: 32px; height: 28px;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
   border: 1px solid var(--color-border);
-  transition: background var(--dur-fast) var(--ease-out),
+  transition:
+    background var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
   cursor: pointer;
@@ -333,177 +479,10 @@
 }
 .ai__attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Empty-state polish. */
-.ai__empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 36px 20px;
-  gap: 10px;
-}
-.ai__empty-icon {
-  width: 48px;
-  height: 48px;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: rgba(125, 130, 248, 0.08);
-  border: 1px solid var(--color-border-accent);
-  color: var(--color-accent);
-  margin-bottom: 4px;
-}
-.ai__empty-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: center;
-  margin-top: 12px;
-}
-.ai__empty-chip {
-  padding: 6px 11px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: 11.5px;
-  cursor: pointer;
-  transition: background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-.ai__empty-chip:hover {
-  background: rgba(125, 130, 248, 0.1);
-  color: var(--color-text);
-  border-color: var(--color-border-accent);
-}
-
-/* Floating "jump to latest" button shown when the user has scrolled
-   away from the bottom and new tokens are still arriving. */
-.ai__jump {
-  position: absolute;
-  right: 16px;
-  bottom: 130px;
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: rgba(14, 20, 34, 0.95);
-  color: var(--color-text);
-  border: 1px solid var(--color-border-accent);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
-  cursor: pointer;
-  z-index: 5;
-  animation: suxai-fade-in 200ms var(--ease-out);
-  transition: background var(--dur-fast) var(--ease-out);
-}
-.ai__jump:hover { background: rgba(20, 26, 42, 0.98); }
-
-/* Composer textarea now grows with content (managed via JS). */
-.ai__composer textarea {
-  min-height: 40px;
-  max-height: 240px;
-  resize: none;
-  overflow-y: auto;
-}
-
-/* Agent mode toggle pill in the header. */
-.ai__agent-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition:
-    background var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
-    color var(--dur-base) var(--ease-out);
-}
-.ai__agent-toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text);
-}
-.ai__agent-toggle--on {
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(84, 87, 216, 0.12));
-  border-color: rgba(125, 130, 248, 0.5);
-  color: #d8dbff;
-}
-.ai__agent-toggle--on:hover { filter: brightness(1.1); }
-
-/* Plan mode toggle — same shape as the Agent pill but yellow when on,
-   to match Cursor's "Plan/Ask" affordance. The two buttons live side
-   by side in the header-actions row. */
-.ai__plan-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  transition:
-    background var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
-    color var(--dur-base) var(--ease-out);
-}
-.ai__plan-toggle:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--color-text);
-}
-.ai__plan-toggle--on {
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(217, 119, 6, 0.10));
-  border-color: rgba(251, 191, 36, 0.55);
-  color: #fde68a;
-}
-.ai__plan-toggle--on:hover { filter: brightness(1.1); }
-
-/* Pulsing dot inside the Agent pill — clear visual cue for the on/off
-   state without leaning on the Cmd-K-style sparkle SVG that didn't
-   render reliably across font stacks. */
-.ai__agent-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-dim);
-  flex-shrink: 0;
-  transition: background var(--dur-base) var(--ease-out);
-}
-.ai__agent-toggle--on .ai__agent-dot {
-  background: #86efac;
-  box-shadow: 0 0 6px rgba(134, 239, 172, 0.6);
-  animation: suxai-agent-pulse 1.6s ease-in-out infinite;
-}
-@keyframes suxai-agent-pulse {
-  0%, 100% { box-shadow: 0 0 4px rgba(134, 239, 172, 0.4); }
-  50%      { box-shadow: 0 0 9px rgba(134, 239, 172, 0.85); }
-}
-
-/* Header right-side action group — keeps the Agent pill + new-conv
-   button visually grouped and away from the title block. */
-.ai__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
+/* Tools wrapper inside an assistant message body. */
 .msg__tools {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 6px;
 }

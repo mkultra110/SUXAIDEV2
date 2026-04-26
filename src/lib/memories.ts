@@ -106,6 +106,80 @@ export function formatMemories(mems: Memory[]): string {
 }
 
 /**
+ * v0.13.4 — extract durable facts from a finished conversation via
+ * Haiku 4.5. Returns at most 5 candidates as an array of
+ * `{ title, content }`. Caller is responsible for showing a UI
+ * toast per candidate so the user can save / dismiss.
+ *
+ * Heuristic-gated to avoid burning tokens on trivial chats:
+ *   • runs only when the conversation has ≥ 6 messages (3 user
+ *     turns minimum)
+ *   • runs at most ONCE per conversation id (caller tracks)
+ *   • silently returns [] on any error — never surfaces to user
+ *
+ * The prompt is intentionally narrow: only project conventions,
+ * style/lib preferences, recurring tools. Bug-of-the-day, current
+ * task state, and ephemeral details are explicitly rejected.
+ */
+const MEMORY_EXTRACTION_PROMPT =
+  'Tu observes une conversation entre un développeur et un assistant IA. ' +
+  "Extrais les FAITS DURABLES sur les préférences de l'utilisateur ou les " +
+  'conventions du projet (PAS l\'état temporaire de la session).\n\n' +
+  'Format réponse : JSON valide, array de `{ "title": string ≤ 60 chars, "content": string ≤ 200 chars }`. ' +
+  'Si rien d\'extractible : `[]`. Maximum 5 items.\n\n' +
+  '**À EXTRAIRE :** préférences de style/lib (ex "Tailwind v4", "Result<T,E>"), ' +
+  'conventions du projet (ex "tests en Vitest", "imports absolus"), ' +
+  'outils du user (ex "utilise pnpm pas npm").\n\n' +
+  '**À NE PAS EXTRAIRE :** état de la tâche en cours, bug spécifique, ' +
+  'path de fichier précis, valeur numérique ad-hoc, "On en est à l\'étape 3".\n\n' +
+  'Réponds UNIQUEMENT avec le JSON, aucun markdown, aucune explication.';
+
+export interface MemoryCandidate {
+  title: string;
+  content: string;
+}
+
+export async function extractMemoriesFromTranscript(
+  transcript: string,
+  fetchFn: (prompt: string) => Promise<string>,
+): Promise<MemoryCandidate[]> {
+  if (transcript.length < 200) return [];
+  let raw: string;
+  try {
+    raw = await fetchFn(
+      MEMORY_EXTRACTION_PROMPT + '\n\n<conversation>\n' + transcript + '\n</conversation>',
+    );
+  } catch {
+    return [];
+  }
+  // Strip Haiku fences if any sneaked in.
+  const cleaned = raw.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```\s*$/, '').trim();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  const out: MemoryCandidate[] = [];
+  for (const item of parsed.slice(0, 5)) {
+    if (
+      item &&
+      typeof item === 'object' &&
+      typeof (item as Record<string, unknown>).title === 'string' &&
+      typeof (item as Record<string, unknown>).content === 'string'
+    ) {
+      const t = ((item as Record<string, unknown>).title as string).trim();
+      const c = ((item as Record<string, unknown>).content as string).trim();
+      if (t && c && t.length <= 80 && c.length <= 280) {
+        out.push({ title: t.slice(0, 60), content: c.slice(0, 200) });
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * React hook that subscribes to memory changes for the current
  * workspace and returns the latest list. Re-renders on add/delete
  * across components (the hook fires on the `suxai:memories-changed`

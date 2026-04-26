@@ -11,7 +11,7 @@ import { ConversationSwitcher } from './ConversationSwitcher';
 import { ApprovalDialog, type ApprovalRequest } from './ApprovalDialog';
 import { onAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
-import { loadMemories, formatMemories, addMemory, deleteMemory } from '../../lib/memories';
+import { loadMemories, formatMemories, addMemory, deleteMemory, extractMemoriesFromTranscript } from '../../lib/memories';
 import {
   emptyConversation,
   deriveTitle,
@@ -742,6 +742,10 @@ export function AIPanel() {
   const [appSettings] = useSettings();
   const approvalModeRef = useRef(appSettings.approvalMode);
   useEffect(() => { approvalModeRef.current = appSettings.approvalMode; }, [appSettings.approvalMode]);
+  // v0.13.4 — track which conversations have already had a memory
+  // extraction run, so we don't re-bill Haiku on every turn. Once
+  // extracted per conv, the user has to /reset or /clear to retry.
+  const memoryExtractedRef = useRef<Set<string>>(new Set());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   // Custom slash commands loaded from <workspace>/.suxai/commands/.
@@ -1771,6 +1775,60 @@ export function AIPanel() {
     [openFiles, selection, activeFile, editorContext, workspaceRoot],
   );
 
+  // v0.13.4 — background Haiku extraction of durable memories at the
+  // tail of a finished run. Fire-and-forget — never blocks the UI,
+  // never surfaces errors. Builds a compact transcript of the LAST
+  // 12 messages (skipping tool noise), asks Haiku to nominate up to
+  // 5 candidates, then shows ONE toast per accepted candidate so the
+  // user can save with a click. Fails silently on any error.
+  const runMemoryExtraction = useCallback(
+    async (convId: string, jwt: string): Promise<void> => {
+      const conv = conversations.find((c) => c.id === convId);
+      if (!conv || conv.messages.length < 6) return;
+      const tailCount = Math.min(12, conv.messages.length);
+      const transcript = conv.messages
+        .slice(-tailCount)
+        .filter((m) => m.content.trim().length > 0)
+        .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content.slice(0, 1200)}`)
+        .join('\n\n---\n\n');
+      if (transcript.length < 200) return;
+      const fetchHaiku = (prompt: string): Promise<string> =>
+        new Promise<string>((resolve, reject) => {
+          let acc = '';
+          streamAi(
+            jwt,
+            {
+              modelId: 'claude-haiku-4-5-20251001',
+              command: 'chat',
+              prompt,
+            },
+            {
+              onToken: (t) => { acc += t; },
+              onDone: (full) => resolve(full || acc),
+              onError: (err) => reject(err),
+            },
+          );
+        });
+      const candidates = await extractMemoriesFromTranscript(transcript, fetchHaiku);
+      // Deduplicate against existing memories by case-insensitive title.
+      const existing = new Set(
+        loadMemories(workspaceRoot).map((m) => m.title.toLowerCase()),
+      );
+      for (const cand of candidates) {
+        if (existing.has(cand.title.toLowerCase())) continue;
+        // v0.13.4: minimal UX — info toast with the title. Manual
+        // save via /memory command for now. A proper "Save" button
+        // requires a custom toast component which we'll wire in
+        // v0.13.5 along with /memory-edit.
+        toast.info(
+          `Memory candidate: ${cand.title}`,
+          `${cand.content}\n\nUse \`/memory ${cand.title}: ${cand.content}\` to save.`,
+        );
+      }
+    },
+    [conversations, workspaceRoot, toast],
+  );
+
   const sendCommand = useCallback(
     async (command: AiCommand, userText?: string) => {
       if (!token) return;
@@ -2063,7 +2121,23 @@ export function AIPanel() {
           requestApproval,
           applyLazyEdit: applyLazyEditBridge,
           getApprovalMode: () => approvalModeRef.current,
-        }).catch((err) => {
+        })
+          .then(() => {
+            // v0.13.4 — auto-extract memories at end of a meaningful
+            // run. Once-per-conversation guard means at most one
+            // background Haiku call per thread per session.
+            const convId = activeConvId;
+            if (
+              token &&
+              workspaceRoot &&
+              convId &&
+              !memoryExtractedRef.current.has(convId)
+            ) {
+              memoryExtractedRef.current.add(convId);
+              void runMemoryExtraction(convId, token);
+            }
+          })
+          .catch((err) => {
           console.error('[agent] loop failed:', err);
           setMessages((m) =>
             m.map((msg) =>

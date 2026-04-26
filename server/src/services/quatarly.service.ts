@@ -29,7 +29,21 @@ function buildSystemPrompt(
   const base =
     'You are SUXAI, a senior AI software engineer embedded in an IDE. ' +
     'Be precise and concise. When returning code, use fenced code blocks. ' +
-    'Never repeat the entire file unless asked.';
+    'Never repeat the entire file unless asked. ' +
+    // v0.12.9 — global blacklist: even in plain chat mode (no tools),
+    // the model must never emit Cline/Roo/Cursor pseudo-XML edit
+    // conventions. The IDE only renders inline diffs from real
+    // `edit_file` tool calls; pseudo-XML in the chat is dead weight
+    // the user has to copy/paste manually.
+    'NEVER emit any of these in your replies: `<apply_diff>` blocks, ' +
+    '`<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` markers, ' +
+    '`<edit>` / `<replace>` / `<diff>` / `<file_diff>` pseudo-XML, ' +
+    '`*** Begin Patch` / `*** End Patch` (Cursor format), or ' +
+    '`--- a/file` / `+++ b/file` standalone unified-diff hunks. ' +
+    'Those are conventions from other IDEs (Cline, Roo, aider, Cursor) ' +
+    'and SUXAI does not parse them. If you have edit tools (agent ' +
+    'mode), call `edit_file`. If you do not, describe the change in ' +
+    'prose with a regular fenced code block — never with pseudo-XML.';
   if (agent) {
     return (
       base +
@@ -54,6 +68,23 @@ function buildSystemPrompt(
       'will burn tokens for nothing. Tool calls trigger an inline diff in the ' +
       "user's editor where they accept or reject each hunk individually; that " +
       'is the ONLY correct way to deliver edits in agent mode.\n' +
+      // v0.12.9 — explicit blacklist of Cline/Roo/Cursor inline-edit
+      // pseudo-XML conventions. Sonnet/Opus thinking models trained
+      // on a lot of those prompts and silently regress to dumping
+      // `<apply_diff>` blocks in the chat instead of calling the
+      // `edit_file` tool. The user sees the raw markup as text, has
+      // to copy-paste manually, and the inline diff UX is bypassed.
+      '  • FORBIDDEN OUTPUT FORMATS — never emit any of these in your ' +
+      'reply, they are conventions from other IDEs (Cline / Roo / ' +
+      'aider) and SUXAI does not parse them:\n' +
+      '      `<apply_diff>` / `</apply_diff>` blocks\n' +
+      '      `<<<<<<< SEARCH` / `=======` / `>>>>>>> REPLACE` markers\n' +
+      '      `<edit>` / `<replace>` / `<diff>` / `<file_diff>` pseudo-XML\n' +
+      '      `*** Begin Patch` / `*** End Patch` (Cursor format)\n' +
+      '      Standalone `--- a/file` / `+++ b/file` unified-diff hunks\n' +
+      '    If you catch yourself writing any of these markers, STOP — ' +
+      'you must emit a real `edit_file` tool call instead. The IDE ' +
+      'will render the diff inline only via tool calls.\n' +
       '  • If the user just asks a question (no edit intent), answer in chat ' +
       'as normal — short code snippets for explanation are fine.\n\n' +
       // Pronoun resolution — the SUXAI client injects an

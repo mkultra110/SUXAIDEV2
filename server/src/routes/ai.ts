@@ -48,6 +48,11 @@ router.post(
     res.setHeader('cache-control', 'no-cache, no-transform');
     res.setHeader('connection', 'keep-alive');
     res.setHeader('x-accel-buffering', 'no');
+    // v0.12.4 (audit #25): defensive header. If a future
+    // `compression()` middleware is mounted globally, this signals
+    // "do not gzip / br this stream" — compression buffers chunks
+    // until the flush threshold which would silently break SSE.
+    res.setHeader('content-encoding', 'identity');
     res.flushHeaders?.();
 
     const startedAt = Date.now();

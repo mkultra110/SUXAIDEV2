@@ -270,10 +270,40 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
   // turn anyway — the cache_control on system + tools already covers
   // the stable prefix. Saves the 1.25× write multiplier on every
   // multi-tool agent turn.
+  //
+  // v0.12.4 (audit #16): skip when the cumulative messages prefix is
+  // below the Anthropic min-cacheable size (≈ 1024 tokens / 4096
+  // chars for Sonnet/Opus). A breakpoint there is a silent no-op on
+  // Anthropic's side but still costs the 1.25× write multiplier.
+  // Heuristic: 4 chars/token. system + tools breakpoints handle the
+  // small-prefix case fine.
+  const MIN_CACHEABLE_CHARS = 4096;
+  function approxCharCount(content: unknown): number {
+    if (typeof content === 'string') return content.length;
+    if (!Array.isArray(content)) return 0;
+    let n = 0;
+    for (const b of content as Array<Record<string, unknown>>) {
+      if (!b) continue;
+      if (b.type === 'text' && typeof b.text === 'string') n += b.text.length;
+      else if (b.type === 'tool_result' && typeof b.content === 'string') n += b.content.length;
+      // tool_use / thinking / redacted_thinking contribute negligibly
+      // to the prefix-cache decision; ignore for the heuristic.
+    }
+    return n;
+  }
+
   function markRollingCache(
     messages: unknown[],
   ): unknown[] {
     if (messages.length === 0) return messages;
+    // v0.12.4: cumulative size guard.
+    let totalChars = 0;
+    for (const m of messages) {
+      if (!m || typeof m !== 'object') continue;
+      totalChars += approxCharCount((m as { content?: unknown }).content);
+      if (totalChars >= MIN_CACHEABLE_CHARS) break;
+    }
+    if (totalChars < MIN_CACHEABLE_CHARS) return messages;
     const last = messages[messages.length - 1] as {
       role: string;
       content: unknown;
@@ -840,7 +870,24 @@ export async function applyLazyEdit(input: import('../schemas/ai.js').AiApplyInp
     if (!obj.content || obj.content.length === 0) return null;
     const piece = obj.content.find((b) => b.type === 'text');
     if (!piece || typeof piece.text !== 'string') return null;
-    return piece.text.replace(/^```[\w-]*\n?/, '').replace(/\n?```\s*$/, '');
+    const merged = piece.text.replace(/^```[\w-]*\n?/, '').replace(/\n?```\s*$/, '');
+    // v0.12.4 (audit #22): truncation guard. Haiku's 64K output cap
+    // can silently cut a 5K-line file mid-statement; without this
+    // check the user accepts a corrupted save. Compare line counts —
+    // refuse the merge if we lost more than 60 % of the original
+    // lines, signalling caller to fall back on the raw lazy edit.
+    // Marker leakage detection: if the literal `// ... existing code
+    // ...` survived into the output, the apply model failed at its
+    // job and we'd be saving placeholder comments verbatim.
+    const origLines = input.original.split('\n').length;
+    const mergedLines = merged.split('\n').length;
+    if (origLines > 50 && mergedLines < origLines * 0.4) {
+      return null; // suspected truncation
+    }
+    if (/\/\/\s*\.\.\.\s*existing code\s*\.\.\.|#\s*\.\.\.\s*existing code\s*\.\.\./i.test(merged)) {
+      return null; // marker leaked — apply model failed
+    }
+    return merged;
   } catch {
     return null;
   }

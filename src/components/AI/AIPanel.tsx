@@ -816,6 +816,10 @@ export function AIPanel() {
   // (≈ 560K chars across all messages). Fires once per threshold
   // crossing thanks to the ref guard so the user isn't spammed.
   const warnedAtRef = useRef<number>(0);
+  // v0.12.4 (audit #17): timestamp of the last successful compaction.
+  // Read by compactConversation to short-circuit a re-trigger that
+  // would loop on a still-saturated context.
+  const lastCompactAtRef = useRef<number>(0);
   useEffect(() => {
     if (!activeConv) return;
     const totalChars = activeConv.messages.reduce(
@@ -980,12 +984,26 @@ export function AIPanel() {
    */
   const compactConversation = useCallback(async () => {
     if (!token || !activeConvId) return;
+    // v0.12.4 (audit #17): thrashing guard. If a compaction ran in
+    // the last 30 s, refuse to retrigger — otherwise a long file
+    // re-opened right after compaction can immediately push us back
+    // over WARN_AT and start an infinite cycle. Toast the user so
+    // they know to /clear or pick a larger model.
+    const now = Date.now();
+    if (now - lastCompactAtRef.current < 30_000) {
+      toast.info(
+        'Compaction récente',
+        'Une compaction a déjà eu lieu il y a moins de 30 s — passe en /clear ou choisis un modèle à plus large fenêtre si la conversation reste trop dense.',
+      );
+      return;
+    }
     const conv = conversations.find((c) => c.id === activeConvId);
     if (!conv || conv.messages.length <= 8) return;
     const TAIL = 6; // keep the most recent 6 messages verbatim
     const tail = conv.messages.slice(-TAIL);
     const head = conv.messages.slice(0, -TAIL);
     if (head.length === 0) return;
+    lastCompactAtRef.current = now;
 
     // Render the head as a compact transcript for the summarising
     // model. We trim attachments / tool dumps to stay under a

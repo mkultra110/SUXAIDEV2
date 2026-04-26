@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol, session } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
@@ -1275,6 +1275,40 @@ async function nodeGrep(
 }
 
 app.whenReady().then(() => {
+  // v0.12.5 (audit #2): in production, install a strict CSP via the
+  // response-headers hook that overrides whatever the renderer's
+  // <meta http-equiv="Content-Security-Policy"> said. We can't drop
+  // 'unsafe-inline' from script-src in dev because Vite's HMR client
+  // is injected as inline script — but in the packaged build there
+  // are no inline scripts, so we kill the directive entirely.
+  // Style-src keeps 'unsafe-inline' because Monaco emits ad-hoc
+  // <style> elements at runtime that we cannot nonce.
+  if (app.isPackaged) {
+    const STRICT_CSP = [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data:",
+      "connect-src 'self' https: http://localhost:* ws://localhost:*",
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "base-uri 'none'",
+      "frame-ancestors 'none'",
+    ].join('; ');
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const headers = { ...(details.responseHeaders ?? {}) };
+      // Drop any CSP the loaded document set so ours is authoritative.
+      for (const k of Object.keys(headers)) {
+        if (k.toLowerCase() === 'content-security-policy') {
+          delete headers[k];
+        }
+      }
+      headers['Content-Security-Policy'] = [STRICT_CSP];
+      callback({ responseHeaders: headers });
+    });
+  }
+
   protocol.handle('app', async (req) => {
     const url = new URL(req.url);
     // Defend against directory traversal (e.g. /../../etc/passwd).

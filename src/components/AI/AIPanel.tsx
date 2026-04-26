@@ -827,7 +827,19 @@ export function AIPanel() {
       0,
     );
     const approxTokens = Math.round(totalChars / 4);
-    const WARN_AT = 140_000; // ~70% of 200K window
+    // v0.12.5 (audit #9): per-model context window. Sonnet/Haiku 4.x
+    // = 200K tokens, Opus 4.x = 200K, but interleaved-thinking and
+    // future bumps can push to 1M. Trigger compaction at 70 % of the
+    // *current model's* window — without this, switching to a 400K
+    // model fired the warning at 35 % usage. Keep a safe 200K
+    // default for unknown IDs.
+    const ctxByModel: Record<string, number> = {
+      'claude-opus-4-6-thinking': 400_000,
+      'claude-sonnet-4-6-thinking': 200_000,
+      'claude-haiku-4-5-20251001': 200_000,
+    };
+    const ctxWindow = ctxByModel[modelId] ?? 200_000;
+    const WARN_AT = Math.floor(ctxWindow * 0.7);
     if (approxTokens > WARN_AT && warnedAtRef.current < WARN_AT) {
       warnedAtRef.current = approxTokens;
       toast.info(
@@ -838,7 +850,7 @@ export function AIPanel() {
     // Reset the guard when the conversation shrinks (e.g. after
     // /compact runs).
     if (approxTokens < WARN_AT * 0.8) warnedAtRef.current = 0;
-  }, [activeConv, toast]);
+  }, [activeConv, modelId, toast]);
 
   // Mutate the active conversation's messages array.
   const setMessages = useCallback(

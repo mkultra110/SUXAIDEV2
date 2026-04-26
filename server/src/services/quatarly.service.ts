@@ -1,6 +1,42 @@
 import { env } from '../config/env.js';
 import { findModel, type AiRequestInput } from '../schemas/ai.js';
 
+/**
+ * v0.15.10 (audit-4 #1) — strip HTML/JS-flavoured chars from upstream
+ * Quatarly error bodies before we put them in an Error message that
+ * may eventually flow back to the client. An attacker proxying or
+ * compromising upstream could otherwise reflect XSS-shaped strings or
+ * leak internal headers in our error pipeline.
+ */
+function sanitizeUpstreamErr(text: string): string {
+  return text
+    .slice(0, 300)
+    .replace(/[<>"'`]/g, '')
+    .replace(/[\x00-\x1f\x7f]/g, ' ');
+}
+
+/**
+ * v0.15.10 (audit-4 #5, #10) — bound every non-streaming Quatarly
+ * fetch with a hard timeout so a hung upstream can't tie up event-loop
+ * slots indefinitely. 30 s is conservative for Haiku's apply / FIM /
+ * count-tokens calls (typical p99 < 5 s). Streaming /v1/messages calls
+ * have their own abort plumbing through the request signal, so they
+ * route through plain fetch.
+ */
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs = 30_000,
+): Promise<Response> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ac.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface StreamHandlers {
   onDelta: (chunk: string) => void;
   onToolUse?: (call: { id: string; name: string; input: unknown }) => void;
@@ -219,7 +255,7 @@ async function streamOpenAI(modelId: string, req: AiRequestInput, h: StreamHandl
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
+      throw new Error(`upstream ${res.status}: ${sanitizeUpstreamErr(text)}`);
     }
     const reader = res.body.getReader();
     if (signal) {
@@ -493,7 +529,7 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
     });
     if (!res.ok || !res.body) {
       const text = await res.text().catch(() => '');
-      throw new Error(`upstream ${res.status}: ${text.slice(0, 300)}`);
+      throw new Error(`upstream ${res.status}: ${sanitizeUpstreamErr(text)}`);
     }
     const reader = res.body.getReader();
     // v0.11.7: forward the route's AbortSignal to the upstream
@@ -813,7 +849,8 @@ export async function completeFIM(input: import('../schemas/ai.js').AiCompleteIn
     ],
   };
   try {
-    const res = await fetch(url, {
+    // v0.15.10 (audit-4 #5) — 30s upper bound on Haiku FIM call.
+    const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -901,7 +938,8 @@ export async function applyLazyEdit(input: import('../schemas/ai.js').AiApplyInp
   };
 
   try {
-    const res = await fetch(url, {
+    // v0.15.10 (audit-4 #5) — bounded 30s on apply-model calls.
+    const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -971,7 +1009,8 @@ export async function countTokens(
     body.thinking = { type: 'enabled', budget_tokens: 16000 };
   }
   try {
-    const res = await fetch(url, {
+    // v0.15.10 (audit-4 #10) — bounded 15s on count-tokens (cheap call).
+    const res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

@@ -1,9 +1,23 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
 
 const router = Router();
 
-router.get('/manifest', (_req, res) => {
+// v0.15.10 (audit-4 #4) — dedicated rate-limit on the public,
+// unauthenticated /manifest endpoint. The global Express limiter
+// (300/min) is too generous for an endpoint anybody on the internet
+// can spam. 60 req/min per IP is plenty for a polling client (default
+// poll is once every 30 minutes).
+const manifestLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { message: 'Update manifest rate limit exceeded', code: 'RATE_LIMIT' },
+});
+
+router.get('/manifest', manifestLimiter, (_req, res) => {
   const manifest: Record<string, unknown> = {
     version: env.UPDATE_VERSION,
     url: env.UPDATE_URL,

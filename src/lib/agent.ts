@@ -450,7 +450,12 @@ export type ApproveFn = (
   preview?: { path: string; original: string; proposed: string },
 ) => Promise<ApproveResult | boolean>;
 
-function normalizeApprove(r: ApproveResult | boolean): ApproveResult {
+function normalizeApprove(r: ApproveResult | boolean | null | undefined): ApproveResult {
+  // v0.15.10 (audit-3 #5) — null / undefined defaults to a deny so
+  // a misbehaving caller (or a thrown async error swallowed upstream)
+  // can never be interpreted as an approval. Without this guard,
+  // `if (!approval.ok)` blows up with "Cannot read 'ok' of undefined".
+  if (r === null || r === undefined) return { ok: false };
   return typeof r === 'boolean' ? { ok: r } : r;
 }
 
@@ -638,7 +643,12 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
     }
     case 'write_file': {
       const path = expectString(args, 'path');
-      const content = typeof args.content === 'string' ? (args.content as string) : '';
+      // v0.15.10 (audit-3 #1) — was : `typeof === 'string' ? args.content : ''`,
+      // which silently turned an undefined / null / wrong-typed `content`
+      // into an empty file. The model's own bug got committed to disk.
+      // Now : same strict expectString as edit_file → validation error
+      // surfaces back to the model on the next turn.
+      const content = expectString(args, 'content');
       // v0.12.12 — same per-path lock as edit_file. write_file is a
       // full overwrite so it doesn't lose data the way edit_file does,
       // but two parallel write_file on the same path would queue two
@@ -843,6 +853,11 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       type Entry = { path: string; line: number; text: string; tokensMatched: Set<string> };
       const byKey = new Map<string, Entry>();
       const tokensByFile = new Map<string, Set<string>>();
+      // v0.15.10 (audit-3 #8) — cap on number of distinct files we
+      // track tokens for. 6 keywords × 50 hits = up to 300 distinct
+      // files in worst case ; in real-world repos this stays under 100.
+      // The cap protects against pathological queries on giant repos.
+      const MAX_FILES_TRACKED = 200;
       keywordHits.forEach((res, i) => {
         if (!res.hits) return;
         const tok = tokens[i];
@@ -855,7 +870,11 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
             byKey.set(key, { ...h, tokensMatched: new Set([tok]) });
           }
           let set = tokensByFile.get(h.path);
-          if (!set) { set = new Set(); tokensByFile.set(h.path, set); }
+          if (!set) {
+            if (tokensByFile.size >= MAX_FILES_TRACKED) continue;
+            set = new Set();
+            tokensByFile.set(h.path, set);
+          }
           set.add(tok);
         }
       });

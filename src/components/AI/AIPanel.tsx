@@ -1561,8 +1561,16 @@ export function AIPanel() {
             return true;
           }
           const colonIdx = trimmed.indexOf(':');
-          const title = colonIdx > 0 ? trimmed.slice(0, colonIdx).trim() : trimmed.slice(0, 60);
-          const content = colonIdx > 0 ? trimmed.slice(colonIdx + 1).trim() : trimmed;
+          // v0.15.10 (audit-3 #3) — when no colon is present, the old
+          // code used the full untrimmed input as content, bypassing
+          // the 300-char cap. Apply the same caps in both branches so
+          // a single rogue paste can't dump 5 KB into the memory store.
+          const title = colonIdx > 0
+            ? trimmed.slice(0, colonIdx).trim().slice(0, 60)
+            : trimmed.slice(0, 60);
+          const content = colonIdx > 0
+            ? trimmed.slice(colonIdx + 1).trim().slice(0, 300)
+            : trimmed.slice(0, 300);
           if (!title || !content) {
             toast.error('Memory rejected', 'Title and content cannot be empty.');
             return true;
@@ -2348,7 +2356,13 @@ export function AIPanel() {
               !memoryExtractedRef.current.has(convId)
             ) {
               memoryExtractedRef.current.add(convId);
-              void runMemoryExtraction(convId, token);
+              // v0.15.10 (audit-3 #2) — attach .catch so an exception
+              // inside the background extraction (Haiku 5xx, network,
+              // store schema mismatch) doesn't surface as an
+              // unhandledrejection in the renderer.
+              runMemoryExtraction(convId, token).catch((err) => {
+                console.error('[memory-extract] failed:', err);
+              });
             }
           })
           .catch((err) => {

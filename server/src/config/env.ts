@@ -40,7 +40,22 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
-export const corsOrigins =
-  env.CORS_ORIGINS === '*'
-    ? true
-    : env.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean);
+// v0.15.10 (audit-4 #7) — never combine credentials:true with origin
+// wildcard. In production we reject the wildcard outright (browsers
+// block the combo anyway, but we catch misconfig at boot). In dev we
+// keep `true` for localhost convenience but credentials:true on a
+// non-public listener is acceptable because it's loopback only.
+export const corsOrigins = (() => {
+  if (env.CORS_ORIGINS === '*') {
+    if (env.NODE_ENV === 'production') {
+      throw new Error(
+        'CORS_ORIGINS="*" is unsafe with credentials:true. Set an explicit ' +
+          'comma-separated list of trusted origins in /opt/suxai/.env',
+      );
+    }
+    return true;
+  }
+  return env.CORS_ORIGINS.split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+})();

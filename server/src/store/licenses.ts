@@ -1,4 +1,21 @@
 import fs from 'node:fs/promises';
+import { timingSafeEqual } from 'node:crypto';
+
+/**
+ * v0.15.10 (audit-4 #8) — constant-time string compare so an
+ * attacker can't time-side-channel which licenses exist. The schema
+ * already enforces a fixed format (SUXAI-XXXXX-XXXXX-XXXXX-XXXXX),
+ * so all valid keys are the same byte length — perfect fit for
+ * timingSafeEqual which throws on length mismatch.
+ */
+function keysEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+  } catch {
+    return false;
+  }
+}
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { env } from '../config/env.js';
@@ -38,7 +55,18 @@ async function readAll(): Promise<LicenseRecord[]> {
 async function writeAll(records: LicenseRecord[]): Promise<void> {
   await ensureDataDir();
   const tmp = `${DB_FILE}.${process.pid}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(records, null, 2), { mode: 0o600 });
+  // v0.15.10 (audit-4 #3) — open/write/fsync/close/rename so a power
+  // loss between the writeFile and the rename can't lose redeemed-state.
+  // Without fsync the kernel may buffer the write and the rename
+  // commits before the contents reach disk → on reboot the license
+  // looks unredeemed and can be replayed.
+  const fh = await fs.open(tmp, 'w', 0o600);
+  try {
+    await fh.writeFile(JSON.stringify(records, null, 2));
+    await fh.sync();
+  } finally {
+    await fh.close();
+  }
   await fs.rename(tmp, DB_FILE);
 }
 
@@ -61,7 +89,7 @@ export const licenseStore = {
       let key: string;
       do {
         key = generateKey();
-      } while (records.some((r) => r.key === key));
+      } while (records.some((r) => keysEqual(r.key, key)));
       created = { key, tier: 'pro', createdAt: new Date().toISOString(), note };
       await writeAll([...records, created]);
     });
@@ -70,7 +98,7 @@ export const licenseStore = {
 
   async findByKey(key: string): Promise<LicenseRecord | null> {
     const records = await readAll();
-    return records.find((r) => r.key === key) ?? null;
+    return records.find((r) => keysEqual(r.key, key)) ?? null;
   },
 
   async redeem(key: string, userId: string): Promise<LicenseRecord | null> {
@@ -78,7 +106,7 @@ export const licenseStore = {
     let alreadyRedeemed = false;
     await enqueueWrite(async () => {
       const records = await readAll();
-      const idx = records.findIndex((r) => r.key === key);
+      const idx = records.findIndex((r) => keysEqual(r.key, key));
       if (idx < 0) return;
       if (records[idx].redeemedBy) {
         alreadyRedeemed = true;

@@ -5,7 +5,8 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import https from 'node:https';
-import http from 'node:http';
+// v0.15.10 (audit-2 #4) — `http` import dropped : updater now refuses
+// any non-HTTPS URL up front (see fetchJson / downloadWithProgress).
 
 type Manifest = {
   version: string;
@@ -112,14 +113,43 @@ export class UpdateManager {
 
   private downloadWithProgress(url: string, destPath: string, expectedSize?: number) {
     return new Promise<void>((resolve, reject) => {
-      const client = url.startsWith('https') ? https : http;
+      // v0.15.10 (audit-2 #1, #4) — installer downloads MUST use HTTPS,
+      // never HTTP. A misconfig / env-var injection on URL_BASE would
+      // otherwise stream cleartext bytes the SHA verify can't protect
+      // against MITM rewriting.
+      if (!url.startsWith('https://')) {
+        reject(new Error('Installer URL must use HTTPS'));
+        return;
+      }
+      const client = https;
       const file = fs.createWriteStream(destPath);
       let transferred = 0;
       const req = client.get(url, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          // v0.15.10 (audit-2 #1) — only follow same-origin redirects.
+          // A redirect to a different host can downgrade-attack the
+          // user even if SHA verification later catches a payload
+          // mismatch (the SHA itself comes from the manifest, which
+          // could have been swapped on the redirect target).
+          let nextUrl: URL;
+          try {
+            nextUrl = new URL(res.headers.location, url);
+          } catch {
+            file.close();
+            fs.unlink(destPath, () => {});
+            reject(new Error('Malformed redirect URL'));
+            return;
+          }
+          const originalOrigin = new URL(url).origin;
+          if (nextUrl.origin !== originalOrigin) {
+            file.close();
+            fs.unlink(destPath, () => {});
+            reject(new Error('Cross-origin redirect refused'));
+            return;
+          }
           file.close();
           fs.unlink(destPath, () => {});
-          this.downloadWithProgress(res.headers.location, destPath, expectedSize).then(resolve, reject);
+          this.downloadWithProgress(nextUrl.toString(), destPath, expectedSize).then(resolve, reject);
           return;
         }
         if (res.statusCode !== 200) {
@@ -154,10 +184,30 @@ export class UpdateManager {
 
   private fetchJson<T>(url: string): Promise<T> {
     return new Promise((resolve, reject) => {
-      const client = url.startsWith('https') ? https : http;
+      // v0.15.10 (audit-2 #4, #7) — manifest fetch is the entire trust
+      // root for the updater (the SHA-256 verifying the binary lives
+      // there). Cleartext HTTP would let a MITM rewrite both the URL
+      // and the SHA — refuse it.
+      if (!url.startsWith('https://')) {
+        reject(new Error('Manifest URL must use HTTPS'));
+        return;
+      }
+      const client = https;
       const req = client.get(url, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          this.fetchJson<T>(res.headers.location).then(resolve, reject);
+          // Same-origin redirect guard as downloadWithProgress.
+          let nextUrl: URL;
+          try {
+            nextUrl = new URL(res.headers.location, url);
+          } catch {
+            reject(new Error('Malformed redirect URL'));
+            return;
+          }
+          if (nextUrl.origin !== new URL(url).origin) {
+            reject(new Error('Cross-origin manifest redirect refused'));
+            return;
+          }
+          this.fetchJson<T>(nextUrl.toString()).then(resolve, reject);
           return;
         }
         if (res.statusCode !== 200) {

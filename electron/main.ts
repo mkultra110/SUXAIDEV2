@@ -379,7 +379,8 @@ function registerIpc() {
       const target = path.join(plansDir, `${slug}.md`);
       // Atomic write + fsync, same as fs:write-file.
       const tmp = `${target}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-      const fh = await fs.open(tmp, 'w');
+      // v0.15.10 (audit-2 #9) — explicit 0o600 mode (see atomicWrite).
+      const fh = await fs.open(tmp, 'w', 0o600);
       try {
         await fh.writeFile(content, 'utf8');
         await fh.sync();
@@ -661,8 +662,15 @@ function registerIpc() {
   const lastSeenMtime = new Map<string, number>();
   const MTIME_CACHE_CAP = 5000;
   function rememberMtime(safePath: string, ms: number): void {
-    if (lastSeenMtime.size >= MTIME_CACHE_CAP) {
-      // FIFO eviction: drop oldest insertion — Map preserves insertion order.
+    // v0.15.10 (audit-2 #10) — LRU instead of FIFO. With FIFO, the
+    // file the user opened first in the session was the FIRST evicted,
+    // even if they were still actively reading/writing it (its mtime
+    // entry was never refreshed). LRU re-anchors recency on every
+    // touch so a hot file can't be silently dropped from the
+    // concurrent-edit guard mid-session.
+    if (lastSeenMtime.has(safePath)) {
+      lastSeenMtime.delete(safePath);
+    } else if (lastSeenMtime.size >= MTIME_CACHE_CAP) {
       const first = lastSeenMtime.keys().next().value;
       if (first !== undefined) lastSeenMtime.delete(first);
     }
@@ -786,7 +794,12 @@ function registerIpc() {
     const onDiskContent = applyQuirks(safe, content);
     const tmp = `${safe}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 10)}.tmp`;
     try {
-      const fh = await fs.open(tmp, 'w');
+      // v0.15.10 (audit-2 #8) — open with explicit 0o600 so the tmp
+      // file is owner-only-readable while it exists. Without this the
+      // current umask leaves a millisecond window where a hostile
+      // local user can read in-progress writes containing the user's
+      // edited source.
+      const fh = await fs.open(tmp, 'w', 0o600);
       try {
         await fh.writeFile(onDiskContent, 'utf8');
         await fh.sync(); // flush page cache to disk before rename
@@ -820,6 +833,14 @@ function registerIpc() {
   ) => {
     const safe = sanitizeFsPath(filePath);
     if (typeof content !== 'string') throw new Error('Content must be a string');
+    // v0.15.10 (audit-2 #5) — opts type guard. The previous
+    // `!opts?.skipMtimeCheck` check coerced any truthy value to false
+    // (e.g. opts: { skipMtimeCheck: "yes" } would pass the negation
+    // and skip the guard). Now we only accept a strict `true` boolean.
+    const skipMtimeCheck =
+      opts !== null &&
+      typeof opts === 'object' &&
+      (opts as { skipMtimeCheck?: unknown }).skipMtimeCheck === true;
     // Concurrent-edit guard (v0.11.4): if we previously read this
     // file and the on-disk mtime has moved since, refuse to clobber.
     // Caller can opt out via { skipMtimeCheck: true } when the user
@@ -827,7 +848,7 @@ function registerIpc() {
     // Brand-new files (no entry in the map) always succeed — that's
     // a creation, not a clobber.
     const expected = lastSeenMtime.get(safe);
-    if (expected !== undefined && !opts?.skipMtimeCheck) {
+    if (expected !== undefined && !skipMtimeCheck) {
       try {
         const current = await fs.stat(safe);
         if (Math.abs(current.mtimeMs - expected) > 1) {
@@ -1317,10 +1338,19 @@ function registerIpc() {
       return { ok: false, error: toplevel.stderr.trim() || 'not_a_git_repo' };
     }
     let root: string;
+    const rawRoot = toplevel.stdout.trim();
+    // v0.15.10 (audit-2 #11) — defensive: a tampered git binary or a
+    // hostile alias could output a URL or relative path. We expect a
+    // real absolute filesystem path. Reject anything that smells like
+    // a URL before handing to sanitizeFsPath (which would then
+    // fail with a less-clear error).
+    if (rawRoot.includes('://')) {
+      return { ok: false, error: 'git output is not a path' };
+    }
     try {
       // Re-validate the repo root through sanitizeFsPath so a symlinked
       // toplevel that escapes FS_DENY can't sneak through.
-      root = sanitizeFsPath(toplevel.stdout.trim(), { mustExist: true });
+      root = sanitizeFsPath(rawRoot, { mustExist: true });
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }
@@ -1502,10 +1532,36 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
 
+  // v0.15.10 (audit-2 #2) — manifest URL must point at a known SUXAI
+  // host. Without this whitelist, a malicious launcher (compromised
+  // .desktop, hijacked PATH, modified .bashrc) could set
+  // UPDATE_MANIFEST_URL to attacker-controlled HTTPS and the updater
+  // would happily fetch/sha-verify/install whatever the manifest
+  // pointed at. The check is on hostname so http→https / port
+  // changes don't break it ; HTTPS is enforced separately in the
+  // updater itself (see updater.ts fetchJson).
+  const ALLOWED_MANIFEST_HOSTS = new Set([
+    'suxai.209-99-186-238.sslip.io',
+    '209.99.186.238',
+  ]);
+  const requestedManifestUrl =
+    process.env.UPDATE_MANIFEST_URL ??
+    'https://suxai.209-99-186-238.sslip.io/update/manifest';
+  let manifestUrl = requestedManifestUrl;
+  try {
+    const parsed = new URL(requestedManifestUrl);
+    if (!ALLOWED_MANIFEST_HOSTS.has(parsed.hostname)) {
+      console.warn(
+        '[updater] UPDATE_MANIFEST_URL host not whitelisted, ignoring:',
+        parsed.hostname,
+      );
+      manifestUrl = 'https://suxai.209-99-186-238.sslip.io/update/manifest';
+    }
+  } catch {
+    manifestUrl = 'https://suxai.209-99-186-238.sslip.io/update/manifest';
+  }
   updateManager = new UpdateManager({
-    manifestUrl:
-      process.env.UPDATE_MANIFEST_URL ??
-      'https://suxai.209-99-186-238.sslip.io/update/manifest',
+    manifestUrl,
     currentVersion: app.getVersion(),
     getWindow: () => mainWindow,
   });
@@ -1558,7 +1614,12 @@ app.on('web-contents-created', (_e, contents) => {
       return { action: 'deny' };
     }
     if (parsed.protocol === 'https:' || parsed.protocol === 'http:' || parsed.protocol === 'mailto:') {
-      shell.openExternal(url).catch(() => { /* */ });
+      // v0.15.10 (audit-2 #12) — log failures so a user reporting "the
+      // link did nothing" has something to grep in the dev tools
+      // console / app log instead of a silent swallow.
+      shell.openExternal(url).catch((err) => {
+        console.warn('[setWindowOpenHandler] external open failed:', err);
+      });
     }
     return { action: 'deny' };
   });

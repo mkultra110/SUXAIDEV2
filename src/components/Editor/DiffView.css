@@ -3,7 +3,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-0);
+  background: var(--color-bg);
   z-index: 30;
 }
 
@@ -13,8 +13,9 @@
   justify-content: space-between;
   padding: 10px 16px;
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(180deg, rgba(17, 22, 33, 0.9), rgba(11, 15, 23, 0.85));
-  backdrop-filter: blur(16px);
+  background: linear-gradient(180deg, rgba(17, 22, 33, 0.92), rgba(11, 15, 23, 0.88));
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
 }
 
 .diffview__title {
@@ -26,15 +27,16 @@
 }
 
 .diffview__badge {
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.22), rgba(84, 87, 216, 0.15));
-  border: 1px solid rgba(125, 130, 248, 0.45);
-  color: #cfd2ff;
-  padding: 2px 8px;
-  border-radius: 4px;
+  background: linear-gradient(135deg, rgba(125, 130, 248, 0.24), rgba(84, 87, 216, 0.16));
+  border: 1px solid rgba(125, 130, 248, 0.5);
+  color: #d8dbff;
+  padding: 2.5px 9px;
+  border-radius: 999px;
   font-size: 10.5px;
   letter-spacing: 0.08em;
   font-weight: 600;
   text-transform: uppercase;
+  box-shadow: 0 0 8px rgba(125, 130, 248, 0.18);
 }
 
 .diffview__file {

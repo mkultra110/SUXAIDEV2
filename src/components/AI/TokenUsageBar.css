@@ -1,50 +1,66 @@
-/* Daily-budget indicator pinned in the composer footer.
-   Three styles depending on free/pro tier and how full the bar is. */
+/* ============================================================
+   TokenUsageBar — daily-budget indicator in composer footer
+   v0.15.2 — visual refresh.
+   ============================================================ */
+
 .tubar {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 9px;
+  gap: 7px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
   border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   font-size: 10px;
   color: var(--color-text-dim);
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
 .tubar__bar {
-  width: 64px;
+  width: 70px;
   height: 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.2);
 }
 .tubar__fill {
   height: 100%;
-  background: #6ee497;
+  background: linear-gradient(90deg, #6ee497, #86efac);
+  box-shadow: 0 0 6px rgba(110, 228, 151, 0.45);
   transition: width var(--dur-base) var(--ease-out);
 }
-.tubar--warn .tubar__fill { background: #fbbf24; }
-.tubar--crit .tubar__fill { background: #ff8e8e; }
+.tubar--warn .tubar__fill {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.45);
+}
+.tubar--crit .tubar__fill {
+  background: linear-gradient(90deg, #ef4444, #f87171);
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+}
 
 .tubar--warn { border-color: rgba(251, 191, 36, 0.5); color: #fde68a; }
 .tubar--crit { border-color: rgba(239, 68, 68, 0.5); color: #fca5a5; }
 
 .tubar__label {
   font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 .tubar--pro {
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.18), rgba(84, 87, 216, 0.10));
-  border-color: rgba(125, 130, 248, 0.45);
-  color: #d8dbff;
-  padding: 0 8px;
+  background:
+    linear-gradient(135deg, rgba(125, 130, 248, 0.22), rgba(84, 87, 216, 0.12));
+  border-color: rgba(125, 130, 248, 0.5);
+  color: #e0e3ff;
+  padding: 0 10px;
+  box-shadow: 0 0 8px rgba(125, 130, 248, 0.16);
 }
 .tubar__icon {
   color: #fde68a;
   font-size: 11px;
-  text-shadow: 0 0 4px rgba(251, 191, 36, 0.55);
+  text-shadow: 0 0 6px rgba(251, 191, 36, 0.6);
 }

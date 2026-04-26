@@ -1,32 +1,37 @@
-/* "Files Modified" panel rendered under an assistant turn that
-   performed edits. Visually a card with a header, file chip list,
-   and footer with navigation + master accept/reject buttons. */
+/* ============================================================
+   EditedFilesPanel — "Files Modified" card under an assistant turn
+   v0.15.2 — visual refresh harmonised with chat v0.14.0.
+   ============================================================ */
+
 .edfiles {
   margin: 12px 0 4px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
-  background: rgba(8, 12, 22, 0.55);
+  background:
+    linear-gradient(180deg, rgba(8, 12, 22, 0.55), rgba(8, 12, 22, 0.65));
   border: 1px solid var(--color-border);
   font-size: 12px;
   color: var(--color-text-muted);
+  transition: border-color var(--dur-fast) var(--ease-out);
 }
+.edfiles:hover { border-color: var(--color-border-strong); }
 
 .edfiles__head {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .edfiles__badge {
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(125, 130, 248, 0.18);
-  color: #c9cdff;
-  border: 1px solid rgba(125, 130, 248, 0.3);
+  padding: 2.5px 8px;
+  border-radius: 999px;
+  background: rgba(125, 130, 248, 0.2);
+  color: #d0d4ff;
+  border: 1px solid rgba(125, 130, 248, 0.34);
 }
 .edfiles__count {
   font-weight: 600;
@@ -36,7 +41,7 @@
 .edfiles__totals {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-variant-numeric: tabular-nums;
   font-size: 11.5px;
 }
@@ -44,62 +49,67 @@
 .edfiles__pending-pill {
   font-size: 10.5px;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 2.5px 9px;
   border-radius: 999px;
-  background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.45);
+  background: rgba(251, 191, 36, 0.16);
+  color: #fde68a;
+  border: 1px solid rgba(251, 191, 36, 0.46);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.16);
 }
-.edfiles__plus  { color: #6ee497; font-weight: 600; }
-.edfiles__minus { color: #ff8e8e; font-weight: 600; }
+.edfiles__plus  { color: #86efac; font-weight: 600; }
+.edfiles__minus { color: #fca5a5; font-weight: 600; }
 
 .edfiles__list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
+  gap: 5px;
+  margin-bottom: 12px;
 }
 
 .edfiles__chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   width: 100%;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--color-border);
+  border-left: 2px solid transparent;
   border-radius: var(--radius-sm);
   color: var(--color-text);
   cursor: pointer;
   text-align: left;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 12px;
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
 .edfiles__chip:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
   border-color: var(--color-border-strong);
 }
 .edfiles__chip--current {
-  border-color: rgba(125, 130, 248, 0.55);
-  background: rgba(125, 130, 248, 0.10);
+  border-color: rgba(125, 130, 248, 0.6);
+  border-left-color: var(--color-accent);
+  background: rgba(125, 130, 248, 0.12);
 }
 .edfiles__chip-icon {
   display: inline-flex;
-  width: 16px;
-  height: 16px;
-  align-items: center;
-  justify-content: center;
+  width: 16px; height: 16px;
+  align-items: center; justify-content: center;
   font-size: 11px;
   flex-shrink: 0;
 }
-.edfiles__chip--pending  .edfiles__chip-icon { color: #fbbf24; }
-.edfiles__chip--streaming .edfiles__chip-icon { color: #7d82f8; }
-.edfiles__chip--accepted .edfiles__chip-icon { color: #6ee497; }
-.edfiles__chip--rejected .edfiles__chip-icon { color: #ff8e8e; }
-.edfiles__chip--error    .edfiles__chip-icon { color: #ff8e8e; }
+.edfiles__chip--pending   .edfiles__chip-icon { color: #fbbf24; }
+.edfiles__chip--streaming .edfiles__chip-icon { color: #8b8ffb; animation: edfiles-pulse 1.4s var(--ease-in-out) infinite; }
+.edfiles__chip--accepted  .edfiles__chip-icon { color: #86efac; }
+.edfiles__chip--rejected  .edfiles__chip-icon { color: #fca5a5; }
+.edfiles__chip--error     .edfiles__chip-icon { color: #fca5a5; }
+@keyframes edfiles-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
 
 .edfiles__chip-name {
   flex: 1;
@@ -110,16 +120,16 @@
 .edfiles__chip-stats {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-variant-numeric: tabular-nums;
   font-size: 11px;
   flex-shrink: 0;
 }
 .edfiles__chip-hunks {
   font-size: 10px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 1.5px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
   color: var(--color-text-dim);
   flex-shrink: 0;
 }
@@ -129,7 +139,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 8px;
+  padding-top: 9px;
   border-top: 1px solid var(--color-border);
 }
 
@@ -139,20 +149,23 @@
   gap: 6px;
 }
 .edfiles__nav-btn {
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  border-radius: 4px;
+  width: 24px; height: 24px;
+  display: grid; place-items: center;
+  border-radius: 5px;
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: 12px;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 .edfiles__nav-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-hover);
   color: var(--color-text);
+  border-color: var(--color-border-strong);
 }
 .edfiles__nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .edfiles__nav-label {
@@ -164,15 +177,15 @@
 .edfiles__masters {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
 }
 .edfiles__master {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 5px;
+  gap: 7px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 6px;
   border: 1px solid var(--color-border);
   background: transparent;
   color: var(--color-text-muted);
@@ -185,32 +198,34 @@
     border-color var(--dur-fast) var(--ease-out);
 }
 .edfiles__master:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--color-hover);
   color: var(--color-text);
 }
 .edfiles__master:disabled { opacity: 0.35; cursor: not-allowed; }
 .edfiles__master--accept {
-  border-color: rgba(110, 228, 151, 0.45);
+  border-color: rgba(110, 228, 151, 0.5);
   color: #d4fbe2;
 }
 .edfiles__master--accept:hover:not(:disabled) {
-  background: rgba(110, 228, 151, 0.12);
-  border-color: rgba(110, 228, 151, 0.7);
+  background: rgba(110, 228, 151, 0.14);
+  border-color: rgba(110, 228, 151, 0.72);
+  color: #fff;
 }
 .edfiles__master--reject {
-  border-color: rgba(239, 68, 68, 0.40);
-  color: #ffd9d9;
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #ffe0e0;
 }
 .edfiles__master--reject:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.10);
-  border-color: rgba(239, 68, 68, 0.65);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.7);
+  color: #fff;
 }
 .edfiles__master kbd {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 9.5px;
-  padding: 1px 5px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--color-border);
-  opacity: 0.85;
+  padding: 1.5px 5px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  opacity: 0.9;
 }

@@ -2484,7 +2484,7 @@ export function AIPanel() {
       )}
 
       <form
-        className={`ai__composer ${dragOver ? 'ai__composer--dragover' : ''}`}
+        className={`ai__composer ${dragOver ? 'ai__composer--dragover' : ''} ${streaming ? 'ai__composer--streaming' : ''}`}
         onDragOver={(e) => {
           // Accept drags carrying our custom payload (sidebar entry)
           // OR a plain file path (legacy text/uri-list, OS file drop).

@@ -4,13 +4,14 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import { emitAiCommand } from '../../lib/commands';
+import { useTasks, runTask } from '../../lib/tasks';
 import './CommandPalette.css';
 
 interface Command {
   id: string;
   label: string;
   hint?: string;
-  group: 'File' | 'AI' | 'Workspace' | 'Account';
+  group: 'File' | 'AI' | 'Workspace' | 'Account' | 'Tasks';
   run: () => void | Promise<void>;
 }
 
@@ -20,9 +21,10 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const { openFile, setWorkspaceRoot, saveActiveFile, activeFile } = useWorkspace();
+  const { openFile, setWorkspaceRoot, saveActiveFile, activeFile, workspaceRoot } = useWorkspace();
   const { logout, user } = useAuth();
   const toast = useToast();
+  const tasks = useTasks(workspaceRoot);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -139,8 +141,45 @@ export function CommandPalette() {
         },
       },
     ];
+    // v0.16.12 — append workspace tasks dynamically. Each label-only
+    // entry runs the task via terminal:run-once and toasts the
+    // captured stdout (truncated). When the workspace doesn't have
+    // a .suxai/tasks.json, `tasks` is just an empty array and this
+    // loop adds nothing.
+    if (workspaceRoot && tasks.length > 0) {
+      for (const t of tasks) {
+        list.push({
+          id: `task:${t.label}`,
+          label: `Run task: ${t.label}`,
+          hint: t.command.length <= 40 ? t.command : t.command.slice(0, 37) + '…',
+          group: 'Tasks',
+          run: async () => {
+            toast.info('Running task', t.label);
+            const res = await runTask(t, workspaceRoot);
+            if (!res.ok) {
+              toast.error(`Task "${t.label}" failed`, res.error);
+              return;
+            }
+            const out = res.stdout.trim();
+            const tail = out.length > 360 ? '…' + out.slice(-340) : out;
+            const summary = res.timedOut
+              ? 'timed out'
+              : `exited ${res.exitCode}`;
+            const title = `Task "${t.label}" — ${summary}`;
+            if (res.exitCode === 0 && !res.timedOut) {
+              toast.success(title, tail || '(no output)');
+            } else {
+              toast.error(title, tail || '(no output)');
+            }
+          },
+        });
+      }
+    }
     return list;
-  }, [openFile, setWorkspaceRoot, saveActiveFile, activeFile, logout, user, toast]);
+  }, [
+    openFile, setWorkspaceRoot, saveActiveFile, activeFile, logout, user, toast,
+    workspaceRoot, tasks,
+  ]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

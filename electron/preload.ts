@@ -181,6 +181,16 @@ const api = {
       ok: true
     } | { ok: false; error: string }> => ipcRenderer.invoke('mcp:save-config', input),
   },
+  tasks: {
+    /** v0.16.12 — read .suxai/tasks.json from a workspace root.
+     *  Returns at most 100 tasks ; each has label + command + optional
+     *  group/description. Empty list on missing file. */
+    read: (input: { cwd: string }): Promise<{
+      ok: true;
+      tasks: { label: string; command: string; group?: string; description?: string }[];
+      path: string;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('tasks:read', input),
+  },
   snippets: {
     /** v0.16.11 — read user snippets from userData/snippets.json. */
     read: (): Promise<{

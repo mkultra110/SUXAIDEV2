@@ -2012,6 +2012,44 @@ function registerIpc() {
     }
   });
 
+  // v0.16.12 — Workspace tasks (.suxai/tasks.json). VSCode-style :
+  //   { "version": "1.0", "tasks": [{ "label": "Build", "command": "npm run build", "group": "build" }] }
+  // Command (string) is run via terminal:run-once when the user picks
+  // it from the Command Palette. Defence-in-depth : sanitizeFsPath
+  // on the workspace root, hard-cap on number + length of tasks.
+  ipcMain.handle('tasks:read', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const file = path.join(safeCwd, '.suxai', 'tasks.json');
+    try {
+      const raw = await fs.readFile(file, 'utf8');
+      if (raw.length > 256 * 1024) return { ok: true, tasks: [], path: file };
+      const parsed = JSON.parse(raw) as { tasks?: unknown };
+      if (!parsed || !Array.isArray(parsed.tasks)) return { ok: true, tasks: [], path: file };
+      const out: { label: string; command: string; group?: string; description?: string }[] = [];
+      for (const t of parsed.tasks.slice(0, 100)) {
+        if (!t || typeof t !== 'object') continue;
+        const tt = t as { label?: unknown; command?: unknown; group?: unknown; description?: unknown };
+        const label = typeof tt.label === 'string' ? tt.label : null;
+        const command = typeof tt.command === 'string' ? tt.command : null;
+        if (!label || !command) continue;
+        if (label.length > 200 || command.length > 4000) continue;
+        out.push({
+          label,
+          command,
+          group: typeof tt.group === 'string' ? tt.group : undefined,
+          description: typeof tt.description === 'string' ? tt.description : undefined,
+        });
+      }
+      return { ok: true, tasks: out, path: file };
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'ENOENT') return { ok: true, tasks: [], path: file };
+      return { ok: false, error: e.message };
+    }
+  });
+
   ipcMain.handle('snippets:save', async (_e, input: { snippets: unknown }) => {
     if (!input || typeof input.snippets !== 'object' || input.snippets === null || Array.isArray(input.snippets)) {
       return { ok: false, error: 'invalid snippets payload' };

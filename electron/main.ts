@@ -1579,6 +1579,186 @@ function registerIpc() {
     };
   });
 
+  // v0.16.16 — Git network ops + branch nav. Network ops use a
+  // larger timeout than other git: handlers (push/pull may take
+  // many seconds on slow links + may block on auth). 60 s upper
+  // bound, then we kill and surface a clear error.
+  const GIT_NETWORK_TIMEOUT_MS = 60_000;
+  const runGitNetwork = (cwd: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> =>
+    new Promise((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      const settle = (r: { code: number; stdout: string; stderr: string }) => {
+        if (settled) return;
+        settled = true;
+        resolve(r);
+      };
+      let child: ChildProcessWithoutNullStreams;
+      try {
+        // Disable interactive prompts — if the remote needs auth and
+        // there's no agent / cached creds, fail fast instead of
+        // blocking forever waiting for stdin.
+        child = spawn('git', args, {
+          cwd,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo' },
+        });
+      } catch (err) {
+        settle({ code: -1, stdout: '', stderr: (err as Error).message });
+        return;
+      }
+      const killTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch { /* */ }
+        settle({ code: -1, stdout, stderr: stderr + '\n[network timeout]' });
+      }, GIT_NETWORK_TIMEOUT_MS);
+      child.stdout.on('data', (c) => {
+        stdout += c.toString();
+        if (stdout.length > GIT_MAX_STDOUT_BYTES) {
+          try { child.kill('SIGKILL'); } catch { /* */ }
+          clearTimeout(killTimer);
+          settle({ code: -1, stdout, stderr: stderr + '\n[output_too_large]' });
+        }
+      });
+      child.stderr.on('data', (c) => { stderr += c.toString(); });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        settle({ code: -1, stdout, stderr: stderr + err.message });
+      });
+      child.on('close', (code) => {
+        clearTimeout(killTimer);
+        settle({ code: code ?? -1, stdout, stderr });
+      });
+    });
+
+  ipcMain.handle('git:fetch', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const r = await runGitNetwork(root, ['fetch', '--prune']);
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'fetch failed' };
+    return { ok: true, output: r.stderr.trim() || r.stdout.trim() };
+  });
+
+  ipcMain.handle('git:pull', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const r = await runGitNetwork(root, ['pull', '--ff-only']);
+    if (r.code !== 0) {
+      const err = (r.stderr || r.stdout).trim();
+      return { ok: false, error: err || 'pull failed' };
+    }
+    return { ok: true, output: r.stdout.trim() || r.stderr.trim() };
+  });
+
+  ipcMain.handle('git:push', async (_e, input: { cwd: string; force?: boolean }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    // We DON'T expose `--force` from the renderer by default ; only
+    // `--force-with-lease` when input.force is explicitly true.
+    // Plain --force would let a renderer bug silently overwrite shared
+    // history.
+    const args = ['push'];
+    if (input.force) args.push('--force-with-lease');
+    const r = await runGitNetwork(root, args);
+    if (r.code !== 0) {
+      const err = (r.stderr || r.stdout).trim();
+      return { ok: false, error: err || 'push failed' };
+    }
+    return { ok: true, output: r.stderr.trim() || r.stdout.trim() };
+  });
+
+  ipcMain.handle('git:current-branch', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const r = await runGitNoTimeout(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() };
+    return { ok: true, branch: r.stdout.trim() };
+  });
+
+  ipcMain.handle('git:ahead-behind', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    // `rev-list --left-right --count HEAD...@{u}` returns "behind\tahead"
+    // when there's an upstream, else exits non-zero.
+    const r = await runGitNoTimeout(root, ['rev-list', '--left-right', '--count', 'HEAD...@{u}']);
+    if (r.code !== 0) {
+      // No upstream configured — fine, return zeros.
+      return { ok: true, ahead: 0, behind: 0, hasUpstream: false };
+    }
+    const m = /^(\d+)\s+(\d+)/.exec(r.stdout.trim());
+    if (!m) return { ok: true, ahead: 0, behind: 0, hasUpstream: true };
+    return { ok: true, ahead: Number(m[1]), behind: Number(m[2]), hasUpstream: true };
+  });
+
+  ipcMain.handle('git:branches', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    // for-each-ref is faster + script-friendly vs `branch --list`.
+    // Format: <refname>|<isHead>|<upstream>|<isRemote>
+    const r = await runGitNoTimeout(root, [
+      'for-each-ref',
+      '--sort=-committerdate',
+      '--format=%(refname:short)|%(HEAD)|%(upstream:short)|%(committerdate:relative)',
+      'refs/heads/', 'refs/remotes/',
+    ]);
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() };
+    const branches: { name: string; isCurrent: boolean; upstream?: string; lastCommitRel?: string; isRemote: boolean }[] = [];
+    for (const line of r.stdout.split('\n')) {
+      if (!line.trim()) continue;
+      const [name, head, upstream, lastCommitRel] = line.split('|');
+      if (!name) continue;
+      branches.push({
+        name,
+        isCurrent: head === '*',
+        upstream: upstream || undefined,
+        lastCommitRel: lastCommitRel || undefined,
+        // for-each-ref doesn't tag remote vs local — sniff from name.
+        isRemote: name.startsWith('origin/') || name.includes('/'),
+      });
+    }
+    return { ok: true, branches };
+  });
+
+  ipcMain.handle('git:checkout', async (_e, input: { cwd: string; branch: string; create?: boolean }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const branch = input?.branch;
+    if (typeof branch !== 'string' || branch.length === 0 || branch.length > 256) {
+      return { ok: false, error: 'invalid branch name' };
+    }
+    // Defensive : refuse names that look like flags (--force, etc.)
+    // or contain shell metacharacters that shouldn't be in a branch.
+    if (/^-/.test(branch) || /[;&|`$]/.test(branch)) {
+      return { ok: false, error: 'invalid branch name' };
+    }
+    const args = input.create ? ['checkout', '-b', branch] : ['checkout', branch];
+    const r = await runGitNoTimeout(root, args);
+    if (r.code !== 0) {
+      return { ok: false, error: (r.stderr || r.stdout).trim() || 'checkout failed' };
+    }
+    return { ok: true };
+  });
+
   // v0.16.7 — File local history. Auto-snapshot on save, browse via
   // a UI modal, restore by opening the snapshot as a read-only tab.
   //

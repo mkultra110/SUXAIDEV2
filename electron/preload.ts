@@ -151,6 +151,34 @@ const api = {
       branch: string | null;
       sha: string | null;
     } | { ok: false; error: string }> => ipcRenderer.invoke('git:commit', input),
+    /** v0.16.16 — git fetch --prune. */
+    fetch: (input: { cwd: string }): Promise<{
+      ok: true; output: string
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:fetch', input),
+    /** v0.16.16 — git pull --ff-only. */
+    pull: (input: { cwd: string }): Promise<{
+      ok: true; output: string
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:pull', input),
+    /** v0.16.16 — git push (--force-with-lease if force=true). */
+    push: (input: { cwd: string; force?: boolean }): Promise<{
+      ok: true; output: string
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:push', input),
+    /** v0.16.16 — git rev-parse --abbrev-ref HEAD (current branch name). */
+    currentBranch: (input: { cwd: string }): Promise<{
+      ok: true; branch: string
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:current-branch', input),
+    /** v0.16.16 — ahead/behind counts vs the configured upstream. */
+    aheadBehind: (input: { cwd: string }): Promise<{
+      ok: true; ahead: number; behind: number; hasUpstream: boolean
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:ahead-behind', input),
+    /** v0.16.16 — list local + remote branches with metadata. */
+    branches: (input: { cwd: string }): Promise<{
+      ok: true; branches: { name: string; isCurrent: boolean; upstream?: string; lastCommitRel?: string; isRemote: boolean }[]
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:branches', input),
+    /** v0.16.16 — checkout existing branch, or create new with -b. */
+    checkout: (input: { cwd: string; branch: string; create?: boolean }): Promise<{
+      ok: true
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:checkout', input),
   },
   mcp: {
     /** v0.16.10 — list configured MCP servers + their connection status. */

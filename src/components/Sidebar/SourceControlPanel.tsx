@@ -2,12 +2,17 @@ import { useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import {
   useGitFullStatus,
+  useGitBranchState,
   stagePaths,
   unstagePaths,
   commitStaged,
+  gitFetch,
+  gitPull,
+  gitPush,
   type GitStatusCode,
 } from '../../lib/git';
 import { useToast } from '../ui/Toast';
+import { openBranchPicker } from './BranchPicker';
 import './SourceControlPanel.css';
 
 /**
@@ -64,9 +69,11 @@ export function SourceControlPanel() {
   const { detail, root: repoRoot } = useGitFullStatus(workspaceRoot);
   const toast = useToast();
 
+  const branchState = useGitBranchState(workspaceRoot);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [commitMessage, setCommitMessage] = useState('');
   const [committing, setCommitting] = useState(false);
+  const [syncBusy, setSyncBusy] = useState<'fetch' | 'pull' | 'push' | null>(null);
   const commitInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Bucket every path by its XY codes :
@@ -216,8 +223,97 @@ export function SourceControlPanel() {
     );
   }
 
+  const onSync = async (op: 'fetch' | 'pull' | 'push') => {
+    if (!opCwd || syncBusy) return;
+    setSyncBusy(op);
+    try {
+      const fn = op === 'fetch' ? gitFetch : op === 'pull' ? gitPull : gitPush;
+      const err = await fn(opCwd);
+      if (err) {
+        toast.error(`${op[0].toUpperCase()}${op.slice(1)} failed`, err);
+      } else {
+        toast.success(`${op[0].toUpperCase()}${op.slice(1)} done`,
+          op === 'fetch' ? 'Remote refs updated' :
+          op === 'pull'  ? 'Pulled fast-forward' :
+          'Pushed to remote');
+      }
+    } finally {
+      setSyncBusy(null);
+    }
+  };
+
   return (
     <div className="scp">
+      {/* v0.16.16 — sync row : branch indicator + fetch/pull/push.
+          The branch button opens the BranchPicker modal ; sync buttons
+          show ahead/behind counts as superscript when relevant. */}
+      <div className="scp__sync">
+        <button
+          type="button"
+          className="scp__branch"
+          onClick={() => openBranchPicker()}
+          disabled={!opCwd || !branchState.branch}
+          title={branchState.branch
+            ? `Switch branch (current: ${branchState.branch})`
+            : 'Not a git repo'}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.7" />
+            <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.7" />
+            <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.7" />
+            <path d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
+          <span className="scp__branch-name">{branchState.branch ?? '—'}</span>
+        </button>
+        <div className="scp__sync-actions">
+          <button
+            type="button"
+            className={`scp__sync-btn ${syncBusy === 'fetch' ? 'scp__sync-btn--busy' : ''}`}
+            onClick={() => void onSync('fetch')}
+            disabled={!opCwd || syncBusy !== null}
+            title="git fetch --prune"
+            aria-label="Fetch"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`scp__sync-btn ${syncBusy === 'pull' ? 'scp__sync-btn--busy' : ''}`}
+            onClick={() => void onSync('pull')}
+            disabled={!opCwd || syncBusy !== null || !branchState.hasUpstream}
+            title={branchState.hasUpstream
+              ? `git pull --ff-only${branchState.behind > 0 ? ` (${branchState.behind} behind)` : ''}`
+              : 'No upstream configured'}
+            aria-label="Pull"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M12 4v14M5 13l7 7 7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {branchState.behind > 0 && (
+              <span className="scp__sync-count">{branchState.behind}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            className={`scp__sync-btn ${syncBusy === 'push' ? 'scp__sync-btn--busy' : ''}`}
+            onClick={() => void onSync('push')}
+            disabled={!opCwd || syncBusy !== null}
+            title={branchState.ahead > 0
+              ? `git push (${branchState.ahead} ahead)`
+              : 'git push (nothing to push)'}
+            aria-label="Push"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M12 20V6M5 11l7-7 7 7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {branchState.ahead > 0 && (
+              <span className="scp__sync-count">{branchState.ahead}</span>
+            )}
+          </button>
+        </div>
+      </div>
       {/* v0.16.0 — commit composer pinned at the top. Disabled until
           there's something staged AND a non-empty message. */}
       <div className="scp__commit">

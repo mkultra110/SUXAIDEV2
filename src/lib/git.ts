@@ -243,3 +243,137 @@ export async function commitStaged(cwd: string, message: string): Promise<{ ok: 
     return { ok: false, error: (err as Error).message ?? 'commit failed' };
   }
 }
+
+/* ====================================================================
+ * v0.16.16 — Branch + network ops.
+ * ==================================================================== */
+
+export interface GitBranchInfo {
+  name: string;
+  isCurrent: boolean;
+  upstream?: string;
+  lastCommitRel?: string;
+  isRemote: boolean;
+}
+
+export interface GitBranchState {
+  branch: string | null;
+  ahead: number;
+  behind: number;
+  hasUpstream: boolean;
+}
+
+const BRANCH_REFRESH_EVENT = 'suxai:git-branch-refresh';
+
+export function broadcastBranchRefresh(): void {
+  window.dispatchEvent(new CustomEvent(BRANCH_REFRESH_EVENT));
+}
+
+/** React hook : returns current branch + ahead/behind counts.
+ *  Refreshes on mount, on every git-status invalidate broadcast,
+ *  and on the dedicated branch-refresh broadcast (fired after
+ *  push/pull/fetch/checkout). */
+export function useGitBranchState(workspaceRoot: string | null): GitBranchState {
+  const [state, setState] = useState<GitBranchState>({
+    branch: null, ahead: 0, behind: 0, hasUpstream: false,
+  });
+  useEffect(() => {
+    if (!workspaceRoot) {
+      setState({ branch: null, ahead: 0, behind: 0, hasUpstream: false });
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      if (!window.suxai?.git) return;
+      try {
+        const [bRes, abRes] = await Promise.all([
+          window.suxai.git.currentBranch({ cwd: workspaceRoot }),
+          window.suxai.git.aheadBehind({ cwd: workspaceRoot }),
+        ]);
+        if (cancelled) return;
+        setState({
+          branch: bRes.ok ? bRes.branch : null,
+          ahead: abRes.ok ? abRes.ahead : 0,
+          behind: abRes.ok ? abRes.behind : 0,
+          hasUpstream: abRes.ok ? abRes.hasUpstream : false,
+        });
+      } catch {
+        if (!cancelled) {
+          setState({ branch: null, ahead: 0, behind: 0, hasUpstream: false });
+        }
+      }
+    };
+    void load();
+    const handler = () => { void load(); };
+    window.addEventListener(BRANCH_REFRESH_EVENT, handler);
+    window.addEventListener('suxai:git-refresh', handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(BRANCH_REFRESH_EVENT, handler);
+      window.removeEventListener('suxai:git-refresh', handler);
+    };
+  }, [workspaceRoot]);
+  return state;
+}
+
+export async function gitFetch(cwd: string): Promise<string | null> {
+  if (!window.suxai?.git?.fetch) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.fetch({ cwd });
+    invalidateGitStatus(cwd);
+    broadcastBranchRefresh();
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+export async function gitPull(cwd: string): Promise<string | null> {
+  if (!window.suxai?.git?.pull) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.pull({ cwd });
+    invalidateGitStatus(cwd);
+    broadcastBranchRefresh();
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+export async function gitPush(cwd: string, force = false): Promise<string | null> {
+  if (!window.suxai?.git?.push) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.push({ cwd, force });
+    invalidateGitStatus(cwd);
+    broadcastBranchRefresh();
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+export async function listBranches(cwd: string): Promise<GitBranchInfo[]> {
+  if (!window.suxai?.git?.branches) return [];
+  try {
+    const res = await window.suxai.git.branches({ cwd });
+    return res.ok ? res.branches : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function checkoutBranch(
+  cwd: string,
+  branch: string,
+  create = false,
+): Promise<string | null> {
+  if (!window.suxai?.git?.checkout) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.checkout({ cwd, branch, create });
+    invalidateGitStatus(cwd);
+    broadcastBranchRefresh();
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}

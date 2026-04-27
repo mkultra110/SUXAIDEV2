@@ -58,3 +58,19 @@
   background: rgba(125, 130, 248, 0.2);
   color: #fff;
 }
+
+/* v0.16.16 — branch indicator on the left side. Tightly-packed with
+   the Terminal toggle, ahead/behind counts as small superscripts. */
+.statusbar__branch {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.statusbar__branch-count {
+  margin-left: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-accent-hover);
+  font-variant-numeric: tabular-nums;
+}

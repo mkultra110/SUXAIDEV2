@@ -2456,10 +2456,19 @@ export function AIPanel() {
           })
           .catch((err) => {
           console.error('[agent] loop failed:', err);
+          // v2.0.2 — surface the failure to the user via toast (visible
+          // immediately even if the assistant message is scrolled off
+          // or the user is staring at another tab). Keeps the existing
+          // inline error pill on the message.
+          const errMsg = (err as Error).message || String(err);
+          toast.error(
+            'Agent loop failed',
+            errMsg.length > 200 ? errMsg.slice(0, 200) + '…' : errMsg,
+          );
           setMessages((m) =>
             m.map((msg) =>
               msg.id === assistantMsg.id
-                ? { ...msg, streaming: false, error: (err as Error).message }
+                ? { ...msg, streaming: false, error: errMsg }
                 : msg,
             ),
           );

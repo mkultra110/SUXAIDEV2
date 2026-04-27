@@ -121,7 +121,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 10px 12px;
   background: transparent;
   border: none;
   border-left: 2px solid transparent;
@@ -132,11 +132,15 @@
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .hist__row:hover {
-  background: rgba(125, 130, 248, 0.16);
+  background: rgba(125, 130, 248, 0.14);
   border-left-color: var(--color-accent);
+}
+.hist__row:active {
+  transform: translateX(1px);
 }
 .hist__row-ts {
   flex: 1;

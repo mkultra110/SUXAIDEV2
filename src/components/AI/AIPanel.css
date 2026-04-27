@@ -316,24 +316,24 @@
   transform: translateY(-1px);
 }
 
-/* ----- Plan-mode banner (v0.16.4) ---------------------------- */
+/* ----- Plan-mode banner (v0.16.4 / polish v0.16.15) ----------- */
 
 .ai__plan-banner {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 8px 12px;
-  margin: 0 12px 8px;
+  gap: 8px;
+  padding: 6px 10px;
+  margin: 0 12px 6px;
   background:
     linear-gradient(180deg,
-      rgba(251, 191, 36, 0.12),
-      rgba(251, 191, 36, 0.06));
-  border: 1px solid rgba(251, 191, 36, 0.45);
-  border-radius: var(--radius-md);
+      rgba(251, 191, 36, 0.08),
+      rgba(251, 191, 36, 0.04));
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  border-left: 3px solid rgba(251, 191, 36, 0.6);
+  border-radius: var(--radius-sm);
   color: #fde68a;
-  font-size: 11.5px;
-  line-height: 1.45;
-  box-shadow: 0 0 12px rgba(251, 191, 36, 0.14);
+  font-size: 11px;
+  line-height: 1.4;
   animation: suxai-fade-in var(--dur-base) var(--ease-out);
 }
 .ai__plan-banner-icon {
@@ -342,6 +342,7 @@
   justify-content: center;
   flex-shrink: 0;
   color: #fbbf24;
+  opacity: 0.85;
 }
 .ai__plan-banner-text {
   flex: 1;
@@ -349,36 +350,39 @@
 }
 .ai__plan-banner-text strong {
   color: #fff;
-  font-weight: 700;
+  font-weight: 600;
 }
 .ai__plan-banner-text code {
   font-family: var(--font-mono);
-  font-size: 11px;
-  padding: 1px 5px;
+  font-size: 10.5px;
+  padding: 0 4px;
   border-radius: 3px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.25);
   color: #fde68a;
 }
 .ai__plan-banner-close {
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: grid;
   place-items: center;
   background: transparent;
-  border: 1px solid rgba(251, 191, 36, 0.32);
-  border-radius: 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
   color: #fde68a;
+  opacity: 0.7;
   cursor: pointer;
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
 }
 .ai__plan-banner-close:hover {
-  background: rgba(251, 191, 36, 0.18);
-  border-color: rgba(251, 191, 36, 0.6);
+  background: rgba(251, 191, 36, 0.16);
+  border-color: rgba(251, 191, 36, 0.45);
   color: #fff;
+  opacity: 1;
 }
 
 /* ----- Composer -------------------------------------------- */

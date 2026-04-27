@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import {
   useGitFullStatus,
@@ -67,6 +67,7 @@ export function SourceControlPanel() {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [commitMessage, setCommitMessage] = useState('');
   const [committing, setCommitting] = useState(false);
+  const commitInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Bucket every path by its XY codes :
   //   staged    : X != ' ' && X != '?' && not in conflict
@@ -180,8 +181,16 @@ export function SourceControlPanel() {
           'Committed',
           res.sha ? `${res.sha.slice(0, 7)}${res.branch ? ` on ${res.branch}` : ''}` : msg.split('\n', 1)[0],
         );
+        // v0.16.15 polish — refocus the composer so the next commit
+        // can be typed without grabbing the mouse. Defer one tick so
+        // the disabled→enabled transition has settled.
+        setTimeout(() => commitInputRef.current?.focus(), 0);
       } else {
         toast.error('Commit failed', res.error);
+        // Don't clear the message on failure — let the user fix it
+        // and retry. Refocus to bring the cursor back to where they
+        // left off.
+        commitInputRef.current?.focus();
       }
     } finally {
       setCommitting(false);
@@ -213,6 +222,7 @@ export function SourceControlPanel() {
           there's something staged AND a non-empty message. */}
       <div className="scp__commit">
         <textarea
+          ref={commitInputRef}
           className="scp__commit-input"
           placeholder={
             stagedCount > 0

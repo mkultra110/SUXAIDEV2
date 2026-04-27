@@ -118,7 +118,25 @@ export function CompareDialog() {
               <span className="cmp__path-label">A</span>
               {fileA}
             </span>
-            <span className="cmp__path-arrow" aria-hidden>↔</span>
+            <button
+              type="button"
+              className="cmp__swap"
+              onClick={() => {
+                setState((s) => s && {
+                  ...s,
+                  pathA: s.pathB,
+                  pathB: s.pathA,
+                  contentA: s.contentB,
+                  contentB: s.contentA,
+                });
+              }}
+              title="Swap A ↔ B"
+              aria-label="Swap A and B"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M7 4l-4 4 4 4M3 8h13M17 12l4 4-4 4M21 16H8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
             <span className="cmp__path cmp__path--b" title={state.pathB}>
               <span className="cmp__path-label">B</span>
               {fileB}

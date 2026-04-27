@@ -109,6 +109,33 @@
   flex-shrink: 0;
 }
 
+/* v0.16.15 — swap A ↔ B button (replaces the static arrow). */
+.cmp__swap {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.cmp__swap:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+  border-color: var(--color-border-strong);
+}
+.cmp__swap:active {
+  transform: scale(0.92);
+}
+
 .cmp__close {
   width: 26px;
   height: 26px;

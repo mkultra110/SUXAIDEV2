@@ -113,6 +113,11 @@ interface WorkspaceValue extends WorkspaceState {
   saveActiveFile: () => Promise<SaveOutcome>;
   reloadActiveFromDisk: () => Promise<boolean>;
   newUntitled: () => void;
+  /** v0.16.3 — reopen the most-recently-closed tab (Ctrl+Shift+T).
+   *  Pops from a session-scoped stack capped at 20 entries.
+   *  Returns the restored path, or null if the stack is empty / the
+   *  file no longer exists on disk. */
+  reopenLastClosed: () => Promise<string | null>;
   reorderTab: (fromPath: string, toPath: string) => void;
   togglePin: (path: string) => void;
   renameFile: (oldPath: string, newPath: string) => void;
@@ -363,6 +368,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         );
         if (!ok) return;
       }
+      // v0.16.3 — push to the closed-tab stack BEFORE the setState
+      // updater so reopenLastClosed can pull a fresh entry. Untitled
+      // buffers are intentionally not stacked : they have no path to
+      // restore and re-creating them would just spawn an empty buffer.
+      if (!target.untitled) {
+        closedStackRef.current.push({
+          path: target.path,
+          name: target.name,
+          ts: Date.now(),
+        });
+        // Cap at 20 most recent — VSCode default behaviour.
+        if (closedStackRef.current.length > 20) {
+          closedStackRef.current.splice(0, closedStackRef.current.length - 20);
+        }
+      }
     }
     // v0.15.11 (audit-5 #4) — re-validate the path still exists at
     // the time of the actual update. Between the confirm() and the
@@ -408,6 +428,44 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  // v0.16.3 — session-scoped closed-tab stack. Each closeFile push
+  // appends the closed file's metadata ; reopenLastClosed pops the
+  // tail and re-reads the file from disk. Ref-only (not state) so
+  // the stack mutation doesn't trigger re-renders of consumers that
+  // don't care.
+  interface ClosedTabEntry { path: string; name: string; ts: number }
+  const closedStackRef = useRef<ClosedTabEntry[]>([]);
+
+  const reopenLastClosed = useCallback(async (): Promise<string | null> => {
+    while (closedStackRef.current.length > 0) {
+      const entry = closedStackRef.current.pop();
+      if (!entry) break;
+      // Skip if the tab is already open (can happen if the user
+      // re-opened the file via Quick Open between close + reopen).
+      if (stateRef.current.openFiles.some((f) => f.path === entry.path)) continue;
+      try {
+        const file = await window.suxai.fs.readFile(entry.path);
+        // openFile re-establishes language detection + recent push.
+        setState((s) => {
+          const next = [...s.openFiles];
+          next.push({
+            path: file.path,
+            name: entry.name,
+            content: file.content,
+            language: langFromPath(file.path),
+          });
+          return { ...s, openFiles: next, activePath: file.path };
+        });
+        return entry.path;
+      } catch {
+        // File deleted / moved / permission denied — drop it and try
+        // the next entry on the stack.
+        continue;
+      }
+    }
+    return null;
+  }, []);
 
   const saveActiveFile = useCallback(async (): Promise<SaveOutcome> => {
     const s = stateRef.current;
@@ -701,6 +759,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       saveActiveFile,
       reloadActiveFromDisk,
       newUntitled,
+      reopenLastClosed,
       reorderTab,
       togglePin,
       renameFile,
@@ -716,7 +775,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
       closeOthers, closeToTheRight, closeAll, setActive, rejectPendingDiffs,
-      updateActiveContent, setSelection, saveActiveFile, reloadActiveFromDisk, newUntitled, reorderTab,
+      updateActiveContent, setSelection, saveActiveFile, reloadActiveFromDisk, newUntitled,
+      reopenLastClosed, reorderTab,
       togglePin, renameFile, openDiff, closeDiff, acceptDiff,
       editorContext, updateEditorContext, recordEdit,
     ],

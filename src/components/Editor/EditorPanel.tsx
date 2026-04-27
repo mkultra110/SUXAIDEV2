@@ -85,6 +85,7 @@ export function EditorPanel() {
     setSelection,
     pendingDiff,
     newUntitled,
+    reopenLastClosed,
     saveActiveFile,
   } = useWorkspace();
 
@@ -195,6 +196,14 @@ export function EditorPanel() {
         const base = cur < 0 ? 0 : cur;
         const next = tabs[(base + dir + tabs.length) % tabs.length];
         if (next) setActive(next.path);
+        return;
+      }
+
+      // v0.16.3 — Ctrl/Cmd+Shift+T : reopen most-recently-closed tab.
+      // Handled BEFORE the shift early-return below.
+      if (e.shiftKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        void reopenLastClosed();
         return;
       }
 
@@ -310,7 +319,7 @@ export function EditorPanel() {
     // sometimes still be eaten by Monaco even though we preventDefault.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newUntitled, saveActiveFile, setActive, closeFile, toast]);
+  }, [newUntitled, saveActiveFile, setActive, closeFile, reopenLastClosed, toast]);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {
@@ -746,6 +755,15 @@ export function EditorPanel() {
                   tabSize: settings.tabSize,
                   wordWrap: settings.wordWrap ? 'on' : 'off',
                   guides: { indentation: true, bracketPairs: true },
+                  // v0.16.3 — Monaco built-ins, parité VSCode :
+                  //   bracketPairColorization : couleur unique par
+                  //     paire de brackets imbriquée (rainbow brackets
+                  //     façon vscode-bracket-pair-colorizer-2)
+                  //   stickyScroll : la signature de la fonction /
+                  //     classe englobante reste épinglée en haut de
+                  //     l'éditeur quand tu scrolles dans son corps
+                  bracketPairColorization: { enabled: true, independentColorPoolPerBracketType: true },
+                  stickyScroll: { enabled: true, maxLineCount: 5 },
                   // Tab autocomplete (ghost text). Even when the toggle
                   // is off in settings, leaving this enabled is fine —
                   // the provider returns no items, so no ghost text shows.

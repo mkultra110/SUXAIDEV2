@@ -18,6 +18,7 @@ import { ensureSnippetProvider } from '../../lib/snippets';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import { iconKindForFile, FileIcon } from '../../lib/file-icon';
+import { defineSuxaiThemes, suxaiThemeForMode } from '../../lib/monaco-suxai-theme';
 import './EditorPanel.css';
 
 interface ActionBarPos {
@@ -370,86 +371,14 @@ export function EditorPanel() {
         try { m?.dispose(); } catch { /* already disposed */ }
       });
 
-      // v1.0 — premium custom theme. Token palette tuned to feel
-      // calm but readable : muted comments, vivid strings, indigo
-      // keywords, cyan types, amber numbers. UI chrome (gutter,
-      // selection, brackets) all run through the same indigo accent
-      // family as the rest of the IDE.
-      monaco.editor.defineTheme('suxai-dark', {
-        base: 'vs-dark',
-        inherit: true,
-        rules: [
-          { token: '', foreground: 'ecf0f8', background: '0a0e17' },
-          { token: 'comment', foreground: '5d6781', fontStyle: 'italic' },
-          { token: 'keyword', foreground: '8b8efc' },
-          { token: 'keyword.control', foreground: 'b39bff' },
-          { token: 'string', foreground: '86efac' },
-          { token: 'string.escape', foreground: '34d399' },
-          { token: 'number', foreground: 'fbbf24' },
-          { token: 'type', foreground: '7dd3fc' },
-          { token: 'type.identifier', foreground: '7dd3fc' },
-          { token: 'function', foreground: 'fde68a' },
-          { token: 'variable', foreground: 'ecf0f8' },
-          { token: 'variable.parameter', foreground: 'fbcfe8' },
-          { token: 'tag', foreground: 'f472b6' },
-          { token: 'attribute.name', foreground: 'fbbf24' },
-          { token: 'attribute.value', foreground: '86efac' },
-          { token: 'delimiter', foreground: '97a1b6' },
-          { token: 'operator', foreground: 'b3b8fc' },
-          { token: 'regexp', foreground: 'fcc4c4' },
-          { token: 'constant', foreground: 'fde68a' },
-          { token: 'class', foreground: '7dd3fc' },
-          { token: 'interface', foreground: '7dd3fc' },
-          { token: 'namespace', foreground: 'a5b4fc' },
-        ],
-        colors: {
-          'editor.background': '#0a0e17',
-          'editor.foreground': '#ecf0f8',
-          'editor.lineHighlightBackground': '#11172a90',
-          'editor.lineHighlightBorder': '#00000000',
-          'editorLineNumber.foreground': '#404a63',
-          'editorLineNumber.activeForeground': '#97a1b6',
-          'editor.selectionBackground': '#4548c0bb',
-          'editor.inactiveSelectionBackground': '#2d3b5c80',
-          'editor.selectionHighlightBackground': '#3b4b7565',
-          'editor.wordHighlightBackground': '#3b4b7555',
-          'editor.wordHighlightStrongBackground': '#3b4b7575',
-          'editorCursor.foreground': '#b3b8fc',
-          'editorBracketMatch.background': '#2b3551',
-          'editorBracketMatch.border': '#8b8efc88',
-          'editorIndentGuide.background': '#161e36',
-          'editorIndentGuide.activeBackground': '#2d3b5c',
-          'editorWhitespace.foreground': '#1a233880',
-          'editorGutter.background': '#0a0e17',
-          'editorGutter.modifiedBackground': '#fbbf24',
-          'editorGutter.addedBackground': '#34d399',
-          'editorGutter.deletedBackground': '#ef4444',
-          'editorOverviewRuler.modifiedForeground': '#fbbf24cc',
-          'editorOverviewRuler.addedForeground': '#34d399cc',
-          'editorOverviewRuler.deletedForeground': '#ef4444cc',
-          'scrollbarSlider.background': '#ffffff10',
-          'scrollbarSlider.hoverBackground': '#ffffff1c',
-          'scrollbarSlider.activeBackground': '#7d80f850',
-          'editorOverviewRuler.border': '#00000000',
-          'editorWidget.background': '#11172af0',
-          'editorWidget.border': '#1c2542',
-          'editorSuggestWidget.background': '#11172af2',
-          'editorSuggestWidget.border': '#1c2542',
-          'editorSuggestWidget.selectedBackground': '#3b4b7588',
-          'editorSuggestWidget.highlightForeground': '#7d80f8',
-          'editorHoverWidget.background': '#11172af2',
-          'editorHoverWidget.border': '#1c2542',
-          'minimap.background': '#0a0e17',
-          'minimap.selectionHighlight': '#7d80f888',
-          'editorBracketHighlight.foreground1': '#8b8efc',
-          'editorBracketHighlight.foreground2': '#7dd3fc',
-          'editorBracketHighlight.foreground3': '#fde68a',
-          'editorBracketHighlight.foreground4': '#86efac',
-          'editorBracketHighlight.foreground5': '#fbcfe8',
-          'editorBracketHighlight.foreground6': '#b3b8fc',
-        },
-      });
-      monaco.editor.setTheme('suxai-dark');
+      // v2.0 — Obsidian Warm theme defined in lib/monaco-suxai-theme.
+      // 6 syntactic hues max (Poimandres principle), warm espresso bg,
+      // amber accent for functions/classes/cursor. Light variant ships
+      // alongside; we pick whichever matches the current data-theme.
+      defineSuxaiThemes(monaco);
+      const initialMode =
+        document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+      monaco.editor.setTheme(suxaiThemeForMode(initialMode));
 
       // Cmd+S inside Monaco is unbound by default but some bundles
       // claim it for "format". We register a no-op so Monaco never

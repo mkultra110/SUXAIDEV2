@@ -1,214 +1,294 @@
 /* ============================================================
-   SUXAI design tokens
-   v1.0.0 — premium V1 release. Adds full type scale, elevation
-   system, z-index ladder. Class names + variable names stable.
+   SUXAI design tokens — v2.0 « Obsidian Warm »
+   ------------------------------------------------------------
+   Architecture en 3 tiers (NON NÉGOCIABLE) :
+     Tier 1 : primitives (--amber-9, --neutral-12) — pas consommé direct
+     Tier 2 : sémantiques (--color-bg-surface) — ce que dark/light swap
+     Tier 3 : composants (cas exceptionnel via REFACTOR-NOTE)
+
+   Identité : warm espresso (cuir, bois sombre, café serré, biblio
+   tard le soir), accent ambre signature #F5C97A. PAS d'indigo/violet
+   AI-slop. PAS de pur noir/blanc. Ombres en 5–6 couches avec inset
+   highlight 1px blanc à 6% (« Apple touch »).
+
+   Couleurs en OKLCH (perceptual uniformity) avec hex fallback en
+   commentaire pour la lisibilité.
    ============================================================ */
 
+/* === TIER 1 — PRIMITIVES === */
+
 :root {
-  /* ========================================================
-     Surfaces — 5-step ramp + 3 glass tiers
-     ======================================================== */
-  --color-bg:        #0a0e17;
-  --color-bg-1:      #0d1220;
-  --color-bg-2:      #11172a;
-  --color-bg-3:      #161e36;
-  --color-bg-4:      #1c2542;
-  --color-bg-elev:   #1f2848;
-  --color-bg-overlay: rgba(3, 5, 10, 0.65);   /* v1.0 — modal/cmdp overlay tone */
+  /* ────────────────────────────────────────────────────────
+     Échelle ambre OKLCH (12 steps Radix) — accent signature
+     ──────────────────────────────────────────────────────── */
+  --amber-1:  oklch(0.16 0.012 67);   /* #131110 */
+  --amber-2:  oklch(0.19 0.018 67);   /* #19160F */
+  --amber-3:  oklch(0.24 0.030 67);   /* #221C12 */
+  --amber-4:  oklch(0.28 0.045 67);   /* #2B2114 */
+  --amber-5:  oklch(0.33 0.060 67);   /* #352716 */
+  --amber-6:  oklch(0.40 0.075 67);   /* #432F1A */
+  --amber-7:  oklch(0.48 0.090 67);   /* #553A1F */
+  --amber-8:  oklch(0.60 0.110 67);   /* #6F4E27 — focus ring */
+  --amber-9:  oklch(0.86 0.090 67);   /* #F5C97A — SOLID ACCENT SUXAI */
+  --amber-10: oklch(0.90 0.080 67);   /* #FFCFA8 — hover */
+  --amber-11: oklch(0.82 0.100 67);   /* #F5B884 — accent text */
+  --amber-12: oklch(0.95 0.050 67);   /* #FCE2C9 — high contrast on amber */
 
-  --color-glass:        rgba(22, 28, 46, 0.62);
-  --color-glass-strong: rgba(28, 36, 60, 0.80);
-  --color-glass-modal:  rgba(20, 26, 46, 0.86);
+  /* ────────────────────────────────────────────────────────
+     Échelle neutre warm-espresso (12 steps)
+     ──────────────────────────────────────────────────────── */
+  --neutral-1:  #0A0908;
+  --neutral-2:  #0F0E0D;   /* éditeur bg */
+  --neutral-3:  #13110F;   /* sidebar bg */
+  --neutral-4:  #1A1714;   /* card / widget bg */
+  --neutral-5:  #221E1A;   /* hover */
+  --neutral-6:  #2B2620;   /* pressed */
+  --neutral-7:  #3A332C;   /* border subtle */
+  --neutral-8:  #4D4439;   /* border default */
+  --neutral-9:  #6B5F50;
+  --neutral-10: #8C8579;
+  --neutral-11: #B5AC9D;   /* secondary text */
+  --neutral-12: #E6E1D7;   /* primary text — JAMAIS #FFF */
 
-  /* ========================================================
-     Borders
-     ======================================================== */
-  --color-border:        rgba(255, 255, 255, 0.055);
-  --color-border-strong: rgba(255, 255, 255, 0.10);
-  --color-border-bright: rgba(255, 255, 255, 0.16);
-  --color-border-accent: rgba(99, 102, 241, 0.48);
-  --color-border-accent-soft: rgba(99, 102, 241, 0.22);
+  /* ────────────────────────────────────────────────────────
+     Sémantiques syntaxiques (6 teintes max — restraint total)
+     ──────────────────────────────────────────────────────── */
+  --green-9:  #9DBE8E;     /* sage — strings, success */
+  --coral-9:  #E8A87C;     /* numbers */
+  --terra-9:  #C97B7B;     /* keywords, danger soft */
+  --teal-9:   #7FA8B5;     /* types */
+  --rose-9:   #D9A3C0;     /* regex / special */
+  --red-9:    #E06C6C;     /* errors */
 
-  /* ========================================================
-     Interactive surfaces
-     ======================================================== */
-  --color-hover-soft: rgba(255, 255, 255, 0.04);
-  --color-hover:      rgba(255, 255, 255, 0.07);
-  --color-press:      rgba(255, 255, 255, 0.10);
-  --color-active:     rgba(99, 102, 241, 0.18);
-  --color-active-soft: rgba(99, 102, 241, 0.10);
-  --focus-ring:       0 0 0 3px rgba(99, 102, 241, 0.32);
-  --focus-ring-soft:  0 0 0 2px rgba(99, 102, 241, 0.22);
+  /* ────────────────────────────────────────────────────────
+     Espacements (4px base, 16 steps)
+     ──────────────────────────────────────────────────────── */
+  --space-0:   0;
+  --space-px:  1px;
+  --space-0_5: 2px;
+  --space-1:   4px;
+  --space-1_5: 6px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+  --space-20:  80px;
+  --space-24:  96px;
 
-  /* ========================================================
-     Text
-     ======================================================== */
-  --color-text:         #ecf0f8;
-  --color-text-strong:  #ffffff;
-  --color-text-strong-2: #f4f6fc;  /* v1.0 — second-tier emphasis */
-  --color-text-muted:   #97a1b6;
-  --color-text-dim:     #5d6781;
-  --color-text-faint:   #404a63;
-  --color-text-inverse: #0a0e17;
+  /* ────────────────────────────────────────────────────────
+     Rayons (3/5/8/12/16/24 — lecture « considéré » vs défaut 4/8)
+     ──────────────────────────────────────────────────────── */
+  --radius-xs:   4px;     /* badges, chips */
+  --radius-sm:   6px;     /* boutons, inputs (Linear default) */
+  --radius-md:   8px;     /* cartes, items de menu */
+  --radius-lg:   10px;    /* cartes proéminentes */
+  --radius-xl:   12px;    /* modales, popovers */
+  --radius-2xl:  16px;    /* command palette, hero */
+  --radius-full: 9999px;
 
-  /* ========================================================
-     Brand & semantic accents
-     ======================================================== */
-  --color-accent:        #6366f1;
-  --color-accent-hover:  #7d80f8;
-  --color-accent-press:  #5457d8;
-  --color-accent-soft:   rgba(99, 102, 241, 0.14);
-  --color-accent-strong: #8b8efc;
-  --color-accent-2:      #38bdf8;  /* cyan — info */
-  --color-accent-3:      #34d399;  /* mint — agent ready */
-  --color-accent-warm:   #f59e0b;  /* amber — plan mode */
+  /* ────────────────────────────────────────────────────────
+     Z-index sémantique (par centaines)
+     ──────────────────────────────────────────────────────── */
+  --z-base:     0;
+  --z-raised:   10;
+  --z-dropdown: 1000;
+  --z-sticky:   1100;
+  --z-overlay:  1200;
+  --z-modal:    1300;
+  --z-popover:  1400;
+  --z-tooltip:  1500;
+  --z-toast:    1600;
 
-  --color-success: #22c55e;
-  --color-success-soft: rgba(34, 197, 94, 0.14);
-  --color-danger:  #ef4444;
-  --color-danger-soft: rgba(239, 68, 68, 0.14);
-  --color-warning: #f59e0b;
-  --color-warning-soft: rgba(245, 158, 11, 0.14);
-  --color-info:    #38bdf8;
-  --color-info-soft: rgba(56, 189, 248, 0.14);
+  /* ────────────────────────────────────────────────────────
+     Typographie (Inter Variable + Geist Mono, échelle 1.125)
+     ──────────────────────────────────────────────────────── */
+  --font-sans: "Inter Variable", "Inter", -apple-system, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono",
+               Menlo, monospace;
+  --font-display: "Inter Display", var(--font-sans);
 
-  --color-diff-add:           rgba(34, 197, 94, 0.16);
-  --color-diff-add-strong:    rgba(34, 197, 94, 0.36);
-  --color-diff-remove:        rgba(239, 68, 68, 0.16);
-  --color-diff-remove-strong: rgba(239, 68, 68, 0.36);
+  --text-2xs:  11px;
+  --text-xs:   12px;
+  --text-sm:   13px;
+  --text-md:   14px;
+  --text-base: 15px;
+  --text-lg:   16px;
+  --text-xl:   18px;
+  --text-2xl:  20px;
+  --text-3xl:  24px;
+  --text-4xl:  32px;
 
-  /* ========================================================
-     Elevation system — v1.0 explicit ramp
-     0 = flush  •  4 = floating modal
-     ======================================================== */
-  --elevation-0: none;
-  --elevation-1:
-    0 1px 2px rgba(0, 0, 0, 0.30);
-  --elevation-2:
-    0 4px 10px rgba(0, 0, 0, 0.28),
-    0 1px 3px rgba(0, 0, 0, 0.20);
-  --elevation-3:
-    0 10px 24px rgba(0, 0, 0, 0.40),
-    0 3px 8px rgba(0, 0, 0, 0.26);
-  --elevation-4:
-    0 22px 44px rgba(0, 0, 0, 0.50),
-    0 4px 12px rgba(0, 0, 0, 0.32);
-  --elevation-modal:
-    0 36px 80px rgba(0, 0, 0, 0.62),
-    0 12px 32px rgba(0, 0, 0, 0.42),
-    0 0 0 1px rgba(255, 255, 255, 0.05),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --leading-tight:  1.2;
+  --leading-snug:   1.4;
+  --leading-normal: 1.5;
+  --leading-relax:  1.65;
 
-  /* Legacy aliases (kept stable for v0.17.x consumers) */
-  --shadow-sm:    var(--elevation-1);
-  --shadow-md:    var(--elevation-3);
-  --shadow-lg:    var(--elevation-4);
+  --tracking-tight:  -0.02em;
+  --tracking-snug:   -0.011em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.01em;
+
+  /* ────────────────────────────────────────────────────────
+     Motion : durées + easings
+     ──────────────────────────────────────────────────────── */
+  --dur-instant: 75ms;
+  --dur-fast:    100ms;
+  --dur-quick:   150ms;
+  --dur-base:    200ms;
+  --dur-medium:  300ms;
+  --dur-slow:    500ms;
+
+  --ease-standard:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-quart:   cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quart:    cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
+  --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* ────────────────────────────────────────────────────────
+     Shadow stack (DARK : border + drop fin + inset highlight)
+     ──────────────────────────────────────────────────────── */
+  --shadow-xs:
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  --shadow-sm:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --shadow-md:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 2px 4px rgba(0, 0, 0, 0.40),
+    0 8px 16px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+  --shadow-lg:
+    0 0 0 1px rgba(255, 255, 255, 0.07),
+    0 4px 8px rgba(0, 0, 0, 0.50),
+    0 16px 32px rgba(0, 0, 0, 0.55),
+    0 32px 64px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
   --shadow-xl:
-    0 32px 72px rgba(0, 0, 0, 0.58),
-    0 8px 22px rgba(0, 0, 0, 0.36);
-  --shadow-modal: var(--elevation-modal);
-  --shadow-glow:
-    0 0 0 1px var(--color-border-accent),
-    0 8px 32px rgba(99, 102, 241, 0.26);
-  --shadow-glow-soft: 0 0 22px rgba(99, 102, 241, 0.18);
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 8px 16px rgba(0, 0, 0, 0.55),
+    0 24px 48px rgba(0, 0, 0, 0.60),
+    0 48px 96px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+  --shadow-accent-glow:
+    0 0 0 1px rgba(245, 201, 122, 0.35),
+    0 0 24px -4px rgba(245, 201, 122, 0.40),
+    0 0 64px -16px rgba(245, 201, 122, 0.30);
 
-  /* ========================================================
-     Radii
-     ======================================================== */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
-  --radius-pill: 999px;
+  /* === TIER 2 — SÉMANTIQUES (DARK par défaut) === */
+  --color-bg-canvas:    var(--neutral-1);   /* derrière la fenêtre */
+  --color-bg-base:      var(--neutral-2);   /* éditeur */
+  --color-bg-surface:   var(--neutral-3);   /* sidebar, panneaux */
+  --color-bg-elevated:  var(--neutral-4);   /* cartes, widgets, onglet actif */
+  --color-bg-overlay:   var(--neutral-5);   /* modales, popovers */
+  --color-bg-hover:     var(--neutral-5);
+  --color-bg-pressed:   var(--neutral-6);
 
-  /* ========================================================
-     Spacing
-     ======================================================== */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
+  --color-border-subtle:  rgba(255, 255, 255, 0.06);
+  --color-border-default: var(--neutral-7);
+  --color-border-strong:  var(--neutral-8);
 
-  /* ========================================================
-     Typography — v1.0 type scale
-     Reference: 13 px body, 1.5 line-height. Scale uses a 1.125
-     ratio (musical "minor second") so steps feel deliberate
-     without dramatic jumps.
-     ======================================================== */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Text',
-    'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', Menlo, Monaco,
-    Consolas, 'Courier New', monospace;
-  --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'SF Pro Display',
-    'Segoe UI', Roboto, sans-serif;
+  --color-text-primary:   var(--neutral-12);
+  --color-text-secondary: var(--neutral-11);
+  --color-text-tertiary:  var(--neutral-10);
+  --color-text-disabled:  var(--neutral-9);
+  --color-text-on-accent: var(--amber-1);
 
-  /* Font sizes */
-  --fs-2xs: 9.5px;
-  --fs-xs:  10.5px;
-  --fs-sm:  11.5px;
-  --fs-base: 13px;
-  --fs-md:  14px;
-  --fs-lg:  16px;
-  --fs-xl:  20px;
-  --fs-2xl: 26px;
-  --fs-3xl: 34px;
+  --color-accent:         var(--amber-9);
+  --color-accent-hover:   var(--amber-10);
+  --color-accent-text:    var(--amber-11);
+  --color-focus-ring:     var(--amber-8);
 
-  /* Font weights — Inter / SF Pro have full range */
-  --fw-regular:  400;
-  --fw-medium:   500;
-  --fw-semibold: 600;
-  --fw-bold:     700;
+  --color-success: var(--green-9);
+  --color-warning: var(--coral-9);
+  --color-danger:  var(--red-9);
 
-  /* Line heights */
-  --lh-tight: 1.2;
-  --lh-snug:  1.4;
-  --lh-base:  1.55;
-  --lh-loose: 1.7;
+  /* Diff highlights (accordés à la palette syntaxique) */
+  --color-diff-add:           rgba(157, 190, 142, 0.16);
+  --color-diff-add-strong:    rgba(157, 190, 142, 0.36);
+  --color-diff-remove:        rgba(224, 108, 108, 0.16);
+  --color-diff-remove-strong: rgba(224, 108, 108, 0.36);
 
-  /* Letter spacing — premium IDEs use slight negative tracking on
-     headings + UI labels for that "Apple-touched" feel. */
-  --ls-tight:  -0.02em;
-  --ls-snug:   -0.005em;
-  --ls-base:   0;
-  --ls-wide:   0.04em;
-  --ls-wider:  0.10em;
-  --ls-widest: 0.14em;  /* uppercase headings */
-
-  /* ========================================================
-     Motion
-     ======================================================== */
-  --ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in-out:   cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-snap:     cubic-bezier(0.5, 0, 0.5, 1);
-  --dur-micro: 90ms;
-  --dur-fast:  140ms;
-  --dur-base:  220ms;
-  --dur-slow:  340ms;
-
-  /* ========================================================
-     Z-index ladder — v1.0 consolidated.
-     Use these instead of magic numbers everywhere.
-     ======================================================== */
-  --z-base:     1;
-  --z-floor:    10;     /* sticky sub-headers, breadcrumbs */
-  --z-tooltip:  100;
-  --z-dropdown: 1000;   /* model menu, conv switcher menu */
-  --z-overlay:  10000;
-  --z-modal:    10100;  /* QuickOpen, CommandPalette, dialogs */
-  --z-popover:  10200;  /* ContextMenu — sits above modals if both open */
-  --z-toast:    11000;
-
-  /* ========================================================
-     Layout
-     ======================================================== */
+  /* Dimensions de layout (stable) */
   --titlebar-height:  36px;
   --sidebar-width:    260px;
   --ai-panel-width:   420px;
   --activity-bar-width: 48px;
-  --statusbar-height: 26px;
+  --statusbar-height: 24px;
+
+  color-scheme: dark;
+}
+
+/* === MODE LIGHT (override sémantiques uniquement) === */
+[data-theme='light'] {
+  --color-bg-canvas:   #F8F6F1;   /* warm off-white, papier-cahier */
+  --color-bg-base:     #FFFFFF;
+  --color-bg-surface:  #F5F2EB;
+  --color-bg-elevated: #FFFFFF;
+  --color-bg-overlay:  #FFFFFF;
+  --color-bg-hover:    #F0EBE0;
+  --color-bg-pressed:  #E8E1D2;
+
+  --color-border-subtle:  rgba(15, 14, 13, 0.05);
+  --color-border-default: rgba(15, 14, 13, 0.10);
+  --color-border-strong:  rgba(15, 14, 13, 0.18);
+
+  --color-text-primary:   #1F1B16;
+  --color-text-secondary: #5C5347;
+  --color-text-tertiary:  #8A7E6E;
+  --color-text-disabled:  #B5AC9D;
+  --color-text-on-accent: #1F1B16;
+
+  --color-accent:       #B8893B;
+  --color-accent-hover: #A37828;
+  --color-accent-text:  #8C6822;
+  --color-focus-ring:   #B8893B;
+
+  /* Shadows light : drop-shadows tintés vers le bg */
+  --shadow-sm:
+    0 0 0 1px rgba(60, 40, 20, 0.06),
+    0 1px 2px rgba(60, 40, 20, 0.04);
+  --shadow-md:
+    0 0 0 1px rgba(60, 40, 20, 0.06),
+    0 1px 2px rgba(60, 40, 20, 0.04),
+    0 4px 8px rgba(60, 40, 20, 0.06),
+    0 8px 16px rgba(60, 40, 20, 0.05);
+  --shadow-lg:
+    0 0 0 1px rgba(60, 40, 20, 0.08),
+    0 1px 2px rgba(60, 40, 20, 0.06),
+    0 4px 8px rgba(60, 40, 20, 0.08),
+    0 16px 32px rgba(60, 40, 20, 0.10);
+  --shadow-xl:
+    0 0 0 1px rgba(60, 40, 20, 0.10),
+    0 8px 16px rgba(60, 40, 20, 0.10),
+    0 24px 48px rgba(60, 40, 20, 0.12),
+    0 48px 96px rgba(60, 40, 20, 0.10);
+  --shadow-accent-glow:
+    0 0 0 1px rgba(184, 137, 59, 0.35),
+    0 0 24px -4px rgba(184, 137, 59, 0.30),
+    0 0 64px -16px rgba(184, 137, 59, 0.20);
+
+  --color-diff-add:           rgba(120, 160, 100, 0.18);
+  --color-diff-add-strong:    rgba(120, 160, 100, 0.40);
+  --color-diff-remove:        rgba(200, 90, 90, 0.16);
+  --color-diff-remove-strong: rgba(200, 90, 90, 0.40);
+
+  color-scheme: light;
+}
+
+/* Reduced motion — opt-OUT pour accessibilité */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

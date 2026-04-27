@@ -1,35 +1,28 @@
 /* ============================================================
    ToolCall — agent tool invocations in chat
-   v0.14.0 — total visual refresh. Compact summary line,
-   single-layer body, pill statuses.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .toolcall {
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-elevated);
   overflow: hidden;
-  transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+  transition: border-color var(--dur-quick) var(--ease-standard);
 }
-.toolcall:hover {
-  border-color: var(--color-border-strong);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
+.toolcall:hover { border-color: var(--color-border-default); }
 
 .toolcall--running {
-  border-color: rgba(125, 130, 248, 0.4);
+  border-color: color-mix(in oklch, var(--color-accent) 40%, transparent);
 }
 .toolcall--running .toolcall__head {
   background: linear-gradient(
     90deg,
-    rgba(125, 130, 248, 0.04),
-    rgba(125, 130, 248, 0.14),
-    rgba(125, 130, 248, 0.04)
+    color-mix(in oklch, var(--color-accent) 04%, transparent),
+    color-mix(in oklch, var(--color-accent) 14%, transparent),
+    color-mix(in oklch, var(--color-accent) 04%, transparent)
   );
   background-size: 200% 100%;
   animation: toolcall-shimmer 1.6s linear infinite;
@@ -39,11 +32,15 @@
   to   { background-position: -200% 50%; }
 }
 
-.toolcall--done    { border-color: rgba(110, 228, 151, 0.3); }
-.toolcall--error   { border-color: rgba(255, 142, 142, 0.4); background: rgba(239, 68, 68, 0.05); }
-.toolcall--rejected{ border-color: rgba(255, 199, 44, 0.3); background: rgba(255, 199, 44, 0.05); }
-
-/* ----- Head (always visible, click toggles body) ---------- */
+.toolcall--done    { border-color: color-mix(in oklch, var(--color-success) 30%, transparent); }
+.toolcall--error   {
+  border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  background: color-mix(in oklch, var(--color-danger) 05%, var(--color-bg-elevated));
+}
+.toolcall--rejected {
+  border-color: color-mix(in oklch, var(--color-warning) 30%, transparent);
+  background: color-mix(in oklch, var(--color-warning) 05%, var(--color-bg-elevated));
+}
 
 .toolcall__head {
   display: flex;
@@ -51,28 +48,28 @@
   gap: 8px;
   padding: 7px 10px;
   background: transparent;
-  color: var(--color-text);
-  font-size: 12px;
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
   cursor: pointer;
   text-align: left;
   width: 100%;
   border: 0;
-  transition: background var(--dur-fast) var(--ease-out);
+  transition: background var(--dur-quick) var(--ease-standard);
 }
-.toolcall__head:hover { background: rgba(255, 255, 255, 0.04); }
+.toolcall__head:hover { background: var(--color-bg-hover); }
 
 .toolcall__glyph {
-  font-size: 13px;
+  font-size: var(--text-sm);
   flex-shrink: 0;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
 }
 
 .toolcall__name {
   font-family: var(--font-mono);
-  color: var(--color-accent-hover);
+  color: var(--color-accent);
   font-weight: 500;
   flex-shrink: 0;
-  font-size: 11.5px;
+  font-size: var(--text-2xs);
 }
 
 .toolcall__headline {
@@ -81,9 +78,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-2xs);
 }
 
 .toolcall__status {
@@ -93,21 +90,35 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid transparent;
 }
-.toolcall__status--pending  { background: rgba(255, 255, 255, 0.06); color: var(--color-text-dim); }
-.toolcall__status--running  { background: rgba(125, 130, 248, 0.18); color: #c9cdff; border-color: rgba(125, 130, 248, 0.32); }
-.toolcall__status--done     { background: rgba(110, 228, 151, 0.18); color: #6ee497; border-color: rgba(110, 228, 151, 0.3); }
-.toolcall__status--error    { background: rgba(239, 68, 68, 0.18);   color: #fca5a5; border-color: rgba(239, 68, 68, 0.34); }
-.toolcall__status--rejected { background: rgba(255, 199, 44, 0.18);  color: #ffd28a; border-color: rgba(255, 199, 44, 0.34); }
-
-/* ----- Body (expanded section) ---------------------------- */
+.toolcall__status--pending  { background: var(--color-bg-elevated); color: var(--color-text-tertiary); }
+.toolcall__status--running  {
+  background: color-mix(in oklch, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
+  border-color: color-mix(in oklch, var(--color-accent) 32%, transparent);
+}
+.toolcall__status--done     {
+  background: color-mix(in oklch, var(--color-success) 18%, transparent);
+  color: var(--color-success);
+  border-color: color-mix(in oklch, var(--color-success) 30%, transparent);
+}
+.toolcall__status--error    {
+  background: color-mix(in oklch, var(--color-danger) 18%, transparent);
+  color: var(--color-danger);
+  border-color: color-mix(in oklch, var(--color-danger) 34%, transparent);
+}
+.toolcall__status--rejected {
+  background: color-mix(in oklch, var(--color-warning) 18%, transparent);
+  color: var(--color-warning);
+  border-color: color-mix(in oklch, var(--color-warning) 34%, transparent);
+}
 
 .toolcall__body {
   padding: 10px 12px 12px;
-  border-top: 1px solid var(--color-border);
-  background: rgba(8, 12, 22, 0.5);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-base);
 }
 
 .toolcall__section + .toolcall__section { margin-top: 10px; }
@@ -115,33 +126,25 @@
 .toolcall__section-label {
   font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: var(--color-text-dim);
+  color: var(--color-text-tertiary);
   margin-bottom: 5px;
 }
 
 .toolcall__pre {
   margin: 0;
   padding: 9px 11px;
-  background: rgba(0, 0, 0, 0.32);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.55;
-  color: var(--color-text);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-base);
+  color: var(--color-text-primary);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 240px;
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
-}
-.toolcall__pre::-webkit-scrollbar { width: 8px; height: 8px; }
-.toolcall__pre::-webkit-scrollbar-track { background: transparent; }
-.toolcall__pre::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
 }

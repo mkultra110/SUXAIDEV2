@@ -1,27 +1,21 @@
 /* ============================================================
    EditedFilesPanel — "Files Modified" card under an assistant turn
-   v0.15.2 — visual refresh harmonised with chat v0.14.0.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .edfiles {
   margin: 14px 0 6px;
   padding: 13px 15px;
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, rgba(8, 12, 22, 0.70), rgba(8, 12, 22, 0.55));
-  border: 1px solid var(--color-border);
-  font-size: 12px;
-  color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+    border-color var(--dur-quick) var(--ease-standard);
 }
 .edfiles:hover {
-  border-color: var(--color-border-strong);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 4px 18px rgba(0, 0, 0, 0.20);
+  border-color: var(--color-border-default);
 }
 
 .edfiles__head {
@@ -36,14 +30,14 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 2.5px 8px;
-  border-radius: 999px;
-  background: rgba(125, 130, 248, 0.2);
-  color: #d0d4ff;
-  border: 1px solid rgba(125, 130, 248, 0.34);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 30%, transparent);
 }
 .edfiles__count {
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-primary);
   font-variant-numeric: tabular-nums;
 }
 .edfiles__totals {
@@ -51,21 +45,20 @@
   align-items: center;
   gap: 7px;
   font-variant-numeric: tabular-nums;
-  font-size: 11.5px;
+  font-size: var(--text-xs);
 }
 .edfiles__head-spacer { flex: 1; }
 .edfiles__pending-pill {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   padding: 2.5px 9px;
-  border-radius: 999px;
-  background: rgba(251, 191, 36, 0.16);
-  color: #fde68a;
-  border: 1px solid rgba(251, 191, 36, 0.46);
-  box-shadow: 0 0 8px rgba(251, 191, 36, 0.16);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, var(--color-warning) 16%, transparent);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in oklch, var(--color-warning) 42%, transparent);
 }
-.edfiles__plus  { color: #86efac; font-weight: 600; }
-.edfiles__minus { color: #fca5a5; font-weight: 600; }
+.edfiles__plus  { color: var(--color-success); font-weight: 600; }
+.edfiles__minus { color: var(--terra-9); font-weight: 600; }
 
 .edfiles__list {
   display: flex;
@@ -80,40 +73,42 @@
   gap: 9px;
   width: 100%;
   padding: 7px 11px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
   border-left: 2px solid transparent;
   border-radius: var(--radius-sm);
-  color: var(--color-text);
+  color: var(--color-text-primary);
   cursor: pointer;
   text-align: left;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
 .edfiles__chip:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--color-border-strong);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-default);
 }
 .edfiles__chip--current {
-  border-color: rgba(125, 130, 248, 0.6);
+  border-color: color-mix(in oklch, var(--color-accent) 50%, transparent);
   border-left-color: var(--color-accent);
-  background: rgba(125, 130, 248, 0.12);
+  background: color-mix(in oklch, var(--color-accent) 10%, transparent);
 }
 .edfiles__chip-icon {
   display: inline-flex;
-  width: 16px; height: 16px;
-  align-items: center; justify-content: center;
-  font-size: 11px;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-2xs);
   flex-shrink: 0;
 }
-.edfiles__chip--pending   .edfiles__chip-icon { color: #fbbf24; }
-.edfiles__chip--streaming .edfiles__chip-icon { color: #8b8ffb; animation: edfiles-pulse 1.4s var(--ease-in-out) infinite; }
-.edfiles__chip--accepted  .edfiles__chip-icon { color: #86efac; }
-.edfiles__chip--rejected  .edfiles__chip-icon { color: #fca5a5; }
-.edfiles__chip--error     .edfiles__chip-icon { color: #fca5a5; }
+.edfiles__chip--pending   .edfiles__chip-icon { color: var(--color-warning); }
+.edfiles__chip--streaming .edfiles__chip-icon { color: var(--color-accent); animation: edfiles-pulse 1.4s var(--ease-in-out-circ) infinite; }
+.edfiles__chip--accepted  .edfiles__chip-icon { color: var(--color-success); }
+.edfiles__chip--rejected  .edfiles__chip-icon { color: var(--terra-9); }
+.edfiles__chip--error     .edfiles__chip-icon { color: var(--color-danger); }
 @keyframes edfiles-pulse {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
@@ -130,15 +125,15 @@
   align-items: center;
   gap: 7px;
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
+  font-size: var(--text-2xs);
   flex-shrink: 0;
 }
 .edfiles__chip-hunks {
-  font-size: 10px;
+  font-size: var(--text-2xs);
   padding: 1.5px 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--color-text-dim);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -148,7 +143,7 @@
   justify-content: space-between;
   gap: 12px;
   padding-top: 9px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .edfiles__nav {
@@ -157,28 +152,30 @@
   gap: 6px;
 }
 .edfiles__nav-btn {
-  width: 24px; height: 24px;
-  display: grid; place-items: center;
-  border-radius: 5px;
-  border: 1px solid var(--color-border);
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border-subtle);
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   cursor: pointer;
-  font-size: 12px;
+  font-size: var(--text-xs);
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
 .edfiles__nav-btn:hover:not(:disabled) {
-  background: var(--color-hover);
-  color: var(--color-text);
-  border-color: var(--color-border-strong);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-default);
 }
 .edfiles__nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .edfiles__nav-label {
-  font-size: 11px;
-  color: var(--color-text-dim);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -193,59 +190,52 @@
   gap: 7px;
   height: 26px;
   padding: 0 11px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-border-subtle);
   background: transparent;
-  color: var(--color-text-muted);
-  font-size: 11.5px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
 }
 .edfiles__master:hover:not(:disabled) {
-  background: var(--color-hover);
-  color: var(--color-text);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 .edfiles__master:disabled { opacity: 0.35; cursor: not-allowed; }
 .edfiles__master--accept {
-  border-color: rgba(110, 228, 151, 0.55);
-  background: linear-gradient(180deg, rgba(110, 228, 151, 0.14), rgba(110, 228, 151, 0.04));
-  color: #d4fbe2;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-color: color-mix(in oklch, var(--color-success) 50%, transparent);
+  background: color-mix(in oklch, var(--color-success) 08%, transparent);
+  color: var(--color-success);
 }
 .edfiles__master--accept:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(110, 228, 151, 0.24), rgba(110, 228, 151, 0.10));
-  border-color: rgba(110, 228, 151, 0.80);
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 0 14px rgba(110, 228, 151, 0.24);
+  background: color-mix(in oklch, var(--color-success) 22%, transparent);
+  border-color: color-mix(in oklch, var(--color-success) 80%, transparent);
+  color: var(--color-text-primary);
   transform: translateY(-1px);
 }
 .edfiles__master--reject {
-  border-color: rgba(239, 68, 68, 0.50);
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.10), rgba(239, 68, 68, 0.03));
-  color: #ffe0e0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border-color: color-mix(in oklch, var(--color-danger) 50%, transparent);
+  background: color-mix(in oklch, var(--color-danger) 06%, transparent);
+  color: var(--color-danger);
 }
 .edfiles__master--reject:hover:not(:disabled) {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.20), rgba(239, 68, 68, 0.08));
-  border-color: rgba(239, 68, 68, 0.78);
-  color: #fff;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.07),
-    0 0 14px rgba(239, 68, 68, 0.24);
+  background: color-mix(in oklch, var(--color-danger) 18%, transparent);
+  border-color: color-mix(in oklch, var(--color-danger) 78%, transparent);
+  color: var(--color-text-primary);
   transform: translateY(-1px);
 }
 .edfiles__master kbd {
   font-family: var(--font-mono);
   font-size: 9.5px;
   padding: 1.5px 5px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-xs);
+  background: color-mix(in oklch, black 30%, transparent);
+  border: 1px solid color-mix(in oklch, white 8%, transparent);
   opacity: 0.9;
 }

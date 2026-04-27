@@ -127,14 +127,16 @@ export function EditorPanel() {
   }, []);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
-  // v0.16.2 — per-file markdown view mode (edit vs preview). Persisted
-  // in a Map so toggling between tabs preserves the user's choice ;
-  // unlimited growth isn't a concern (1 entry per file ever opened in
-  // this session, capped naturally by the open-tabs lifecycle).
-  const [mdViewMode, setMdViewMode] = useState<Map<string, 'edit' | 'preview'>>(() => new Map());
+  // v0.16.2 / v0.16.6 — per-file markdown view mode (edit / split /
+  // preview). Persisted in a Map so toggling between tabs preserves
+  // the user's choice ; unlimited growth isn't a concern (1 entry
+  // per file ever opened in this session, capped naturally by the
+  // open-tabs lifecycle).
+  type MdView = 'edit' | 'split' | 'preview';
+  const [mdViewMode, setMdViewMode] = useState<Map<string, MdView>>(() => new Map());
   const isMarkdown =
     !!activeFile && /\.(md|markdown|mdown|mkd)$/i.test(activeFile.name);
-  const currentMdView = activeFile ? (mdViewMode.get(activeFile.path) ?? 'edit') : 'edit';
+  const currentMdView: MdView = activeFile ? (mdViewMode.get(activeFile.path) ?? 'edit') : 'edit';
   const [zoomOffset, setZoomOffset] = useState(0);
   const [inlineEdit, setInlineEdit] = useState<{
     top: number;
@@ -705,6 +707,25 @@ export function EditorPanel() {
                 </button>
                 <button
                   type="button"
+                  className={`editor__viewmode-btn ${currentMdView === 'split' ? 'editor__viewmode-btn--active' : ''}`}
+                  onClick={() =>
+                    setMdViewMode((m) => {
+                      const next = new Map(m);
+                      next.set(activeFile.path, 'split');
+                      return next;
+                    })
+                  }
+                  title="Split mode (live preview)"
+                  aria-pressed={currentMdView === 'split'}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <rect x="3" y="4" width="18" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+                    <path d="M12 4v16" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                  Split
+                </button>
+                <button
+                  type="button"
                   className={`editor__viewmode-btn ${currentMdView === 'preview' ? 'editor__viewmode-btn--active' : ''}`}
                   onClick={() =>
                     setMdViewMode((m) => {
@@ -731,6 +752,42 @@ export function EditorPanel() {
             )}
             {isMarkdown && currentMdView === 'preview' ? (
               <MarkdownPreview source={activeFile.content} basePath={activeFile.path} />
+            ) : isMarkdown && currentMdView === 'split' ? (
+              <div className="editor__split">
+                <div className="editor__split-pane editor__split-pane--editor">
+                  <Editor
+                    key={`split:${activeFile.path}`}
+                    height="100%"
+                    language={activeFile.language ?? 'plaintext'}
+                    value={activeFile.content}
+                    onChange={(v) => updateActiveContent(v ?? '')}
+                    onMount={onMount}
+                    options={{
+                      fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
+                      fontSize: effectiveFontSize,
+                      fontLigatures: true,
+                      minimap: { enabled: false },
+                      smoothScrolling: true,
+                      cursorBlinking: 'smooth',
+                      cursorSmoothCaretAnimation: 'on',
+                      padding: { top: 14, bottom: 14 },
+                      scrollBeyondLastLine: false,
+                      renderLineHighlight: 'all',
+                      lineNumbersMinChars: 3,
+                      automaticLayout: true,
+                      tabSize: settings.tabSize,
+                      wordWrap: 'on',
+                      guides: { indentation: true, bracketPairs: true },
+                      bracketPairColorization: { enabled: true, independentColorPoolPerBracketType: true },
+                      stickyScroll: { enabled: false },
+                      inlineSuggest: { enabled: true, mode: 'subwordSmart', showToolbar: 'onHover' },
+                    }}
+                  />
+                </div>
+                <div className="editor__split-pane editor__split-pane--preview">
+                  <MarkdownPreview source={activeFile.content} basePath={activeFile.path} />
+                </div>
+              </div>
             ) : (
               <Editor
                 key={activeFile.path}

@@ -212,6 +212,30 @@
   color: #fca5a5;
 }
 
+/* === Split mode (v0.16.6) ===
+   Editor pane on the left + MarkdownPreview pane on the right, both
+   100% height, separator hairline between them. The toggle pill
+   floats above the right pane so it doesn't overlap the editor's
+   gutter / minimap area. */
+.editor__split {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--color-border);
+}
+.editor__split-pane {
+  min-width: 0;
+  min-height: 0;
+  background: var(--color-bg);
+  overflow: hidden;
+  position: relative;
+}
+.editor__split-pane--preview {
+  background: var(--color-bg);
+}
+
 /* === Editor toolbar : Preview / Edit toggle ===
    v0.16.2 — toggle pill rendered above the Monaco editor when the
    active file is markdown. Stays out of the way otherwise. */

@@ -1,0 +1,46 @@
+/* ============================================================
+   SuxaiLogo — brand mark
+   v2.0 — Obsidian Warm. Colour values flow from theme.css tokens
+   so the mark adapts automatically to data-theme.
+   ============================================================ */
+
+.suxai-logo {
+  display: inline-block;
+  flex-shrink: 0;
+  /* Plate + glint + mark all read these vars. */
+  color: var(--color-accent);
+}
+
+.suxai-logo__plate {
+  fill: var(--color-accent);
+  stroke: color-mix(in oklch, white 14%, transparent);
+  stroke-width: 1;
+}
+
+.suxai-logo__glint {
+  fill: url(#__suxai_logo_glint_grad);
+  /* The gradient is generated below via mask + linear-gradient on a
+     real DOM rect — but SVG <linearGradient> with currentColor stops
+     would force inline IDs. Simpler : fake the glint with a CSS
+     mask-image gradient applied to the SVG rect, since we can't put
+     CSS gradients directly on an SVG <rect> fill in all engines. We
+     instead overlay via a pseudo-element on the parent `.titlebar__brand`
+     in dense surfaces. As a compromise, we set a static high-contrast
+     fill at low opacity here ; the perceived sheen comes from the
+     plate gradient when it's animated by the parent (titlebar hover).
+     */
+  fill: rgba(255, 255, 255, 0.18);
+  /* Light theme reduces the glint so it doesn't fight the dark mark. */
+}
+
+[data-theme='light'] .suxai-logo__glint {
+  fill: rgba(255, 255, 255, 0.42);
+}
+
+.suxai-logo__mark {
+  stroke: var(--color-text-on-accent);
+}
+
+.suxai-logo--glow {
+  filter: drop-shadow(0 0 12px color-mix(in oklch, var(--color-accent) 55%, transparent));
+}

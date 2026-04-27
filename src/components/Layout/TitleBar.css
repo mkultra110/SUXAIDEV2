@@ -1,8 +1,7 @@
 /* ============================================================
    TitleBar — top window chrome
-   v0.17.0 — visual refresh, class names stable for JSX.
-   3-zone grid (1fr | auto | 1fr) keeps the user cluster centered
-   independently of username length.
+   v2.0 — Obsidian Warm. 3-zone grid (1fr | auto | 1fr) keeps the
+   user cluster centered independently of username length.
    ============================================================ */
 
 .titlebar {
@@ -10,18 +9,11 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: stretch;
-  /* v0.17.0 — slightly cooler base + subtle horizontal sheen so the
-     bar reads as a polished plate rather than a flat rectangle. */
-  background:
-    linear-gradient(180deg, #1a2138 0%, #0d1322 100%),
-    linear-gradient(90deg, transparent, rgba(125, 130, 248, 0.06) 50%, transparent);
-  background-blend-mode: normal, screen;
+  background: var(--color-bg-surface);
   user-select: none;
   position: relative;
-  border-bottom: 1px solid var(--color-border-strong);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 1px 0 rgba(0, 0, 0, 0.4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  -webkit-app-region: drag;
 }
 
 .titlebar__zone {
@@ -45,31 +37,26 @@
   align-items: center;
   gap: 10px;
   font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--ls-wide);
-  color: var(--color-text-strong);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.34);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  color: var(--color-text-primary);
   -webkit-app-region: no-drag;
   cursor: default;
 }
 .titlebar__brand svg {
   transition: transform var(--dur-base) var(--ease-spring),
-    filter var(--dur-base) var(--ease-out);
+    filter var(--dur-base) var(--ease-out-expo);
 }
 .titlebar__brand:hover svg {
-  transform: scale(1.08) rotate(-3deg);
-  filter: drop-shadow(0 0 14px rgba(125, 130, 248, 0.55));
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 12px color-mix(in oklch, var(--color-accent) 55%, transparent));
 }
 .titlebar__brand-name {
-  background: linear-gradient(180deg, #ffffff 0%, #d8dbff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--color-text-primary);
 }
 
-/* Legacy alias — kept so anywhere still rendering .titlebar__dot
-   (e.g. older e2e selectors) doesn't blow up. */
+/* Legacy alias — guard older code that may still render .titlebar__dot. */
 .titlebar__dot {
   width: 0;
   height: 0;
@@ -77,15 +64,16 @@
 }
 
 .titlebar__version {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--color-text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-normal);
+  color: var(--color-text-tertiary);
   margin-left: 4px;
   padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .titlebar__actions {
@@ -104,23 +92,24 @@
   margin-right: 0;
   background: transparent;
   border: none;
-  font-size: 11.5px;
-  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
   -webkit-app-region: no-drag;
 }
 
 .titlebar__avatar {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background:
-    radial-gradient(120% 120% at 30% 20%, #9396ff, #5457d8 70%);
-  color: #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--amber-9), var(--amber-7));
+  color: var(--color-text-on-accent);
   font-size: 11px;
   font-weight: 700;
-  display: grid; place-items: center;
+  display: grid;
+  place-items: center;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
-    0 1px 6px rgba(84, 87, 216, 0.55);
+    0 0 0 1px color-mix(in oklch, white 8%, transparent) inset,
+    0 1px 4px color-mix(in oklch, var(--color-accent) 40%, transparent);
 }
 
 .titlebar__email {
@@ -128,20 +117,20 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .titlebar__logout {
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   padding: 4px;
   border-radius: var(--radius-xs);
   transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard);
 }
 .titlebar__logout:hover {
-  color: var(--color-text);
-  background: var(--color-hover);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 /* Window controls clustered in soft pill so the 3 icons feel like
@@ -151,64 +140,76 @@
   align-items: center;
   gap: 1px;
   padding: 2px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
 }
 
 .titlebar__btn {
-  width: 28px; height: 22px;
-  display: grid; place-items: center;
-  color: var(--color-text-muted);
-  border-radius: 4px;
+  width: 28px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-xs);
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard);
 }
-.titlebar__btn:hover { background: var(--color-hover); color: var(--color-text); }
-.titlebar__btn--close:hover { background: #e81123; color: #fff; }
+.titlebar__btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+.titlebar__btn--close:hover {
+  background: var(--color-danger);
+  color: var(--color-text-on-accent);
+}
 
 /* Tier pill — FREE / PRO. */
 .titlebar__tier {
-  font-size: 9.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.12em;
   padding: 2.5px 8px;
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-full);
   border: 1px solid transparent;
   line-height: 1;
 }
 .titlebar__tier--free {
-  color: #aab0c2;
-  border-color: rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--color-text-tertiary);
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
 }
 .titlebar__tier--pro {
-  color: #ffe2a3;
-  border-color: rgba(255, 199, 44, 0.50);
-  background: linear-gradient(135deg, rgba(255, 199, 44, 0.22), rgba(255, 146, 44, 0.14));
-  box-shadow: 0 0 14px rgba(255, 199, 44, 0.22);
+  color: var(--color-text-on-accent);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  box-shadow: 0 0 14px color-mix(in oklch, var(--color-accent) 25%, transparent);
 }
 
 .titlebar__upgrade {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 600;
   padding: 4px 11px;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(125, 130, 248, 0.50);
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.26), rgba(84, 87, 216, 0.16));
-  color: #dee0ff;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
   transition:
-    filter var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    filter var(--dur-quick) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard),
+    transform var(--dur-quick) var(--ease-standard);
 }
 .titlebar__upgrade:hover:not(:disabled) {
-  filter: brightness(1.15);
-  box-shadow: 0 0 18px rgba(125, 130, 248, 0.38);
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  box-shadow: var(--shadow-accent-glow);
   transform: translateY(-1px);
 }
-.titlebar__upgrade:disabled { opacity: 0.5; cursor: default; }
+.titlebar__upgrade:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
 
 .titlebar__redeem-msg {
   position: absolute;
@@ -217,18 +218,18 @@
   margin-top: 6px;
   padding: 7px 13px;
   border-radius: var(--radius-sm);
-  font-size: 11.5px;
-  z-index: 20;
+  font-size: var(--text-xs);
+  z-index: var(--z-raised);
   box-shadow: var(--shadow-md);
-  animation: suxai-fade-in var(--dur-base) var(--ease-out);
+  animation: suxai-fade-in var(--dur-base) var(--ease-out-expo);
 }
 .titlebar__redeem-msg--ok {
-  background: rgba(52, 199, 89, 0.18);
-  color: #6ee497;
-  border: 1px solid rgba(52, 199, 89, 0.36);
+  background: color-mix(in oklch, var(--color-success) 18%, transparent);
+  color: var(--color-success);
+  border: 1px solid color-mix(in oklch, var(--color-success) 36%, transparent);
 }
 .titlebar__redeem-msg--err {
-  background: rgba(255, 77, 77, 0.14);
-  color: #ff9f9f;
-  border: 1px solid rgba(255, 77, 77, 0.34);
+  background: color-mix(in oklch, var(--color-danger) 14%, transparent);
+  color: var(--color-danger);
+  border: 1px solid color-mix(in oklch, var(--color-danger) 34%, transparent);
 }

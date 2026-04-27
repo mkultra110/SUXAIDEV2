@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
+import { WebglAddon } from '@xterm/addon-webgl';
+import { SearchAddon } from '@xterm/addon-search';
+import { WebLinksAddon } from '@xterm/addon-web-links';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import '@xterm/xterm/css/xterm.css';
 import './TerminalPanel.css';
@@ -31,11 +34,20 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const termRef = useRef<XTerm | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
+  // v0.16.1 — addons WebGL/Search/WebLinks. Refs pour pouvoir
+  // recréer l'addon WebGL si on perd le contexte (GPU crash) sans
+  // toucher au reste du terminal.
+  const webglRef = useRef<WebglAddon | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const webLinksRef = useRef<WebLinksAddon | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const spawningRef = useRef(false);
   const offDataRef = useRef<(() => void) | null>(null);
   const offExitRef = useRef<(() => void) | null>(null);
   const termOnDataRef = useRef<{ dispose(): void } | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const [height, setHeight] = useState<number>(DEFAULT_HEIGHT);
   const [dragging, setDragging] = useState(false);
 
@@ -75,10 +87,36 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
+    // v0.16.1 — Search + WebLinks chargés à la création (zero-cost
+    // tant qu'on ne s'en sert pas). WebLinks transforme http(s):// en
+    // liens cliquables (callback shell.openExternal côté main).
+    const search = new SearchAddon();
+    const webLinks = new WebLinksAddon((event, uri) => {
+      // Ne pas suivre sur Ctrl+Click vide (xterm fire spuriously) ;
+      // exiger une vraie intention via metaKey/ctrlKey + bouton 1.
+      if (event.button !== 0) return;
+      try { window.suxai.fs.revealInFolder?.(uri); } catch { /* */ }
+      // Pour les URLs externes, openExternal — le revealInFolder
+      // fallback ci-dessus ne s'applique qu'aux paths fichiers ; les
+      // vrais URLs http partent via shell.
+      if (/^https?:\/\//i.test(uri)) {
+        try { void window.open(uri, '_blank', 'noopener'); } catch { /* */ }
+      }
+    });
+    term.loadAddon(search);
+    term.loadAddon(webLinks);
     termRef.current = term;
     fitRef.current = fit;
+    searchRef.current = search;
+    webLinksRef.current = webLinks;
     return () => {
+      try { webglRef.current?.dispose(); } catch { /* */ }
+      try { search.dispose(); } catch { /* */ }
+      try { webLinks.dispose(); } catch { /* */ }
       term.dispose();
+      webglRef.current = null;
+      searchRef.current = null;
+      webLinksRef.current = null;
       termRef.current = null;
       fitRef.current = null;
     };
@@ -97,6 +135,27 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
     term.open(host);
     fitRef.current?.fit();
     term.focus();
+
+    // v0.16.1 — WebGL renderer activé après term.open(). Améliore
+    // drastiquement le throughput (~20× vs canvas) sur logs verbeux
+    // (npm install, build TypeScript, watch mode). Si le contexte
+    // WebGL est perdu (driver crash, GPU reset), on dispose et on
+    // retombe silencieusement sur le renderer canvas par défaut —
+    // pas de re-essai en boucle qui consommerait CPU.
+    if (!webglRef.current) {
+      try {
+        const webgl = new WebglAddon();
+        webgl.onContextLoss(() => {
+          try { webgl.dispose(); } catch { /* */ }
+          webglRef.current = null;
+        });
+        term.loadAddon(webgl);
+        webglRef.current = webgl;
+      } catch {
+        // WebGL pas dispo (machine headless, GPU bloqué, vGPU bridé) —
+        // on continue avec le renderer canvas par défaut.
+      }
+    }
 
     (async () => {
       if (sessionIdRef.current || spawningRef.current) return; // already spawned / in flight
@@ -205,6 +264,41 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
     };
   }, [dragging]);
 
+  // v0.16.1 — Ctrl+F dans le terminal ouvre un mini panneau de
+  // recherche. Listener limité au terminal lui-même (pas window) pour
+  // ne pas voler Ctrl+F à Monaco quand le focus est dans l'éditeur.
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        e.stopPropagation();
+        setSearchOpen(true);
+        setTimeout(() => searchInputRef.current?.focus(), 30);
+      }
+    };
+    host.addEventListener('keydown', handler);
+    return () => host.removeEventListener('keydown', handler);
+  }, [open]);
+
+  const onSearchNext = () => {
+    const q = searchQuery.trim();
+    if (!q || !searchRef.current) return;
+    searchRef.current.findNext(q, { caseSensitive: false, wholeWord: false });
+  };
+  const onSearchPrev = () => {
+    const q = searchQuery.trim();
+    if (!q || !searchRef.current) return;
+    searchRef.current.findPrevious(q, { caseSensitive: false, wholeWord: false });
+  };
+  const onSearchClose = () => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    try { searchRef.current?.clearDecorations(); } catch { /* */ }
+    termRef.current?.focus();
+  };
+
   if (!open) return null;
 
   return (
@@ -231,6 +325,24 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
           <button
             type="button"
             className="termpanel__btn"
+            onClick={() => {
+              setSearchOpen((v) => {
+                const next = !v;
+                if (next) setTimeout(() => searchInputRef.current?.focus(), 30);
+                else onSearchClose();
+                return next;
+              });
+            }}
+            title="Find in terminal (Ctrl+F)"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M16 16l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="termpanel__btn"
             onClick={() => termRef.current?.clear()}
             title="Clear"
           >
@@ -246,6 +358,56 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
           </button>
         </div>
       </div>
+      {searchOpen && (
+        <div className="termpanel__search">
+          <input
+            ref={searchInputRef}
+            className="termpanel__search-input"
+            placeholder="Find in terminal…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                if (e.shiftKey) onSearchPrev();
+                else onSearchNext();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                onSearchClose();
+              }
+            }}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          <button
+            type="button"
+            className="termpanel__search-btn"
+            onClick={onSearchPrev}
+            title="Previous (Shift+Enter)"
+            aria-label="Previous match"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            className="termpanel__search-btn"
+            onClick={onSearchNext}
+            title="Next (Enter)"
+            aria-label="Next match"
+          >
+            ↓
+          </button>
+          <button
+            type="button"
+            className="termpanel__search-btn termpanel__search-btn--close"
+            onClick={onSearchClose}
+            title="Close (Esc)"
+            aria-label="Close search"
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="termpanel__host" ref={hostRef} onClick={() => termRef.current?.focus()} />
     </div>
   );

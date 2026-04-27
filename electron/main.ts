@@ -490,19 +490,10 @@ function registerIpc() {
       if (!Array.isArray(manifest.files)) {
         throw new Error('Checkpoint manifest has no files');
       }
-      const safePathFor = (abs: string) => {
-        // Reverse of safePathFor used at create time — given the
-        // snapshotted absolute path, find its .bak by looking at its
-        // basename in the dir.
-        const all = manifest.files;
-        return all.find((p) => p === abs);
-      };
       const restored: string[] = [];
       for (const abs of manifest.files) {
-        const original = safePathFor(abs);
-        if (!original) continue;
         let safe: string;
-        try { safe = sanitizeFsPath(original); }
+        try { safe = sanitizeFsPath(abs); }
         catch { continue; }
         // The bak filename uses the ORIGINAL path with separators
         // replaced by __. To find it without the original-path map, we
@@ -808,7 +799,9 @@ function registerIpc() {
       }
       await fs.rename(tmp, safe);
       // Fire-and-forget orphan sweep — never blocks the write path.
-      sweepTmpOrphans(path.dirname(safe)).catch(() => { /* */ });
+      sweepTmpOrphans(path.dirname(safe)).catch((err) => {
+        console.warn('[suxai] sweepTmpOrphans failed:', err);
+      });
     } catch (err) {
       try { await fs.unlink(tmp); } catch { /* */ }
       if ((err as NodeJS.ErrnoException).code === 'EXDEV') {

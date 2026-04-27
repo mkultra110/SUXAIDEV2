@@ -239,14 +239,30 @@ export class UpdateManager {
 }
 
 function compareSemver(a: string, b: string): number {
-  const pa = a.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
-  const pb = b.replace(/^v/, '').split('.').map((n) => parseInt(n, 10) || 0);
+  // Strip leading 'v' (e.g. v1.2.3 → 1.2.3).
+  const stripV = (s: string) => s.replace(/^v/, '');
+  const splitSemver = (s: string): [number[], string | null] => {
+    const clean = stripV(s);
+    // Split on '-' to separate pre-release suffix: '1.0.0-alpha.1' → '1.0.0' + 'alpha.1'
+    const dashIdx = clean.indexOf('-');
+    const core = dashIdx < 0 ? clean : clean.slice(0, dashIdx);
+    const pre = dashIdx < 0 ? null : clean.slice(dashIdx + 1);
+    const nums = core.split('.').map((n) => parseInt(n, 10) || 0);
+    return [nums, pre];
+  };
+  const [pa, preA] = splitSemver(a);
+  const [pb, preB] = splitSemver(b);
   for (let i = 0; i < 3; i++) {
     const da = pa[i] ?? 0;
     const db = pb[i] ?? 0;
     if (da > db) return 1;
     if (da < db) return -1;
   }
+  // Numeric parts are equal. Per SemVer spec §11, a pre-release version
+  // has lower precedence than the associated normal version:
+  // 1.0.0-alpha < 1.0.0. So if a has a pre-release and b doesn't, a < b.
+  if (preA !== null && preB === null) return -1;
+  if (preA === null && preB !== null) return 1;
   return 0;
 }
 

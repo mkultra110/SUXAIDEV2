@@ -71,7 +71,7 @@ async function writeAll(records: LicenseRecord[]): Promise<void> {
 }
 
 function generateKey(): string {
-  // 4×5-char blocks: SUXAI-XXXXX-XXXXX-XXXXX-XXXXX
+  // 3×4-char blocks: SUXAI-XXXX-XXXX-XXXX (12 random chars from the alphabet).
   const bytes = crypto.randomBytes(12);
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Crockford-ish, no 0/O/1/I
   let out = '';

@@ -177,9 +177,10 @@ router.post(
     try {
       const completion = await completeFIM(req.body);
       res.json({ completion: completion ?? '' });
-    } catch {
+    } catch (err) {
       // Never surface autocomplete failures to the client — they'd
       // pop up as a generic error toast every few seconds.
+      console.error('[ai:complete] FIM error:', (err as Error).message);
       res.json({ completion: '' });
     }
   },

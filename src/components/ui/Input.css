@@ -1,3 +1,8 @@
+/* ============================================================
+   Input — labelled wrap with icon support
+   v2.0 — Obsidian Warm.
+   ============================================================ */
+
 .sx-field {
   display: flex;
   flex-direction: column;
@@ -5,10 +10,10 @@
 }
 
 .sx-field__label {
-  font-size: 12px;
-  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .sx-field__wrap {
@@ -16,32 +21,30 @@
   align-items: center;
   gap: 8px;
   padding: 0 13px;
-  height: 42px;
-  border-radius: var(--radius-md);
-  background: rgba(6, 10, 20, 0.55);
-  border: 1px solid var(--color-border);
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    border-color var(--dur-quick) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard);
 }
 
 .sx-field__wrap:hover {
-  border-color: var(--color-border-strong);
-  background: rgba(6, 10, 20, 0.65);
+  border-color: var(--color-border-default);
 }
 
 .sx-field__wrap:focus-within {
-  border-color: var(--color-border-accent);
-  box-shadow: var(--focus-ring);
-  background: rgba(6, 10, 20, 0.85);
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-accent-glow);
 }
 
 .sx-field__icon,
 .sx-field__right {
   display: inline-flex;
   align-items: center;
-  color: var(--color-text-dim);
+  color: var(--color-text-tertiary);
 }
 
 .sx-field__input {
@@ -50,24 +53,24 @@
   background: transparent;
   border: none;
   outline: none;
-  font-size: 13px;
-  color: var(--color-text);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
   height: 100%;
 }
 
 .sx-field__input::placeholder {
-  color: var(--color-text-dim);
+  color: var(--color-text-tertiary);
 }
 
 .sx-field--error .sx-field__wrap {
-  border-color: rgba(239, 68, 68, 0.5);
+  border-color: color-mix(in oklch, var(--color-danger) 50%, transparent);
 }
 
 .sx-field--error .sx-field__wrap:focus-within {
-  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--color-danger) 25%, transparent);
 }
 
 .sx-field__error {
-  font-size: 12px;
-  color: #fca5a5;
+  font-size: var(--text-xs);
+  color: var(--color-danger);
 }

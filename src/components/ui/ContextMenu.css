@@ -1,23 +1,21 @@
 /* ============================================================
    ContextMenu — right-click and dropdown menus
-   v0.15.0 — visual refresh : glass background, refined hover.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .ctxmenu {
   position: fixed;
-  z-index: 10200;
-  min-width: 220px;
-  padding: 5px;
+  z-index: var(--z-popover);
+  min-width: 200px;
+  padding: 4px 0;
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, rgba(30, 38, 62, 0.94), rgba(20, 26, 46, 0.96));
-  border: 1px solid var(--color-border-strong);
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-top-color: color-mix(in oklch, white 10%, transparent);
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
-  box-shadow:
-    0 14px 32px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  animation: suxai-scale-in var(--dur-fast) var(--ease-out);
+  box-shadow: var(--shadow-lg);
+  animation: suxai-scale-in var(--dur-fast) var(--ease-out-expo);
   transform-origin: top left;
 }
 
@@ -27,31 +25,31 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 7px 10px;
-  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  border-radius: 0;
   background: transparent;
-  color: var(--color-text);
-  font-size: 12.5px;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard);
 }
 
 .ctxmenu__item:hover:not(:disabled) {
-  background: rgba(125, 130, 248, 0.18);
+  background: var(--color-bg-hover);
 }
 
 .ctxmenu__item:disabled {
-  color: var(--color-text-dim);
+  color: var(--color-text-disabled);
   cursor: default;
 }
 
-.ctxmenu__item--danger { color: #ff9494; }
+.ctxmenu__item--danger { color: var(--color-danger); }
 .ctxmenu__item--danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.18);
-  color: #ffc3c3;
+  background: color-mix(in oklch, var(--color-danger) 14%, transparent);
+  color: var(--color-danger);
 }
 
 .ctxmenu__label {
@@ -62,14 +60,14 @@
 }
 
 .ctxmenu__hint {
-  font-size: 10.5px;
-  color: var(--color-text-dim);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
   font-family: var(--font-mono);
-  letter-spacing: 0.02em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .ctxmenu__sep {
   height: 1px;
-  background: var(--color-border);
-  margin: 5px 4px;
+  background: var(--color-border-subtle);
+  margin: 4px 0;
 }

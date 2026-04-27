@@ -1,13 +1,13 @@
 /* ============================================================
    Toast — bottom-right transient notifications
-   v0.15.0 — visual refresh : softer entrance, accent border-glow.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .toast-stack {
   position: fixed;
   bottom: 22px;
   right: 22px;
-  z-index: 11000;
+  z-index: var(--z-toast);
   display: flex;
   flex-direction: column;
   gap: 9px;
@@ -22,19 +22,15 @@
   padding: 12px 40px 12px 14px;
   position: relative;
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, rgba(28, 34, 54, 0.96), rgba(18, 24, 42, 0.96));
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
-  border: 1px solid var(--color-border-strong);
-  box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  font-size: 12.5px;
-  color: var(--color-text);
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-top-color: color-mix(in oklch, white 10%, transparent);
+  box-shadow: var(--shadow-md);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
   pointer-events: auto;
   cursor: pointer;
-  animation: toast-in 240ms var(--ease-spring);
+  animation: toast-in var(--dur-medium) var(--ease-spring);
 }
 
 @keyframes toast-in {
@@ -43,51 +39,68 @@
 }
 
 .toast__icon {
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  display: grid; place-items: center;
-  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-size: var(--text-2xs);
   font-weight: 700;
   flex-shrink: 0;
   margin-top: 1px;
 }
 
-.toast--success .toast__icon { background: rgba(52, 199, 89, 0.24); color: #7ef0a4; box-shadow: 0 0 8px rgba(52, 199, 89, 0.3); }
-.toast--error   .toast__icon { background: rgba(239, 68, 68, 0.24); color: #fca5a5; box-shadow: 0 0 8px rgba(239, 68, 68, 0.32); }
-.toast--info    .toast__icon { background: rgba(125, 130, 248, 0.24); color: #c5c8ff; box-shadow: 0 0 8px rgba(125, 130, 248, 0.32); }
+.toast--success .toast__icon {
+  background: color-mix(in oklch, var(--color-success) 24%, transparent);
+  color: var(--color-success);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--color-success) 30%, transparent);
+}
+.toast--error .toast__icon {
+  background: color-mix(in oklch, var(--color-danger) 24%, transparent);
+  color: var(--color-danger);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--color-danger) 32%, transparent);
+}
+.toast--info .toast__icon {
+  background: color-mix(in oklch, var(--color-accent) 24%, transparent);
+  color: var(--color-accent);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--color-accent) 32%, transparent);
+}
 
-.toast--success { border-color: rgba(52, 199, 89, 0.32); }
-.toast--error   { border-color: rgba(239, 68, 68, 0.36); }
-.toast--info    { border-color: rgba(125, 130, 248, 0.32); }
+.toast--success { border-color: color-mix(in oklch, var(--color-success) 32%, transparent); }
+.toast--error   { border-color: color-mix(in oklch, var(--color-danger) 36%, transparent); }
+.toast--info    { border-color: color-mix(in oklch, var(--color-accent) 32%, transparent); }
 
 .toast__body { flex: 1; min-width: 0; }
 .toast__title {
   font-weight: 600;
   line-height: 1.3;
-  letter-spacing: -0.005em;
+  letter-spacing: var(--tracking-snug);
 }
 .toast__desc {
   margin-top: 2px;
-  color: var(--color-text-muted);
-  font-size: 11.5px;
+  color: var(--color-text-secondary);
+  font-size: var(--text-2xs);
   line-height: 1.4;
   word-break: break-word;
 }
 
 .toast__close {
   position: absolute;
-  top: 7px; right: 8px;
-  width: 22px; height: 22px;
-  display: grid; place-items: center;
-  color: var(--color-text-dim);
-  font-size: 15px;
+  top: 7px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
   line-height: 1;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard);
 }
 .toast__close:hover {
-  color: var(--color-text);
-  background: var(--color-hover);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }

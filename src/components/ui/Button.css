@@ -1,10 +1,14 @@
+/* ============================================================
+   Button — primary / secondary / ghost / danger
+   v2.0 — Obsidian Warm.
+   ============================================================ */
+
 .sx-btn {
-  --btn-bg: var(--color-bg-2);
-  --btn-bg-hover: var(--color-bg-3);
-  --btn-fg: var(--color-text);
-  --btn-border: var(--color-border);
+  --btn-bg: var(--color-bg-elevated);
+  --btn-bg-hover: var(--color-bg-hover);
+  --btn-fg: var(--color-text-primary);
+  --btn-border: var(--color-border-subtle);
   --btn-shadow: none;
-  --btn-ring: transparent;
 
   display: inline-flex;
   align-items: center;
@@ -12,20 +16,20 @@
   gap: 8px;
   padding: 0 14px;
   height: 34px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   background: var(--btn-bg);
   color: var(--btn-fg);
   border: 1px solid var(--btn-border);
   box-shadow: var(--btn-shadow);
   font-family: var(--font-sans);
-  font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-snug);
+  font-weight: 500;
+  letter-spacing: var(--tracking-snug);
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
   cursor: pointer;
   white-space: nowrap;
   position: relative;
@@ -35,63 +39,49 @@
   background: var(--btn-bg-hover);
   transform: translateY(-1px);
 }
-
 .sx-btn:active:not(:disabled) {
   transform: translateY(0);
 }
-
 .sx-btn:disabled {
-  opacity: 0.55;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .sx-btn--full { width: 100%; }
-
-.sx-btn--sm { height: 28px; padding: 0 10px; font-size: 12px; border-radius: var(--radius-sm); }
-.sx-btn--md { height: 34px; padding: 0 14px; font-size: 13px; }
-.sx-btn--lg { height: 42px; padding: 0 18px; font-size: 14px; border-radius: var(--radius-md); }
+.sx-btn--sm { height: 28px; padding: 0 10px; font-size: var(--text-xs); border-radius: var(--radius-xs); }
+.sx-btn--md { height: 34px; padding: 0 14px; font-size: var(--text-sm); }
+.sx-btn--lg { height: 44px; padding: 0 18px; font-size: var(--text-md); border-radius: var(--radius-sm); }
 
 .sx-btn--primary {
-  --btn-bg: linear-gradient(180deg, #8285fa 0%, #5457d8 100%);
-  --btn-bg-hover: linear-gradient(180deg, #9396ff 0%, #5e61e0 100%);
-  --btn-fg: #ffffff;
-  --btn-border: rgba(255, 255, 255, 0.16);
-  --btn-shadow:
-    0 10px 26px rgba(99, 102, 241, 0.42),
-    0 0 0 1px rgba(125, 130, 248, 0.36) inset,
-    inset 0 1px 0 rgba(255, 255, 255, 0.20);
+  --btn-bg: var(--color-accent);
+  --btn-bg-hover: var(--color-accent-hover);
+  --btn-fg: var(--color-text-on-accent);
+  --btn-border: var(--color-accent);
+  --btn-shadow: var(--shadow-sm);
 }
 .sx-btn--primary:hover:not(:disabled) {
-  box-shadow:
-    0 14px 36px rgba(99, 102, 241, 0.55),
-    0 0 22px rgba(125, 130, 248, 0.30),
-    0 0 0 1px rgba(125, 130, 248, 0.46) inset,
-    inset 0 1px 0 rgba(255, 255, 255, 0.24);
-}
-.sx-btn:focus-visible {
-  outline: none;
-  box-shadow: var(--btn-shadow), var(--focus-ring);
+  box-shadow: var(--shadow-accent-glow);
 }
 
 .sx-btn--secondary {
-  --btn-bg: var(--color-bg-2);
-  --btn-bg-hover: var(--color-bg-3);
-  --btn-fg: var(--color-text);
-  --btn-border: var(--color-border-strong);
+  --btn-bg: var(--color-bg-elevated);
+  --btn-bg-hover: var(--color-bg-hover);
+  --btn-fg: var(--color-text-primary);
+  --btn-border: var(--color-border-default);
 }
 
 .sx-btn--ghost {
   --btn-bg: transparent;
-  --btn-bg-hover: rgba(255, 255, 255, 0.04);
-  --btn-fg: var(--color-text);
+  --btn-bg-hover: var(--color-bg-hover);
+  --btn-fg: var(--color-text-primary);
   --btn-border: transparent;
 }
 
 .sx-btn--danger {
-  --btn-bg: rgba(239, 68, 68, 0.12);
-  --btn-bg-hover: rgba(239, 68, 68, 0.18);
-  --btn-fg: #fecaca;
-  --btn-border: rgba(239, 68, 68, 0.35);
+  --btn-bg: color-mix(in oklch, var(--color-danger) 12%, transparent);
+  --btn-bg-hover: color-mix(in oklch, var(--color-danger) 22%, transparent);
+  --btn-fg: var(--color-danger);
+  --btn-border: color-mix(in oklch, var(--color-danger) 35%, transparent);
 }
 
 .sx-btn__label { display: inline-flex; align-items: center; }

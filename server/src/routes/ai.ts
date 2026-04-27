@@ -217,7 +217,9 @@ router.post(
     // Track elapsed against the daily budget — apply calls are cheap
     // but they still cost real money on Quatarly.
     const elapsed = Date.now() - startedAt;
-    userStore.trackUsage(userId, elapsed).catch(() => { /* */ });
+    userStore.trackUsage(userId, elapsed).catch((err) => {
+      console.error('[ai/apply] failed to track usage:', err);
+    });
     if (result == null) {
       res.status(502).json({
         message: 'Apply model failed; falling back to the raw lazy edit.',

@@ -17,6 +17,7 @@ import { syncTypeScriptExtraLibs, syncNodeModulesTypes } from '../../lib/lsp-ts'
 import { ensureSnippetProvider } from '../../lib/snippets';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
+import { iconKindForFile, FileIcon } from '../../lib/file-icon';
 import './EditorPanel.css';
 
 interface ActionBarPos {
@@ -586,10 +587,13 @@ export function EditorPanel() {
                 />
               </svg>
             )}
+            <span className={`editor__tab-icon editor__tab-icon--${iconKindForFile(f.name)}`}>
+              <FileIcon kind={iconKindForFile(f.name)} size={13} />
+            </span>
             <span className="editor__tab-name">
               {f.name}
-              {f.dirty ? ' •' : ''}
             </span>
+            {f.dirty && <span className="editor__tab-dirty" aria-label="Unsaved changes" />}
             <button
               className="editor__tab-close"
               onClick={(e) => {

@@ -14,40 +14,51 @@
 }
 
 /* ----- Header ----------------------------------------------- */
+/* v0.17.2 — explicit 2-row structure :
+   row 1 = identity (conversation switcher + model selector)
+   row 2 = mode toggles (Plan / Agent) + accent New button
+   Each row reflows independently if the panel narrows. */
 
 .ai__header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  column-gap: 16px;
+  flex-direction: column;
+  gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 100%);
   backdrop-filter: saturate(150%) blur(4px);
   -webkit-backdrop-filter: saturate(150%) blur(4px);
   flex-shrink: 0;
 }
 
-.ai__header-main {
+.ai__header-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  flex: 1 1 100%;
-  overflow: hidden;
 }
-.ai__header-main > * { min-width: 0; flex-shrink: 1; }
+.ai__header-row--identity {
+  /* identity row : conversation pill grows, model pill shrinks */
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.ai__header-row--identity > * { min-width: 0; flex-shrink: 1; }
 
-.ai__header-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+.ai__header-row--actions {
+  /* actions row : Plan/Agent on the left, New button pushed right */
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.ai__header-row--actions .ai__clear,
+.ai__header-row--actions .ai__new-conv {
   margin-left: auto;
 }
+
+/* Backwards-compat aliases (some external code may still target these) */
+.ai__header-main { display: contents; }
+.ai__header-actions { display: contents; }
 
 .ai__title {
   display: flex;
@@ -82,6 +93,39 @@
   color: var(--color-text);
 }
 .ai__clear:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* v0.17.2 — accent-styled New button (replaces bare ghost +). */
+.ai__new-conv {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.24), rgba(99, 102, 241, 0.14));
+  border: 1px solid rgba(125, 130, 248, 0.50);
+  color: #e6e8ff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.ai__new-conv:hover {
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.34), rgba(99, 102, 241, 0.20));
+  border-color: rgba(125, 130, 248, 0.72);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 0 16px rgba(125, 130, 248, 0.22);
+  transform: translateY(-1px);
+}
+.ai__new-conv:active { transform: translateY(0); }
 
 .ai__agent-toggle,
 .ai__plan-toggle {

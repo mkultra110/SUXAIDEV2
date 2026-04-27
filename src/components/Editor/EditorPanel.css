@@ -88,6 +88,62 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* v0.17.2 — coloured file-kind icon in tabs (parity with sidebar). */
+.editor__tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  color: #8a93a8;
+}
+.editor__tab-icon--folder, .editor__tab-icon--folder-open { color: #d4a64a; }
+.editor__tab-icon--ts        { color: #3b8eea; }
+.editor__tab-icon--js        { color: #e9c452; }
+.editor__tab-icon--json      { color: #cfa856; }
+.editor__tab-icon--md        { color: #8b9bb4; }
+.editor__tab-icon--css       { color: #7faad6; }
+.editor__tab-icon--html      { color: #e36f3a; }
+.editor__tab-icon--image     { color: #8e7fd5; }
+.editor__tab-icon--shell     { color: #6ec068; }
+.editor__tab-icon--lock      { color: #c75a5a; }
+.editor__tab-icon--config    { color: #909090; }
+.editor__tab-icon--lua       { color: #4f7eff; }
+.editor__tab-icon--cpp       { color: #5e9bd3; }
+.editor__tab-icon--python    { color: #ffd83a; }
+.editor__tab-icon--rust      { color: #d2754f; }
+.editor__tab-icon--go        { color: #5acded; }
+.editor__tab-icon--java      { color: #e17a52; }
+.editor__tab-icon--csharp    { color: #6f4cb0; }
+.editor__tab-icon--php       { color: #8a93c8; }
+.editor__tab-icon--ruby      { color: #c33038; }
+.editor__tab-icon--sql       { color: #d49860; }
+.editor__tab-icon--yaml      { color: #d6a26a; }
+.editor__tab-icon--xml       { color: #c0925e; }
+.editor__tab-icon--pdf       { color: #d05050; }
+.editor__tab-icon--archive   { color: #c08e58; }
+.editor__tab-icon--binary    { color: #777e8c; }
+.editor__tab-icon--plain     { color: #8a93a8; }
+
+/* v0.17.2 — dirty-file dot (replaces the textual " •"). Lives where
+   the close button sits when there's no hover, swaps to close on
+   hover for a clean VSCode-style affordance. */
+.editor__tab-dirty {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-hover);
+  box-shadow: 0 0 6px rgba(125, 130, 248, 0.6);
+}
+.editor__tab:hover .editor__tab-dirty,
+.editor__tab--active .editor__tab-dirty {
+  display: none;
 }
 
 .editor__tab-close {

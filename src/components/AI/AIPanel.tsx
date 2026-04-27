@@ -2730,7 +2730,13 @@ export function AIPanel() {
   return (
     <aside className="ai">
       <div className="ai__header">
-        <div className="ai__header-main">
+        {/* v0.17.2 — header restructured into 2 explicit rows :
+            row 1 = identity (conversation + model)
+            row 2 = mode toggles (Plan / Agent) + new-conversation
+            Each row is a flex line that can wrap independently if the
+            panel narrows. The `+` button is now an accent-styled
+            primary action, not a bare ghost. */}
+        <div className="ai__header-row ai__header-row--identity">
           <ConversationSwitcher
             conversations={conversations}
             activeId={activeConvId}
@@ -2743,7 +2749,7 @@ export function AIPanel() {
           />
           <ModelSelector value={modelId} onChange={setModelId} />
         </div>
-        <div className="ai__header-actions">
+        <div className="ai__header-row ai__header-row--actions">
           <button
             type="button"
             className={
@@ -2827,14 +2833,15 @@ export function AIPanel() {
             <span>Agent</span>
           </button>
           <button
-            className="ai__clear"
+            className="ai__new-conv"
             onClick={newConversation}
             title="New conversation"
             aria-label="New conversation"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
+            <span>New</span>
           </button>
         </div>
       </div>

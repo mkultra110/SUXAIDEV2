@@ -12,37 +12,46 @@
   position: relative;
 }
 
+/* v0.17.2 — header height now matches the editor tab strip (36 px)
+   so EXPLORER, tabs and the AI header line up across the IDE. */
 .sidebar__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 12px;
+  height: 36px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.02);
+  background:
+    linear-gradient(180deg, #0d1322 0%, #0a0f1c 100%);
   flex-shrink: 0;
 }
 
 .sidebar__label {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-text-muted);
 }
 
 .sidebar__header-actions {
   display: flex;
-  gap: 2px;
+  gap: 1px;
+  padding: 1px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
+/* v0.17.2 — bumped 24→26 px, hover brings the icon forward. */
 .sidebar__iconbtn {
   position: relative;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   display: grid;
   place-items: center;
   color: var(--color-text-muted);
-  border-radius: var(--radius-xs);
+  border-radius: 4px;
   transition:
     background var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out),
@@ -55,20 +64,21 @@
 .sidebar__iconbtn:active { transform: scale(0.92); }
 
 .sidebar__iconbtn--active {
-  background: rgba(125, 130, 248, 0.18);
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.26), rgba(125, 130, 248, 0.14));
   color: #d8dbff;
+  box-shadow: inset 0 0 0 1px rgba(125, 130, 248, 0.30);
 }
 .sidebar__iconbtn--active:hover {
-  background: rgba(125, 130, 248, 0.26);
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.34), rgba(125, 130, 248, 0.20));
 }
 
 .sidebar__iconbtn-badge {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -82,7 +92,7 @@
   line-height: 1;
   border: 1.5px solid #0a0f1c;
   pointer-events: none;
-  box-shadow: 0 1px 4px rgba(84, 87, 216, 0.5);
+  box-shadow: 0 1px 4px rgba(84, 87, 216, 0.55);
 }
 
 .sidebar__empty {

@@ -34,7 +34,14 @@ export function TitleBar() {
 
   return (
     <header className="titlebar">
-      <div className="titlebar__drag">
+      {/* v0.16.4 — 3-zone grid layout (left brand / center user / right
+          window controls). Avant : titlebar__drag (flex:1) collait
+          tout le reste contre le bord droit, le user cluster se
+          retrouvait coincé contre les boutons min/max/X. Maintenant
+          le user cluster est dans une zone CENTER auto-width avec
+          1fr de chaque côté → naturellement centré dans la barre,
+          peu importe la longueur du nom d'utilisateur. */}
+      <div className="titlebar__zone titlebar__zone--left titlebar__drag">
         <div className="titlebar__brand">
           <div className="titlebar__dot" />
           <span>SUXAI</span>
@@ -42,7 +49,7 @@ export function TitleBar() {
         </div>
       </div>
 
-      <div className="titlebar__actions">
+      <div className="titlebar__zone titlebar__zone--center titlebar__drag">
         {user && (
           <div className="titlebar__user">
             <span
@@ -83,6 +90,9 @@ export function TitleBar() {
             </button>
           </div>
         )}
+      </div>
+
+      <div className="titlebar__zone titlebar__zone--right">
         <div className="titlebar__controls">
           <button
             onClick={() => window.suxai.window.minimize()}

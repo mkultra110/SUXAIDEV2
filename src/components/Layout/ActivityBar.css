@@ -1,5 +1,6 @@
 /* ============================================================
-   v0.15.8 — Activity Bar (left rail, parité VSCode).
+   Activity Bar — left rail (parité VSCode).
+   v0.17.0 visual refresh — class names stable for JSX.
    ============================================================ */
 
 .actbar {
@@ -8,16 +9,28 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 6px 0;
+  padding: 8px 0;
   gap: 2px;
   background:
-    linear-gradient(180deg, rgba(13, 18, 30, 0.96), rgba(9, 13, 22, 0.96));
+    linear-gradient(180deg, #0c1120 0%, #080c18 100%);
   border-right: 1px solid var(--color-border);
+  position: relative;
+}
+/* v0.17.0 — soft inner highlight on the right edge so the rail
+   reads as a distinct plate against the sidebar. */
+.actbar::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; right: 0;
+  width: 1px;
+  background: linear-gradient(180deg,
+    transparent,
+    rgba(255, 255, 255, 0.04) 30%,
+    rgba(255, 255, 255, 0.04) 70%,
+    transparent);
+  pointer-events: none;
 }
 
-/* v0.15.9 — pushes the trailing button cluster (Settings cog) to the
-   bottom of the rail, leaving the top three view-switcher icons
-   anchored at the top. */
 .actbar__spacer {
   flex: 1;
   min-height: 4px;
@@ -33,32 +46,39 @@
   border: none;
   color: var(--color-text-dim);
   cursor: pointer;
-  border-radius: 0;
+  border-radius: var(--radius-sm);
+  margin: 1px 0;
   transition:
     color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 
 .actbar__btn:hover {
   color: var(--color-text);
   background: var(--color-hover-soft);
 }
+.actbar__btn:active {
+  transform: scale(0.94);
+}
 
 /* Active icon : color-shift + 2px accent stripe down the left
-   edge — matches VSCode's selected-view indicator. */
+   edge — matches VSCode's selected-view indicator. v0.17.0
+   adds a subtle accent halo for premium feel. */
 .actbar__btn--active {
   color: #fff;
+  background: rgba(99, 102, 241, 0.10);
 }
 .actbar__btn--active::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 4px;
-  bottom: 4px;
-  width: 2px;
-  background: var(--color-accent);
-  box-shadow: 0 0 8px rgba(125, 130, 248, 0.5);
-  border-radius: 0 2px 2px 0;
+  left: -8px;
+  top: 6px;
+  bottom: 6px;
+  width: 2.5px;
+  background: linear-gradient(180deg, var(--color-accent-hover), var(--color-accent-press));
+  box-shadow: 0 0 12px rgba(125, 130, 248, 0.65);
+  border-radius: 0 3px 3px 0;
 }
 
 .actbar__btn:focus-visible {
@@ -69,10 +89,10 @@
 /* Dirty-count badge over the Source Control icon. */
 .actbar__badge {
   position: absolute;
-  top: 5px;
-  right: 4px;
-  min-width: 16px;
-  height: 16px;
+  top: 4px;
+  right: 3px;
+  min-width: 17px;
+  height: 17px;
   padding: 0 4px;
   display: inline-flex;
   align-items: center;
@@ -80,12 +100,13 @@
   font-size: 9.5px;
   font-weight: 700;
   font-family: var(--font-mono);
-  border-radius: 999px;
-  background: var(--color-accent);
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #7d80f8, #5457d8);
   color: #fff;
   letter-spacing: 0;
   line-height: 1;
-  border: 1px solid rgba(0, 0, 0, 0.3);
+  border: 1.5px solid #0c1120;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 4px rgba(84, 87, 216, 0.6);
 }

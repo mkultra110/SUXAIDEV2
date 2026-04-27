@@ -1,3 +1,9 @@
+/* ============================================================
+   Globals — base reset, ambient surface, scrollbars, primitives.
+   v0.17.0 visual refresh : refined ambient gradients, premium
+   scrollbars, refined glass utilities, new motion utilities.
+   ============================================================ */
+
 *,
 *::before,
 *::after {
@@ -24,31 +30,48 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   user-select: none;
+  /* v0.17.0 — kerning + variant ligatures so the UI numerals and
+     small-caps tokens read as polished, not "browser default". */
+  font-feature-settings: 'kern' 1, 'ss01' 1, 'cv11' 1;
 }
 
-/* Ambient backdrop — subtle radial gradients for depth.
-   v0.15.3 : tuned + subtle slow drift so the surface never feels static. */
+/* Ambient backdrop — layered radial gradients, slow drift + faint
+   grain so the surface has subtle organic texture rather than a
+   flat dark slab. v0.17.0 : warmer indigo tone-on-tone, plus a
+   third subtle cyan gradient for diagonal depth. */
 body::before {
+  content: '';
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(1200px 600px at 8% -10%,  rgba(99, 102, 241, 0.14), transparent 60%),
+    radial-gradient(1000px 500px at 100% 110%, rgba(56, 189, 248, 0.07), transparent 60%),
+    radial-gradient(900px 500px at 50% 0%,    rgba(139, 142, 252, 0.06), transparent 60%);
+  filter: saturate(115%);
+  animation: suxai-ambient-drift 28s var(--ease-in-out) infinite alternate;
+}
+body::after {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 0;
+  /* faint vignette → focuses attention toward the editor */
   background:
-    radial-gradient(1200px 600px at 0% 0%, rgba(99, 102, 241, 0.1), transparent 60%),
-    radial-gradient(1000px 500px at 100% 100%, rgba(34, 197, 94, 0.06), transparent 60%),
-    radial-gradient(800px 400px at 50% 0%, rgba(125, 211, 252, 0.06), transparent 60%);
-  animation: suxai-ambient-drift 22s var(--ease-in-out) infinite alternate;
+    radial-gradient(120% 80% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.32) 100%);
+  mix-blend-mode: multiply;
 }
 
 @keyframes suxai-ambient-drift {
-  from { transform: translate3d(0, 0, 0); }
-  to   { transform: translate3d(0, -10px, 0); }
+  0%   { transform: translate3d(0, 0, 0)   scale(1); }
+  100% { transform: translate3d(0, -14px, 0) scale(1.03); }
 }
 
 /* Native text selection — match accent palette. */
 ::selection {
-  background: rgba(125, 130, 248, 0.34);
+  background: rgba(125, 130, 248, 0.36);
   color: #ffffff;
 }
 
@@ -77,105 +100,121 @@ button {
 }
 
 a {
-  color: var(--color-accent);
+  color: var(--color-accent-hover);
   text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
 }
+a:hover { color: var(--color-accent-strong); }
 
 code,
 pre {
   font-family: var(--font-mono);
   font-size: 12.5px;
+  font-feature-settings: 'liga' 1, 'calt' 1;
 }
 
-/* Scrollbars — thin VS Code-style, transparent until hover. */
+/* ============================================================
+   Scrollbars — VS Code-style thin, transparent track, dim thumb
+   that brightens on hover. v0.17.0 : tuned to the new palette.
+   ============================================================ */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
   transition: background var(--dur-fast) var(--ease-out);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.20);
   background-clip: padding-box;
-  border: 2px solid transparent;
+}
+::-webkit-scrollbar-thumb:active {
+  background: rgba(125, 130, 248, 0.45);
+  background-clip: padding-box;
 }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-/* Focus ring — uses the v0.15.0 token so any future palette
-   change cascades. */
+/* ============================================================
+   Focus ring — uses tokens. v0.17.0 : adds inner-line so the
+   ring reads even on glassy surfaces.
+   ============================================================ */
 :focus-visible {
   outline: none;
   box-shadow: var(--focus-ring), 0 0 0 1px var(--color-accent);
   border-radius: var(--radius-sm);
 }
 
-/* Utility primitives */
+/* ============================================================
+   Utility primitives
+   ============================================================ */
+
 .glass {
   background:
-    linear-gradient(180deg, rgba(28, 36, 56, 0.58), rgba(22, 28, 44, 0.62));
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
+    linear-gradient(180deg, rgba(28, 36, 60, 0.62), rgba(20, 26, 44, 0.66));
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
   border: 1px solid var(--color-border);
 }
 
-/* v0.15.1 — premium modal surface used by every dialog/palette.
-   Tuning:
-   - bicouche gradient (haut clair → bas plus dense) pour donner
-     du volume sans peser
-   - blur 24 + saturate 160 pour fondre l'arrière-plan tout en
-     préservant la lisibilité
-   - inset highlight 1px en haut → effet "verre épais" Apple-like
-   - shadow lg + halo accent très soft → ancre la fenêtre */
+/* Premium modal / palette surface — bicouche gradient (haut clair
+   → bas dense), inset highlight 1px, cushioned shadow + halo accent.
+   v0.17.0 : accent halo is more present, top inset doubled to read
+   as machined glass. */
 .glass-strong {
   background:
-    linear-gradient(180deg, rgba(34, 42, 64, 0.78), rgba(22, 28, 44, 0.86));
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
+    linear-gradient(180deg, rgba(38, 46, 72, 0.82), rgba(22, 28, 48, 0.90));
+  backdrop-filter: blur(26px) saturate(170%);
+  -webkit-backdrop-filter: blur(26px) saturate(170%);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-modal);
+}
+
+/* Floating popover (tooltips, context menus) — lighter than modal
+   but still distinctly elevated. v0.17.0 new utility. */
+.glass-pop {
+  background:
+    linear-gradient(180deg, rgba(30, 38, 62, 0.94), rgba(20, 26, 46, 0.96));
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
   border: 1px solid var(--color-border-strong);
   box-shadow:
-    0 28px 64px rgba(0, 0, 0, 0.55),
-    0 0 80px rgba(99, 102, 241, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    0 14px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.stack {
-  display: flex;
-  flex-direction: column;
-}
-.row {
-  display: flex;
-  flex-direction: row;
-}
-.grow {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
+.stack { display: flex; flex-direction: column; }
+.row   { display: flex; flex-direction: row; }
+.grow  { flex: 1 1 auto; min-width: 0; min-height: 0; }
+
+/* ============================================================
+   Animations
+   ============================================================ */
 
 @keyframes suxai-fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes suxai-fade-in-soft {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes suxai-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
 }
 @keyframes suxai-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 @keyframes suxai-pulse {
   0%, 100% { opacity: 0.55; }
   50%      { opacity: 1; }
+}
+@keyframes suxai-shimmer {
+  0%   { background-position: -120% 0; }
+  100% { background-position:  220% 0; }
 }

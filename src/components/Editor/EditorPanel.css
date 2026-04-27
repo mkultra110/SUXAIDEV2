@@ -1,8 +1,8 @@
 /* ============================================================
-   v0.15.0 — Editor tabs strip & chrome refresh.
+   Editor — tabs strip, body, welcome
+   v0.17.0 visual refresh — class names stable for JSX.
    Inactive tabs visibly recede ; active tab gets a subtle indigo
-   top accent + matching editor-bg. Drag-and-drop hover state and
-   close-button reveal-on-hover preserved.
+   top accent + matching editor-bg.
    ============================================================ */
 
 .editor {
@@ -10,6 +10,7 @@
   flex-direction: column;
   background: var(--color-bg);
   overflow: hidden;
+  position: relative;
 }
 
 .editor__tabs {
@@ -17,11 +18,13 @@
   align-items: stretch;
   gap: 0;
   height: 36px;
-  background: var(--color-bg-1);
+  background:
+    linear-gradient(180deg, #0d1322 0%, #0a0f1c 100%);
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
+  flex-shrink: 0;
 }
 .editor__tabs::-webkit-scrollbar { display: none; }
 
@@ -64,12 +67,21 @@
   position: absolute;
   left: 0; right: 0; top: 0;
   height: 2px;
-  background: linear-gradient(90deg, #7d82f8, #5457d8);
-  box-shadow: 0 0 8px rgba(125, 130, 248, 0.45);
+  background: linear-gradient(90deg, transparent, #7d80f8 20%, #6366f1 50%, #7d80f8 80%, transparent);
+  box-shadow: 0 0 10px rgba(125, 130, 248, 0.55);
+}
+/* v0.17.0 — subtle bottom highlight where the active tab meets
+   the editor body, removing the sharp visual cut. */
+.editor__tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 1px;
+  background: var(--color-bg);
 }
 
 .editor__tab--dragging {
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .editor__tab-name {
@@ -81,7 +93,7 @@
 .editor__tab-close {
   color: var(--color-text-dim);
   padding: 3px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   opacity: 0;
   transition:
     opacity var(--dur-fast) var(--ease-out),
@@ -108,40 +120,59 @@
   height: 100%;
   padding: 40px;
   background:
-    radial-gradient(50% 50% at 50% 40%, rgba(99, 102, 241, 0.10), transparent 60%),
+    radial-gradient(60% 60% at 50% 35%, rgba(99, 102, 241, 0.13), transparent 65%),
+    radial-gradient(40% 50% at 50% 110%, rgba(56, 189, 248, 0.06), transparent 70%),
     var(--color-bg);
 }
 
 .editor__welcome-card {
-  max-width: 720px;
+  max-width: 760px;
   text-align: center;
   animation: suxai-fade-in var(--dur-slow) var(--ease-out);
 }
 
 .editor__welcome-brand {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.3em;
-  color: var(--color-text-dim);
-  padding: 4px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  margin-bottom: 18px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--color-text-muted);
+  padding: 5px 14px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  margin-bottom: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0));
+  text-transform: uppercase;
+}
+.editor__welcome-brand::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #a4a7ff, #6366f1 70%);
+  box-shadow: 0 0 10px rgba(125, 130, 248, 0.7);
 }
 
 .editor__welcome h2 {
-  margin: 0 0 10px;
-  font-size: 22px;
+  margin: 0 0 12px;
+  font-size: 26px;
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  color: var(--color-text-strong);
+  background: linear-gradient(180deg, #ffffff, #c8cdf0);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .editor__welcome p {
   margin: 0 auto;
   color: var(--color-text-muted);
   font-size: 13.5px;
-  max-width: 420px;
+  max-width: 460px;
   line-height: 1.65;
 }
 
@@ -152,17 +183,14 @@
   gap: 10px;
   padding: 10px 14px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-size: 12.5px;
 }
 
-/* v0.13.14 — actionable Welcome view (open folder / new file) +
-   keyboard cheatsheet so the v0.13.11/12/13 additions are
-   discoverable at first launch. */
 .editor__welcome-actions {
-  margin: 24px 0 28px;
+  margin: 26px 0 30px;
   display: inline-flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -172,45 +200,48 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 16px;
+  padding: 10px 18px;
   border-radius: var(--radius-md);
-  background: rgba(125, 130, 248, 0.14);
-  border: 1px solid rgba(125, 130, 248, 0.32);
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.20), rgba(125, 130, 248, 0.10));
+  border: 1px solid rgba(125, 130, 248, 0.36);
   color: var(--color-text);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.16);
 }
 .editor__welcome-btn:hover {
-  background: rgba(125, 130, 248, 0.22);
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.28), rgba(125, 130, 248, 0.16));
   border-color: var(--color-accent);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.28);
 }
 .editor__welcome-btn:active {
-  transform: translateY(1px);
+  transform: translateY(0);
 }
 .editor__welcome-btn kbd {
   font-size: 10.5px;
-  background: rgba(0, 0, 0, 0.25);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.28);
+  border-color: rgba(255, 255, 255, 0.10);
 }
 
-/* v0.13.15 — Recent files block above the shortcut grid. */
 .editor__welcome-recent {
-  margin: 4px 0 22px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.02);
+  margin: 4px 0 24px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.025);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   text-align: left;
 }
 .editor__welcome-recent h3 {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--color-text-dim);
 }
@@ -227,7 +258,7 @@
   display: flex;
   align-items: baseline;
   gap: 10px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border: none;
   background: transparent;
   border-radius: var(--radius-sm);
@@ -266,16 +297,21 @@
   text-align: left;
 }
 .editor__welcome-col {
-  background: rgba(255, 255, 255, 0.02);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 14px 16px;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.editor__welcome-col:hover {
+  border-color: var(--color-border-strong);
 }
 .editor__welcome-col h3 {
   margin: 0 0 10px;
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
   color: var(--color-text-dim);
 }
@@ -309,8 +345,9 @@ kbd {
   font-size: 11.5px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--color-border-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   color: var(--color-text);
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.3);
 }
 
 /* Floating code-action bar shown above a Monaco selection. */
@@ -320,57 +357,62 @@ kbd {
   display: inline-flex;
   gap: 2px;
   padding: 3px;
-  border-radius: 999px;
-  background: rgba(10, 14, 24, 0.92);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  border-radius: var(--radius-pill);
+  background: rgba(14, 18, 32, 0.95);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
   border: 1px solid var(--color-border-strong);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  animation: suxai-fade-in var(--dur-fast) var(--ease-out);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: suxai-scale-in var(--dur-fast) var(--ease-out);
 }
 .editor__actions button {
   font-size: 11.5px;
   font-weight: 500;
-  padding: 5px 10px;
-  border-radius: 999px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
   cursor: pointer;
 }
 .editor__actions button:hover {
-  background: rgba(125, 130, 248, 0.18);
+  background: rgba(125, 130, 248, 0.20);
   color: #d8dbff;
 }
 
 .editor__tab--pinned { background: rgba(125, 130, 248, 0.08); }
 .editor__tab--dragging { opacity: 0.4; }
 .editor__tab-pin {
-  color: var(--color-accent);
+  color: var(--color-accent-hover);
   margin-right: 4px;
   flex-shrink: 0;
 }
 
 .editor__zoom-hint {
   position: absolute;
-  bottom: 10px;
-  right: 14px;
-  padding: 3px 10px;
+  bottom: 12px;
+  right: 16px;
+  padding: 4px 11px;
   font-size: 10.5px;
-  color: var(--color-text-muted);
-  background: rgba(14, 20, 34, 0.85);
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  color: var(--color-text);
+  background: rgba(14, 20, 34, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
   pointer-events: none;
   animation: suxai-fade-in 180ms var(--ease-out);
   z-index: 20;
+  letter-spacing: 0.02em;
 }
 
 .editor__actions-primary {
-  background: rgba(125, 130, 248, 0.18) !important;
-  color: #d8dbff !important;
+  background: rgba(125, 130, 248, 0.22) !important;
+  color: #dee0ff !important;
   font-weight: 600 !important;
 }
 .editor__actions-primary:hover {
-  background: rgba(125, 130, 248, 0.28) !important;
+  background: rgba(125, 130, 248, 0.32) !important;
 }

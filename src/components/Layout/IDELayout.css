@@ -1,3 +1,8 @@
+/* ============================================================
+   IDE Layout — top-level grid
+   v0.17.0 — refined panel borders for crisp boundaries.
+   ============================================================ */
+
 .ide {
   display: flex;
   flex-direction: column;
@@ -8,16 +13,18 @@
 
 .ide__body {
   display: grid;
-  /* v0.15.8 — 4-column layout : ActivityBar | Sidebar | Editor | AIPanel */
   grid-template-columns:
     var(--activity-bar-width)
     var(--sidebar-width)
     minmax(0, 1fr)
     var(--ai-panel-width);
   height: calc(100% - var(--titlebar-height));
+  /* v0.17.0 — gap rendered as a 1px column-gap of border colour
+     gives crisp panel separators without per-component borders.
+     The gap doubles as the divider line. */
   gap: 0;
-  background: var(--color-border);
-  border-top: 1px solid var(--color-border);
+  background: var(--color-border-strong);
+  border-top: 1px solid var(--color-border-strong);
 }
 
 .ide__body > * {
@@ -26,10 +33,6 @@
   min-width: 0;
 }
 
-/* v0.13.12 / v0.15.8 — collapsible side panels (Cmd/Ctrl+B sidebar,
-   Cmd/Ctrl+E AI). The Activity Bar stays visible always — Cmd+B only
-   collapses the file/SC sidebar, matching VSCode. Children stay
-   mounted (preserves Monaco models, AI conversation buffer). */
 .ide__body--no-sidebar {
   grid-template-columns:
     var(--activity-bar-width)

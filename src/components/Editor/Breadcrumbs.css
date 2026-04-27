@@ -1,14 +1,14 @@
 /* ============================================================
    Breadcrumbs — file path strip under the editor tabs
-   v0.15.2 — visual refresh.
+   v0.17.0 — visual refresh.
    ============================================================ */
 
 .breadcrumbs {
   display: flex;
   align-items: center;
-  padding: 7px 14px;
+  padding: 6px 14px;
   background:
-    linear-gradient(180deg, rgba(13, 18, 30, 0.7), rgba(11, 15, 23, 0.6));
+    linear-gradient(180deg, rgba(15, 20, 34, 0.72), rgba(11, 15, 25, 0.62));
   border-bottom: 1px solid var(--color-border);
   font-size: 11.5px;
   color: var(--color-text-muted);
@@ -17,6 +17,7 @@
   white-space: nowrap;
   scrollbar-width: none;
   letter-spacing: 0.005em;
+  flex-shrink: 0;
 }
 .breadcrumbs::-webkit-scrollbar { display: none; }
 
@@ -24,20 +25,24 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  transition: color var(--dur-fast) var(--ease-out);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
 .breadcrumbs__seg:hover {
   color: var(--color-text);
+  background: var(--color-hover-soft);
 }
 
 .breadcrumbs__seg--last {
   color: var(--color-text);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .breadcrumbs__sep {
-  margin: 0 4px;
-  color: var(--color-text-dim);
+  margin: 0 2px;
+  color: var(--color-text-faint);
   font-size: 10px;
-  opacity: 0.7;
 }

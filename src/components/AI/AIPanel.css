@@ -244,7 +244,7 @@
   color: var(--color-accent);
   box-shadow:
     0 12px 36px color-mix(in oklch, var(--color-accent) 20%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 1px 0 var(--inset-highlight-soft);
   margin-bottom: 8px;
 }
 .ai__empty-badge {

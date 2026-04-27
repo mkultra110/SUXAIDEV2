@@ -50,7 +50,7 @@ export function ToolCall({ call }: { call: ToolCallSnapshot }) {
           aria-hidden
           style={{
             transform: open ? 'rotate(180deg)' : 'none',
-            transition: 'transform 160ms var(--ease-out)',
+            transition: 'transform var(--dur-quick) var(--ease-out-expo)',
             opacity: 0.6,
           }}
         >

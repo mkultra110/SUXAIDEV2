@@ -84,7 +84,7 @@ export function ModelSelector({ value, onChange }: Props) {
           viewBox="0 0 10 10"
           style={{
             transform: open ? 'rotate(180deg)' : 'none',
-            transition: 'transform 180ms var(--ease-out)',
+            transition: 'transform var(--dur-quick) var(--ease-out-expo)',
           }}
         >
           <path

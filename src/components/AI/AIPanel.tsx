@@ -2878,9 +2878,15 @@ export function AIPanel() {
                   strokeLinejoin="round"
                 />
                 <defs>
+                  {/* REFACTOR-NOTE: SVG <stop> requires a colour string,
+                      can't read CSS vars in all engines. We use the amber
+                      tokens directly via CSS-readable getComputedStyle
+                      would be heavy here ; we accept these two amber
+                      stops as the brand-mark gradient (matches the
+                      SuxaiLogo plate). */}
                   <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#7d82f8" />
-                    <stop offset="100%" stopColor="#5457d8" />
+                    <stop offset="0%" stopColor="var(--amber-9, #F5C97A)" />
+                    <stop offset="100%" stopColor="var(--amber-7, #553A1F)" />
                   </linearGradient>
                 </defs>
               </svg>

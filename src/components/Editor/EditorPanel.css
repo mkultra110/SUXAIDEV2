@@ -238,7 +238,7 @@
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-sm);
   pointer-events: none;
-  animation: suxai-fade-in 180ms var(--ease-out-expo);
+  animation: suxai-fade-in var(--dur-quick) var(--ease-out-expo);
   z-index: var(--z-raised);
   letter-spacing: var(--tracking-wide);
 }
@@ -289,7 +289,7 @@
   background: color-mix(in oklch, var(--color-accent) 6%, transparent);
   text-transform: uppercase;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 var(--inset-highlight-subtle),
     0 0 32px color-mix(in oklch, var(--color-accent) 8%, transparent);
 }
 .editor__welcome-brand::before {

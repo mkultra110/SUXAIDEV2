@@ -42,7 +42,7 @@
   border: 1px solid color-mix(in oklch, var(--color-accent) 36%, transparent);
   box-shadow:
     0 12px 28px color-mix(in oklch, var(--color-accent) 25%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 1px 0 var(--inset-highlight-soft);
 }
 
 .upd__title {
@@ -128,7 +128,7 @@
   background-size: 200% 100%;
   box-shadow:
     0 0 14px color-mix(in oklch, var(--color-accent) 50%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    inset 0 1px 0 var(--inset-highlight-strong);
   transition: width var(--dur-base) var(--ease-out-expo);
   animation: upd-fill-shimmer 2s linear infinite;
 }

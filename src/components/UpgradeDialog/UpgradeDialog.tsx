@@ -69,7 +69,8 @@ export function UpgradeDialog({ token, open, onClose, onUpgraded }: Props) {
                 stroke="currentColor"
                 strokeWidth="1.6"
                 strokeLinejoin="round"
-                fill="rgba(125,130,248,0.15)"
+                fill="currentColor"
+                fillOpacity="0.18"
               />
             </svg>
           </div>

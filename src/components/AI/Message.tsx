@@ -358,7 +358,10 @@ function DivertedChip({ path }: { path: string }) {
       <span className="msg__diverted-icon" aria-hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
           <path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-          <path d="M16 16l3 3 5-5" stroke="#86efac" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          {/* REFACTOR-NOTE: green checkmark on summary icon — semantic
+              success colour, kept inline because the SVG path needs a
+              different stroke than its parent's currentColor. */}
+          <path d="M16 16l3 3 5-5" stroke="var(--color-success)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
       <div className="msg__diverted-body">

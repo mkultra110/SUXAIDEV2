@@ -216,6 +216,15 @@
   --color-diff-remove:        rgba(224, 108, 108, 0.16);
   --color-diff-remove-strong: rgba(224, 108, 108, 0.36);
 
+  /* « Apple touch » inset highlights — top-edge 1px white at low alpha.
+     Tokens nommés par intensité plutôt que par usage pour rester
+     composables sur n'importe quelle surface. */
+  --inset-highlight-subtle:  rgba(255, 255, 255, 0.04);
+  --inset-highlight-soft:    rgba(255, 255, 255, 0.06);
+  --inset-highlight-medium:  rgba(255, 255, 255, 0.10);
+  --inset-highlight-strong:  rgba(255, 255, 255, 0.18);
+  --inset-shadow-deep:       rgba(0, 0, 0, 0.40);
+
   /* File kind colours — intentionally chromatic (langage = identité).
      Désaturés pour harmoniser avec le warm-espresso, restent
      distinctifs au premier coup d'œil. */

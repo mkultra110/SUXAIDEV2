@@ -21,14 +21,27 @@ Tokens en OKLCH avec hex fallback en commentaire.
 
 ## Lots terminés
 
-- [x] **Lot 1** — `theme.css` Obsidian Warm + `grain.css` + `monaco-suxai-theme.ts`. Commit `4ba74a6`.
-- [x] **Lot 2** — `main.tsx` (fontsource imports) + `index.html` (anti-FOUC inline script + meta theme-color) + `globals.css` (réécrit). Commit `3af5e07`.
-- [x] **Lot 3** — `electron/main.ts` BrowserWindow (vibrancy/mica/trafficLights) + nativeTheme IPC handlers. Commit `b0ac169`.
-- [x] **Lot 4** — `TitleBar.css` réécrit + `SuxaiLogo.tsx/.css` token-driven. Commit `6d9a708`.
+- [x] **Lot 1** — `theme.css` Obsidian Warm + `grain.css` + `monaco-suxai-theme.ts`.
+- [x] **Lot 2** — `main.tsx` (fontsource) + `index.html` (anti-FOUC) + `globals.css` réécrit.
+- [x] **Lot 3** — `electron/main.ts` BrowserWindow vibrancy/mica + nativeTheme IPC.
+- [x] **Lot 4** — `TitleBar.css` + `SuxaiLogo.tsx/.css` token-driven.
+- [x] **Lot 5** — `Sidebar.tsx/.css` + `--kind-*` primitives.
+- [x] **Lot 6** — `SourceControlPanel.css` + `BranchPicker.css`.
+- [x] **Lot 7+8** — `EditorPanel.css` (tabs + body + welcome) + `Breadcrumbs.css` + Monaco Geist Mono.
+- [x] **Lot 9** — `StatusBar.css` + `ActivityBar.css` + `IDELayout.css`.
+- [x] **Lot 10** — `CommandPalette.css` + `QuickOpen.css` + `SearchInFiles.css`.
+- [x] **Lot 11** — `AIPanel.css` header + composer + commands.
+- [x] **Lot 12** — `Message.css` + `CodeBlock.css` + `ToolCall.css` + `EditedFilesPanel.css`.
+- [x] **Lot 13** — `ModelSelector.css` + `ConversationSwitcher.css` + `TokenUsageBar.css` + `ApprovalDialog.css`.
+- [x] **Lot 14** — `LoginScreen.css` + grain SVG overlay inline.
+- [x] **Lot 15** — `UpdateDialog` + `UpgradeDialog` + `CompareDialog` + `HistoryDialog` + `SettingsDialog`.
+- [x] **Lot 16** — `InlineDiff` + `InlineEdit` + `DiffView` + `MarkdownPreview` + `TerminalPanel`.
+- [x] **Lot 17** — `Button.css` + `Input.css` + `ContextMenu.css` + `Toast.css`.
+- [x] **Lot 18** — audit grep brut + light mode shippé via `[data-theme='light']` + bump v2.0.0.
 
 ## Lots restants
 
-- [ ] **Lot 5** — `Sidebar.tsx/.css` (header overline, row 24 px, active stripe slide).
+_Aucun. Refonte v2.0.0 terminée._
 - [ ] **Lot 6** — `SourceControlPanel.css` + `BranchPicker.css`.
 - [ ] **Lot 7** — `EditorPanel.css` tab bar (strip 34 px, top accent stripe).
 - [ ] **Lot 8** — `EditorPanel.css` body + `Breadcrumbs.css` + Monaco settings (Geist Mono, line height 1.65).

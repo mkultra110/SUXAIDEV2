@@ -50,7 +50,7 @@
   gap: 6px;
   z-index: var(--z-raised);
   pointer-events: auto;
-  animation: indiff-chip-in 140ms var(--ease-out-expo);
+  animation: indiff-chip-in var(--dur-quick) var(--ease-out-expo);
 }
 @keyframes indiff-chip-in {
   from { opacity: 0; transform: translateX(6px); }

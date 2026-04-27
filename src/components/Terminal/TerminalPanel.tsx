@@ -54,31 +54,38 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
   // Boot the xterm instance once.
   useEffect(() => {
     if (termRef.current) return;
+    // REFACTOR-NOTE: xterm.js takes a theme object of literal hex
+    // strings — no CSS var interpolation. We resolve current theme
+    // tokens via getComputedStyle so the terminal stays in sync with
+    // the active palette (Obsidian Warm dark/light).
+    const css = getComputedStyle(document.documentElement);
+    const v = (name: string, fallback: string) =>
+      css.getPropertyValue(name).trim() || fallback;
     const term = new XTerm({
-      fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
+      fontFamily: 'Geist Mono, "JetBrains Mono", "SF Mono", Menlo, monospace',
       fontSize: 12.5,
       theme: {
-        background: '#0b0f17',
-        foreground: '#e8ecf4',
-        cursor: '#7d82f8',
-        cursorAccent: '#0b0f17',
-        selectionBackground: '#3b4b75aa',
-        black: '#1a2338',
-        red: '#ff8e8e',
-        green: '#86efac',
-        yellow: '#fbbf24',
-        blue: '#7d82f8',
-        magenta: '#f472b6',
-        cyan: '#7dd3fc',
-        white: '#e8ecf4',
-        brightBlack: '#455065',
-        brightRed: '#ff8e8e',
-        brightGreen: '#86efac',
-        brightYellow: '#fbbf24',
-        brightBlue: '#7d82f8',
-        brightMagenta: '#f472b6',
-        brightCyan: '#7dd3fc',
-        brightWhite: '#ffffff',
+        background: v('--color-bg-base', '#0F0E0D'),
+        foreground: v('--color-text-primary', '#E6E1D7'),
+        cursor: v('--color-accent', '#F5C97A'),
+        cursorAccent: v('--color-bg-base', '#0F0E0D'),
+        selectionBackground: 'rgba(245, 201, 122, 0.25)',
+        black:         v('--neutral-3', '#13110F'),
+        red:           v('--terra-9', '#C97B7B'),
+        green:         v('--green-9', '#9DBE8E'),
+        yellow:        v('--coral-9', '#E8A87C'),
+        blue:          v('--teal-9', '#7FA8B5'),
+        magenta:       v('--rose-9', '#D9A3C0'),
+        cyan:          v('--teal-9', '#7FA8B5'),
+        white:         v('--neutral-12', '#E6E1D7'),
+        brightBlack:   v('--neutral-8', '#4D4439'),
+        brightRed:     v('--color-danger', '#E06C6C'),
+        brightGreen:   v('--green-9', '#9DBE8E'),
+        brightYellow:  v('--color-accent', '#F5C97A'),
+        brightBlue:    v('--teal-9', '#7FA8B5'),
+        brightMagenta: v('--rose-9', '#D9A3C0'),
+        brightCyan:    v('--teal-9', '#7FA8B5'),
+        brightWhite:   v('--neutral-12', '#E6E1D7'),
       },
       cursorBlink: true,
       scrollback: 5000,

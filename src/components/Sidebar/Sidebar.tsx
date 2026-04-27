@@ -384,7 +384,7 @@ function TreeList({
             >
               <span className="sidebar__chev" aria-hidden>
                 {e.isDirectory ? (
-                  <svg width="10" height="10" viewBox="0 0 10 10" style={{ transform: e.expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 160ms var(--ease-out)' }}>
+                  <svg width="10" height="10" viewBox="0 0 10 10" style={{ transform: e.expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform var(--dur-quick) var(--ease-out-expo)' }}>
                     <path d="M3 2 L7 5 L3 8 Z" fill="currentColor" />
                   </svg>
                 ) : null}

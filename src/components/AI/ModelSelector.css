@@ -41,11 +41,10 @@
 .model-sel__dot--openai    { background: linear-gradient(135deg, #10b981, #06b6d4); box-shadow: 0 0 6px rgba(16, 185, 129, 0.45); }
 
 .model-sel__name {
-  /* v0.14.1 — tightened 140 → 110 so cswitch (130) + gap (14) + model
-     (110) + gap (20) + actions cluster all fit inside the 420px AI
-     panel without overlap. The full label remains visible in the
-     dropdown + on hover via title attribute. */
-  max-width: 110px;
+  /* v0.15.12 — bumped 110→160 because the AI header now wraps onto
+     2 rows. cswitch + model share the 420 px row alone, plenty of
+     room for the full "Claude Sonnet 4.6 (thinking)" label. */
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

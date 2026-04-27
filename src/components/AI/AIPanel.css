@@ -20,11 +20,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* v0.14.1 — gap bumped 16→20 between header-main and header-actions
-     to restore the breathing room v0.13.9 had. v0.14.0's 16px was
-     too tight: on a 420px AI panel the conversation pill literally
-     touched the model pill (user-reported regression). */
-  gap: 20px;
+  /* v0.15.12 — 2-row layout when the panel is narrower than the
+     full pill cluster needs. flex-wrap pushes header-actions
+     below header-main when they don't fit on the same line, with
+     row-gap 8px so the two rows breathe. col-gap 16 between main
+     and actions when they DO share a line. */
+  flex-wrap: wrap;
+  row-gap: 8px;
+  column-gap: 16px;
   padding: 9px 12px;
   border-bottom: 1px solid var(--color-border);
   background:
@@ -37,12 +40,13 @@
 .ai__header-main {
   display: flex;
   align-items: center;
-  /* v0.14.1 — between cswitch and model pill, 14px was the v0.13.9
-     value that user-tested OK. v0.14.0's 10px brought back the
-     "they touch each other" complaint. */
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
-  flex: 1 1 auto;
+  /* v0.15.12 — flex 1 1 100% encourages the wrap : header-main
+     takes the full first row, header-actions falls cleanly under.
+     On very wide panels (custom resize) the basis collapses and
+     they share a row again. */
+  flex: 1 1 100%;
   overflow: hidden;
 }
 .ai__header-main > * { min-width: 0; flex-shrink: 1; }
@@ -50,8 +54,10 @@
 .ai__header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
+  /* v0.15.12 — pushed to the right when on its own row. */
+  margin-left: auto;
 }
 
 .ai__title {

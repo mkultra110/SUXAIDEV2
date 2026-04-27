@@ -59,16 +59,23 @@
 .titlebar__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-right: 8px;
+  /* v0.15.12 — 8→14 between user pill cluster and window controls,
+     plus an extra 12px margin-right via the user pill itself, so
+     "Louise" and the minimize icon don't appear glued together. */
+  gap: 14px;
+  padding-right: 10px;
   -webkit-app-region: no-drag;
 }
 
 .titlebar__user {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px 4px 4px;
+  /* v0.15.12 — 8→12 between FREE / Upgrade / avatar / username /
+     logout, prevents the cluster from looking like one squashed
+     blob when the window is < 1100 px wide. */
+  gap: 12px;
+  padding: 4px 12px 4px 4px;
+  margin-right: 8px;
   border-radius: 999px;
   border: 1px solid var(--color-border);
   background: rgba(255, 255, 255, 0.025);

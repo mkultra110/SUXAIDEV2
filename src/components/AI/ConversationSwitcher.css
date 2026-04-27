@@ -29,7 +29,11 @@
      could not coexist on the line and overlapped. Container queries
      (@container) would be the proper fix; for now the static caps
      are tight enough to fit. */
-  max-width: 130px;
+  /* v0.15.12 — bumped 130→200 because the AI header now wraps onto
+     2 rows (header-actions falls below header-main), so cswitch +
+     model share the full 420 px row alone. Conversation titles like
+     "Audit du serveur" now fit without aggressive truncation. */
+  max-width: 200px;
   min-width: 0;
   transition:
     background var(--dur-base) var(--ease-out),

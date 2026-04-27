@@ -1,6 +1,6 @@
 /* ============================================================
    UpdateDialog — auto-update prompt
-   v0.15.1 — visual refresh.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .upd__overlay {
@@ -9,19 +9,19 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(0, 0, 0, 0.5);
+  background: color-mix(in oklch, black 60%, transparent);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 100;
-  animation: suxai-fade-in var(--dur-base) var(--ease-out);
+  z-index: var(--z-modal);
+  animation: suxai-fade-in-soft var(--dur-base) var(--ease-out-expo);
 }
 
 .upd__card {
   width: 100%;
   max-width: 480px;
   padding: 24px 24px 20px;
-  border-radius: var(--radius-xl);
-  animation: suxai-fade-in var(--dur-slow) var(--ease-out);
+  border-radius: var(--radius-2xl);
+  animation: suxai-scale-in var(--dur-base) var(--ease-out-expo);
 }
 
 .upd__head {
@@ -32,44 +32,42 @@
 }
 
 .upd__icon {
-  width: 48px; height: 48px;
-  border-radius: 14px;
-  display: grid; place-items: center;
-  background:
-    radial-gradient(80% 80% at 30% 20%, rgba(125, 130, 248, 0.40), transparent 70%),
-    linear-gradient(180deg, rgba(99, 102, 241, 0.22), rgba(99, 102, 241, 0.10));
-  color: #e0e3ff;
-  border: 1px solid rgba(125, 130, 248, 0.46);
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  display: grid;
+  place-items: center;
+  background: color-mix(in oklch, var(--color-accent) 16%, transparent);
+  color: var(--color-accent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 36%, transparent);
   box-shadow:
-    0 12px 28px rgba(99, 102, 241, 0.30),
-    0 0 22px rgba(125, 130, 248, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10);
-  position: relative;
+    0 12px 28px color-mix(in oklch, var(--color-accent) 25%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .upd__title {
-  font-size: 15px;
+  font-size: var(--text-md);
   font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--color-text);
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-text-primary);
 }
 .upd__ver {
-  font-size: 12px;
-  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
   font-family: var(--font-mono);
   margin-top: 2px;
 }
-.upd__ver strong { color: var(--color-text); }
+.upd__ver strong { color: var(--color-text-primary); }
 
 .upd__notes-wrap {
   margin-bottom: 16px;
 }
 .upd__notes-title {
-  font-size: 10.5px;
+  font-size: var(--text-2xs);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--color-text-dim);
+  color: var(--color-text-tertiary);
   margin: 0 0 7px;
 }
 .upd__notes--md { white-space: normal; }
@@ -80,60 +78,58 @@
 .upd__notes--md li { margin: 3px 0; }
 .upd__notes--md code {
   font-family: var(--font-mono);
-  font-size: 11.5px;
+  font-size: var(--text-2xs);
   padding: 1.5px 5px;
-  border-radius: 4px;
-  background: rgba(125, 130, 248, 0.12);
-  color: #d0d4ff;
+  border-radius: var(--radius-xs);
+  background: color-mix(in oklch, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
 }
-.upd__notes--md strong { color: var(--color-text); }
+.upd__notes--md strong { color: var(--color-text-primary); }
 .upd__notes--md h1,
 .upd__notes--md h2,
 .upd__notes--md h3 {
-  font-size: 12px;
+  font-size: var(--text-xs);
   font-weight: 600;
   margin: 9px 0 5px;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 .upd__notes--empty {
-  color: var(--color-text-dim);
+  color: var(--color-text-tertiary);
   font-style: italic;
 }
 
 .upd__notes {
-  font-size: 12.5px;
-  color: var(--color-text-muted);
-  line-height: 1.65;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relax);
   padding: 12px 14px;
-  background: rgba(0, 0, 0, 0.22);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   margin-bottom: 16px;
   max-height: 200px;
   overflow-y: auto;
   white-space: pre-wrap;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
 }
 
 .upd__progress { margin: 12px 0 16px; }
 
 .upd__bar {
   height: 8px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, black 35%, transparent);
   overflow: hidden;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-subtle);
 }
 
 .upd__fill {
   height: 100%;
-  background: linear-gradient(90deg, #7d82f8, #5457d8, #7d82f8);
+  background: linear-gradient(90deg, var(--amber-9), var(--amber-7), var(--amber-9));
   background-size: 200% 100%;
   box-shadow:
-    0 0 14px rgba(125, 130, 248, 0.5),
+    0 0 14px color-mix(in oklch, var(--color-accent) 50%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  transition: width var(--dur-base) var(--ease-out);
+  transition: width var(--dur-base) var(--ease-out-expo);
   animation: upd-fill-shimmer 2s linear infinite;
 }
 @keyframes upd-fill-shimmer {
@@ -144,8 +140,8 @@
 .upd__progress-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 11.5px;
-  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
   margin-top: 8px;
   text-transform: capitalize;
   font-family: var(--font-mono);
@@ -155,10 +151,10 @@
   margin: 12px 0;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.32);
-  color: #fca5a5;
-  font-size: 12px;
+  background: color-mix(in oklch, var(--color-danger) 10%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-danger) 32%, transparent);
+  color: var(--color-danger);
+  font-size: var(--text-xs);
 }
 
 .upd__actions {

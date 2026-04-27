@@ -137,8 +137,8 @@ export function SettingsDialog() {
           <Section title={`Memories (${memories.length})`}>
             {memories.length === 0 ? (
               <div className="settings__hint">
-                Aucune mémoire pour ce workspace. Utilise <code>/memory Title: content</code> dans le chat,
-                ou laisse l'extraction automatique tourner après quelques messages.
+                No memories for this workspace yet. Use <code>/memory Title: content</code> in the chat,
+                or let automatic extraction run after a few messages.
               </div>
             ) : (
               <div className="settings__memories">
@@ -152,8 +152,8 @@ export function SettingsDialog() {
                       type="button"
                       className="settings__memory-delete"
                       onClick={() => deleteMemory(workspaceRoot, m.id)}
-                      title="Supprimer cette mémoire"
-                      aria-label={`Supprimer ${m.title}`}
+                      title="Delete this memory"
+                      aria-label={`Delete ${m.title}`}
                     >
                       ×
                     </button>

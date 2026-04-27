@@ -438,7 +438,7 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
             ? {
                 ...msg,
                 streaming: false,
-                error: 'Le modèle a refusé cette requête. Reformule ou abandonne.',
+                error: 'The model refused this request. Rephrase or try a different prompt.',
               }
             : msg,
         ),
@@ -455,7 +455,7 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
             ? {
                 ...msg,
                 streaming: false,
-                error: 'Réponse tronquée (max_tokens atteint). Relance pour faire continuer.',
+                error: 'Response truncated (max_tokens reached). Resend to continue.',
               }
             : msg,
         ),
@@ -473,7 +473,7 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
             ? {
                 ...msg,
                 streaming: false,
-                error: 'Contexte saturé. Lance /compact ou choisis un modèle à plus large fenêtre (Opus 4.6 thinking).',
+                error: 'Context window full. Run /compact or switch to a model with a larger context window (Opus 4.6 thinking).',
               }
             : msg,
         ),
@@ -1101,8 +1101,8 @@ export function AIPanel() {
     const now = Date.now();
     if (now - lastCompactAtRef.current < 30_000) {
       toast.info(
-        'Compaction récente',
-        'Une compaction a déjà eu lieu il y a moins de 30 s — passe en /clear ou choisis un modèle à plus large fenêtre si la conversation reste trop dense.',
+        'Recent compaction',
+        'A compaction ran less than 30 s ago — use /clear or switch to a larger context model if the conversation is still too dense.',
       );
       return;
     }
@@ -1296,7 +1296,7 @@ export function AIPanel() {
             const code = (err as Error & { code?: string }).code;
             const friendly =
               code === 'STREAM_TRUNCATED'
-                ? `Connexion interrompue avant la fin de la réponse — relance ta question pour reprendre. (${err.message})`
+                ? `Connection interrupted before the response completed — resend your message to retry. (${err.message})`
                 : err.message;
             setMessages((m) =>
               m.map((msg) =>
@@ -1392,27 +1392,27 @@ export function AIPanel() {
               '_Conversation:_\n' +
               '- `/clear`, `/reset` — wipe this conversation (reset = also resets mode/agent flags)\n' +
               '- `/new` — fresh thread\n' +
-              '- `/compact`, `/summarize` — résume les anciens messages pour libérer du contexte\n' +
-              '- `/export` — sauve la conversation en `.md` dans `.suxai/exports/`\n\n' +
+              '- `/compact`, `/summarize` — summarise old messages to free up context\n' +
+              '- `/export` — save the conversation as `.md` in `.suxai/exports/`\n\n' +
               '_Modes & model:_\n' +
               '- `/plan` — toggle Plan mode (read-only investigation, produces a markdown plan)\n' +
               '- `/agent` — toggle Agent mode (lets Claude read/edit your files)\n' +
-              '- `/model` — hint pour ouvrir le model selector\n\n' +
-              '_Memories (faits durables sur le projet):_\n' +
-              '- `/memory <Title>: <content>` — sauve une mémoire manuelle\n' +
-              '- `/memories` — liste les mémoires du workspace\n' +
-              '- `/memory-delete <id>` — supprime une mémoire (ids visibles via `/memories`)\n\n' +
-              '_Tâches:_\n' +
+              '- `/model` — open the model selector\n\n' +
+              '_Memories (persistent project facts):_\n' +
+              '- `/memory <Title>: <content>` — save a memory manually\n' +
+              '- `/memories` — list memories for this workspace\n' +
+              '- `/memory-delete <id>` — delete a memory (ids shown by `/memories`)\n\n' +
+              '_Tasks:_\n' +
               '- `/explain`, `/refactor`, `/fix`, `/optimize` — task shortcuts on the current file/selection\n' +
-              '- `/init` — génère AGENTS.md depuis le repo map\n\n' +
-              '**@-mentions** (dans le chat) :\n\n' +
-              '- `@<path>` — fichier (auto-completion fuzzy)\n' +
-              '- `@selection`, `@cursor` — code sélectionné / autour du curseur\n' +
-              '- `@open-tabs`, `@tabs` — tous les fichiers ouverts\n' +
-              '- `@problems`, `@lint` — diagnostics du fichier actif\n' +
-              '- `@recent_changes`, `@recent_edits` — derniers edits\n' +
-              '- `@git`, `@diff` — git diff du working tree\n' +
-              '- `@memories` — dump les mémoires courantes\n\n' +
+              '- `/init` — generate AGENTS.md from the repo map\n\n' +
+              '**@-mentions** (in the chat):\n\n' +
+              '- `@<path>` — file (fuzzy auto-complete)\n' +
+              '- `@selection`, `@cursor` — selected code / code around cursor\n' +
+              '- `@open-tabs`, `@tabs` — all open files\n' +
+              '- `@problems`, `@lint` — diagnostics for the active file\n' +
+              '- `@recent_changes`, `@recent_edits` — recent edits\n' +
+              '- `@git`, `@diff` — git diff of the working tree\n' +
+              '- `@memories` — dump current memories\n\n' +
               '**Editor shortcuts:**\n\n' +
               '- `Cmd/Ctrl+S` — save file\n' +
               '- `Cmd/Ctrl+K` — inline AI edit on selection\n' +
@@ -1577,7 +1577,7 @@ export function AIPanel() {
           }
           addMemory(workspaceRoot, { title, content });
           setInput('');
-          toast.info('Memory saved', `"${title}" — apparaît dans le préambule des prochains tours`);
+          toast.info('Memory saved', `"${title}" — will appear in the preamble of future turns`);
           return true;
         }
         case 'memories': {
@@ -1610,7 +1610,7 @@ export function AIPanel() {
           setInput('');
           toast.info(
             `/${cmd} arrives in v0.14+`,
-            'Cette commande nécessite des sub-agents cloud — pas encore implémenté. Suis la roadmap dans le repo.',
+            'This command requires cloud sub-agents — not yet implemented. Follow the roadmap in the repo.',
           );
           return true;
         }
@@ -2446,7 +2446,7 @@ export function AIPanel() {
             const code = (err as Error & { code?: string }).code;
             const friendly =
               code === 'STREAM_TRUNCATED'
-                ? `Connexion interrompue avant la fin de la réponse — relance ta question pour reprendre. (${err.message})`
+                ? `Connection interrupted before the response completed — resend your message to retry. (${err.message})`
                 : err.message;
             setMessages((m) =>
               m.map((msg) =>
@@ -2634,8 +2634,8 @@ export function AIPanel() {
           toast.error(
             'Apply failed',
             code502
-              ? 'Le modèle apply n\'a pas pu fusionner proprement (truncation ou marker leakage détecté). Réessaie ou édite manuellement.'
-              : `HTTP ${res.status} sur /ai/apply. Vérifie ton quota / ta connexion.`,
+              ? 'The apply model could not merge cleanly (truncation or marker leakage detected). Retry or edit manually.'
+              : `HTTP ${res.status} from /ai/apply. Check your quota / connection.`,
           );
           return;
         }
@@ -2644,7 +2644,7 @@ export function AIPanel() {
         if (typeof merged !== 'string' || merged.length === 0) {
           toast.error(
             'Apply failed',
-            'Réponse vide du modèle apply. Le snippet est peut-être trop ambigu — ajoute des markers `// ... existing code ...` autour des zones non modifiées et ré-essaie.',
+            'Empty response from the apply model. The snippet may be too ambiguous — add `// ... existing code ...` markers around unchanged sections and retry.',
           );
           return;
         }

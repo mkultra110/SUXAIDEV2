@@ -493,11 +493,11 @@ export function InlineDiff({ diff }: { diff: PendingDiff }) {
       // (and clobber the external edit).
       const isStale = /modified externally|STALE_FILE/i.test(msg);
       const friendly = isStale
-        ? `Le fichier a été modifié à l'extérieur depuis l'ouverture du diff. ` +
-          `Recharge le fichier (le diff sera perdu) ou rejette ce diff puis relance la requête.`
+        ? `The file was modified externally since the diff was opened. ` +
+          `Reload the file (the diff will be lost) or reject this diff and resend the request.`
         : msg;
       setError(friendly);
-      toast.error(isStale ? 'Fichier modifié à l\'extérieur' : 'Could not save', friendly);
+      toast.error(isStale ? 'File modified externally' : 'Could not save', friendly);
     } finally {
       setBusy(false);
     }

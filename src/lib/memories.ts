@@ -122,17 +122,17 @@ export function formatMemories(mems: Memory[]): string {
  * task state, and ephemeral details are explicitly rejected.
  */
 const MEMORY_EXTRACTION_PROMPT =
-  'Tu observes une conversation entre un développeur et un assistant IA. ' +
-  "Extrais les FAITS DURABLES sur les préférences de l'utilisateur ou les " +
-  'conventions du projet (PAS l\'état temporaire de la session).\n\n' +
-  'Format réponse : JSON valide, array de `{ "title": string ≤ 60 chars, "content": string ≤ 200 chars }`. ' +
-  'Si rien d\'extractible : `[]`. Maximum 5 items.\n\n' +
-  '**À EXTRAIRE :** préférences de style/lib (ex "Tailwind v4", "Result<T,E>"), ' +
-  'conventions du projet (ex "tests en Vitest", "imports absolus"), ' +
-  'outils du user (ex "utilise pnpm pas npm").\n\n' +
-  '**À NE PAS EXTRAIRE :** état de la tâche en cours, bug spécifique, ' +
-  'path de fichier précis, valeur numérique ad-hoc, "On en est à l\'étape 3".\n\n' +
-  'Réponds UNIQUEMENT avec le JSON, aucun markdown, aucune explication.';
+  'You are observing a conversation between a developer and an AI assistant. ' +
+  'Extract DURABLE FACTS about the user\'s preferences or project conventions ' +
+  '(NOT temporary session state).\n\n' +
+  'Response format: valid JSON array of `{ "title": string ≤ 60 chars, "content": string ≤ 200 chars }`. ' +
+  'If nothing is extractable: `[]`. Maximum 5 items.\n\n' +
+  '**EXTRACT:** style/lib preferences (e.g. "Tailwind v4", "Result<T,E>"), ' +
+  'project conventions (e.g. "tests in Vitest", "absolute imports"), ' +
+  'user tooling (e.g. "uses pnpm not npm").\n\n' +
+  '**DO NOT EXTRACT:** current task state, specific bug, ' +
+  'exact file path, ad-hoc numeric value, "We are at step 3".\n\n' +
+  'Respond ONLY with the JSON, no markdown, no explanation.';
 
 export interface MemoryCandidate {
   title: string;

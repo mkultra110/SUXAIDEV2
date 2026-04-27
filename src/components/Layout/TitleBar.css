@@ -67,27 +67,23 @@
   -webkit-app-region: no-drag;
 }
 
+/* v0.15.13 — flatten the user cluster. The previous wrapping pill
+   (border-radius 999 + faint border) was visually asymmetric : the
+   left rounding showed because FREE has high contrast, the right
+   curve disappeared into the dark background and looked cut off.
+   Now : transparent flex row, each child (FREE pill, Upgrade button,
+   avatar, name, logout) is its own visual element with proper
+   spacing. Cleaner and matches VSCode / Cursor titlebars. */
 .titlebar__user {
   display: flex;
   align-items: center;
-  /* v0.15.12 — 8→12 between FREE / Upgrade / avatar / username /
-     logout, prevents the cluster from looking like one squashed
-     blob when the window is < 1100 px wide. */
-  gap: 12px;
-  padding: 4px 12px 4px 4px;
-  margin-right: 8px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: rgba(255, 255, 255, 0.025);
+  gap: 10px;
+  padding: 0;
+  margin-right: 4px;
+  background: transparent;
+  border: none;
   font-size: 11.5px;
   color: var(--color-text-muted);
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-.titlebar__user:hover {
-  background: var(--color-hover-soft);
-  border-color: var(--color-border-strong);
 }
 
 .titlebar__avatar {

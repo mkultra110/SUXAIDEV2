@@ -548,23 +548,47 @@
 
 /* ----- Composer chips & attachments ----------------------- */
 
+/* v0.17.3 — composer chips refined : tighter padding, leading dot
+   for active-file chip so it reads as "current context", subtle
+   accent tint + inset glow on the accent variant. */
 .ai__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 11px;
-  padding: 3px 9px;
+  padding: 3px 9px 3px 8px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.045);
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
   font-family: var(--font-mono);
-  max-width: 160px;
+  max-width: 180px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.ai__chip:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--color-text);
 }
 .ai__chip--accent {
-  background: var(--color-accent-soft);
-  border-color: var(--color-border-accent);
-  color: #c7d2fe;
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.18), rgba(125, 130, 248, 0.08));
+  border-color: var(--color-border-accent-soft);
+  color: #d8dbff;
+  box-shadow: inset 0 0 0 1px rgba(125, 130, 248, 0.06);
+}
+.ai__chip--accent::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-accent-hover);
+  box-shadow: 0 0 6px rgba(125, 130, 248, 0.55);
+  flex-shrink: 0;
 }
 
 .ai__attachments {

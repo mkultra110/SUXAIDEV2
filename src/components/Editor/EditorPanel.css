@@ -348,26 +348,37 @@
 .editor__welcome-grid {
   margin-top: 8px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
   text-align: left;
 }
+/* v0.17.3 — welcome cards get a subtle accent halo on hover and
+   a tighter row layout (justify-content space-between instead of
+   left-aligned baseline) so kbd shortcuts pin to the right edge. */
 .editor__welcome-col {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.012));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  padding: 14px 16px;
-  transition: border-color var(--dur-fast) var(--ease-out);
+  padding: 16px 18px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 }
 .editor__welcome-col:hover {
-  border-color: var(--color-border-strong);
+  border-color: var(--color-border-accent-soft);
+  background:
+    linear-gradient(180deg, rgba(125, 130, 248, 0.06), rgba(255, 255, 255, 0.012));
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.10);
+  transform: translateY(-1px);
 }
 .editor__welcome-col h3 {
-  margin: 0 0 10px;
-  font-size: 11px;
+  margin: 0 0 12px;
+  font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.10em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-text-dim);
 }
@@ -377,12 +388,13 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .editor__welcome-col li {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 12px;
   color: var(--color-text-muted);
 }
@@ -392,6 +404,9 @@
 }
 .editor__welcome-col li span {
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 kbd {

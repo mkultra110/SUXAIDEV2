@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import { pushRecent } from '../lib/recent';
 import { invalidateGitStatus } from '../lib/git';
+import { snapshotFile } from '../lib/history';
 
 export interface OpenFile {
   path: string;
@@ -498,6 +499,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // in sync with the working tree without a polling loop.
       const ws = stateRef.current.workspaceRoot;
       if (ws) invalidateGitStatus(ws);
+      // v0.16.7 — fire-and-forget local history snapshot. Server caps
+      // (5s min gap, identity-skip, 50 max per file, 4 MB max) keep
+      // the disk usage bounded ; failures here must never break the
+      // save flow itself.
+      void snapshotFile(targetPath, toSave.content);
       setState((prev) => {
         // The user may have closed the tab between when we started
         // the write and when it resolved. Don't resurrect a closed

@@ -21,6 +21,11 @@ const USER_DATA = () => app.getPath('userData');
 const TOKEN_FILE = () => path.join(USER_DATA(), 'auth.bin');
 const REFRESH_TOKEN_FILE = () => path.join(USER_DATA(), 'refresh.bin');
 const CONVERSATIONS_FILE = () => path.join(USER_DATA(), 'conversations.json');
+// v0.16.7 — File local history root. Each tracked file gets a folder
+// keyed by SHA-256(absPath, 8 hex chars) containing its snapshots and
+// a meta.json with the original path so the browse modal can show
+// the human-readable filename even after a rename / move.
+const HISTORY_DIR = () => path.join(USER_DATA(), 'History');
 
 let mainWindow: BrowserWindow | null = null;
 let updateManager: UpdateManager | null = null;
@@ -1564,6 +1569,149 @@ function registerIpc() {
       branch: m?.[1] ?? null,
       sha: m?.[2] ?? null,
     };
+  });
+
+  // v0.16.7 — File local history. Auto-snapshot on save, browse via
+  // a UI modal, restore by opening the snapshot as a read-only tab.
+  //
+  // Layout : userData/History/<sha8(absPath)>/
+  //            ├── meta.json          { sourcePath: string, ts: number }
+  //            ├── 1714200000000.txt  ← snapshots, ms epoch in name
+  //            ├── 1714200300000.txt
+  //            └── ...
+  //
+  // Caps :
+  //   - 50 snapshots per file (oldest dropped on overflow)
+  //   - skip if identical to latest snapshot
+  //   - skip if last snapshot < 5s old (no spam during rapid Ctrl+S)
+  //   - skip if content >  4 MB (huge files would blow disk usage)
+  const HISTORY_MAX_PER_FILE = 50;
+  const HISTORY_MIN_GAP_MS = 5_000;
+  const HISTORY_MAX_BYTES = 4 * 1024 * 1024;
+
+  function pathSha8(absPath: string): string {
+    return createHash('sha256').update(absPath).digest('hex').slice(0, 16);
+  }
+
+  ipcMain.handle('history:snapshot', async (_e, input: { path: string; content: string }) => {
+    let safePath: string;
+    try { safePath = sanitizeFsPath(input?.path); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    if (typeof input?.content !== 'string') {
+      return { ok: false, error: 'content required' };
+    }
+    if (input.content.length > HISTORY_MAX_BYTES) {
+      // Quietly skip: too big to keep in history without ballooning
+      // userData. Log so users with audit telemetry can spot trends.
+      return { ok: false, error: 'content_too_large', skipped: true };
+    }
+    const sha8 = pathSha8(safePath);
+    const dir = path.join(HISTORY_DIR(), sha8);
+    try {
+      await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+    // List existing snapshots, sorted DESC by name (timestamp).
+    let entries: string[];
+    try {
+      entries = (await fs.readdir(dir))
+        .filter((e) => /^\d+\.txt$/.test(e))
+        .sort()
+        .reverse();
+    } catch { entries = []; }
+    // Min-gap guard: skip if last snapshot is younger than 5 s.
+    if (entries.length > 0) {
+      const lastTs = Number(entries[0].slice(0, -4));
+      if (Number.isFinite(lastTs) && Date.now() - lastTs < HISTORY_MIN_GAP_MS) {
+        return { ok: true, skipped: true, reason: 'min_gap' };
+      }
+      // Identity guard: skip if content matches the last snapshot.
+      try {
+        const last = await fs.readFile(path.join(dir, entries[0]), 'utf8');
+        if (last === input.content) {
+          return { ok: true, skipped: true, reason: 'identical' };
+        }
+      } catch { /* read failed → snapshot anyway */ }
+    }
+    const ts = Date.now();
+    const fileName = `${ts}.txt`;
+    const target = path.join(dir, fileName);
+    try {
+      await fs.writeFile(target, input.content, { mode: 0o600 });
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+    // Refresh meta.json (sourcePath might have changed via rename).
+    try {
+      await fs.writeFile(
+        path.join(dir, 'meta.json'),
+        JSON.stringify({ sourcePath: safePath, ts }),
+        { mode: 0o600 },
+      );
+    } catch { /* best-effort */ }
+    // Trim to 50 most recent.
+    const all = entries.concat(fileName).sort().reverse();
+    if (all.length > HISTORY_MAX_PER_FILE) {
+      const toDrop = all.slice(HISTORY_MAX_PER_FILE);
+      for (const old of toDrop) {
+        try { await fs.unlink(path.join(dir, old)); } catch { /* */ }
+      }
+    }
+    return { ok: true, ts };
+  });
+
+  ipcMain.handle('history:list', async (_e, input: { path: string }) => {
+    let safePath: string;
+    try { safePath = sanitizeFsPath(input?.path); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const sha8 = pathSha8(safePath);
+    const dir = path.join(HISTORY_DIR(), sha8);
+    try {
+      const entries = await fs.readdir(dir);
+      const snapshots: { id: string; ts: number; sizeBytes: number }[] = [];
+      for (const e of entries) {
+        const m = /^(\d+)\.txt$/.exec(e);
+        if (!m) continue;
+        const ts = Number(m[1]);
+        if (!Number.isFinite(ts)) continue;
+        let sizeBytes = 0;
+        try {
+          const stat = await fs.stat(path.join(dir, e));
+          sizeBytes = stat.size;
+        } catch { /* file vanished — skip */ continue; }
+        snapshots.push({ id: e.slice(0, -4), ts, sizeBytes });
+      }
+      // Most recent first.
+      snapshots.sort((a, b) => b.ts - a.ts);
+      return { ok: true, sha8, snapshots };
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'ENOENT') return { ok: true, sha8, snapshots: [] };
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('history:read', async (_e, input: { sha8: string; id: string }) => {
+    if (typeof input?.sha8 !== 'string' || !/^[a-f0-9]{16}$/.test(input.sha8)) {
+      return { ok: false, error: 'invalid sha8' };
+    }
+    if (typeof input?.id !== 'string' || !/^\d+$/.test(input.id)) {
+      return { ok: false, error: 'invalid id' };
+    }
+    const target = path.join(HISTORY_DIR(), input.sha8, `${input.id}.txt`);
+    // Defence-in-depth: ensure we resolve under HISTORY_DIR — without
+    // this a crafted sha8/id with traversal would escape userData.
+    const resolved = path.resolve(target);
+    if (!resolved.startsWith(path.resolve(HISTORY_DIR()) + path.sep)) {
+      return { ok: false, error: 'invalid path' };
+    }
+    try {
+      const content = await fs.readFile(resolved, 'utf8');
+      return { ok: true, content };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
   });
 }
 

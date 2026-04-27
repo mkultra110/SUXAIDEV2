@@ -152,6 +152,25 @@ const api = {
       sha: string | null;
     } | { ok: false; error: string }> => ipcRenderer.invoke('git:commit', input),
   },
+  history: {
+    /** v0.16.7 — fire-and-forget snapshot of file content. Skips if
+     *  identical to last snapshot, if < 5s since last, or if > 4 MB.
+     *  Caps at 50 entries per file (oldest dropped). */
+    snapshot: (input: { path: string; content: string }): Promise<{
+      ok: true; ts?: number; skipped?: boolean; reason?: string
+    } | { ok: false; error: string; skipped?: boolean }> =>
+      ipcRenderer.invoke('history:snapshot', input),
+    /** List snapshots for a path, most-recent first. */
+    list: (input: { path: string }): Promise<{
+      ok: true; sha8: string; snapshots: { id: string; ts: number; sizeBytes: number }[]
+    } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('history:list', input),
+    /** Read a single snapshot by sha8 (path hash) + id (epoch ms). */
+    read: (input: { sha8: string; id: string }): Promise<{
+      ok: true; content: string
+    } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('history:read', input),
+  },
   checkpoint: {
     create: (workspaceRoot: string, turnId: string, files: string[]): Promise<{ id: string }> =>
       ipcRenderer.invoke('checkpoint:create', workspaceRoot, turnId, files),

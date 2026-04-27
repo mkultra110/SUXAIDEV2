@@ -5,6 +5,7 @@ import { InlineDiff } from './InlineDiff';
 import { InlineEdit } from './InlineEdit';
 import { Breadcrumbs } from './Breadcrumbs';
 import { MarkdownPreview } from './MarkdownPreview';
+import { HistoryDialog } from './HistoryDialog';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { emitAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
@@ -127,6 +128,9 @@ export function EditorPanel() {
   }, []);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
+  // v0.16.7 — local history modal state. null = closed, otherwise the
+  // absolute path of the file whose snapshots to list.
+  const [historyPath, setHistoryPath] = useState<string | null>(null);
   // v0.16.2 / v0.16.6 — per-file markdown view mode (edit / split /
   // preview). Persisted in a Map so toggling between tabs preserves
   // the user's choice ; unlimited growth isn't a concern (1 entry
@@ -591,10 +595,15 @@ export function EditorPanel() {
               closeAll,
               togglePin,
               setActive,
+              showHistory: (p) => {
+                setTabMenu(null);
+                setHistoryPath(p);
+              },
             },
           )}
         />
       )}
+      <HistoryDialog path={historyPath} onClose={() => setHistoryPath(null)} />
 
       {zoomOffset !== 0 && (
         <div className="editor__zoom-hint">
@@ -972,6 +981,8 @@ interface TabMenuActions {
   closeAll: () => void;
   togglePin: (p: string) => void;
   setActive: (p: string) => void;
+  /** v0.16.7 — open the local history modal for the right-clicked tab. */
+  showHistory: (p: string) => void;
 }
 
 function buildTabMenu(
@@ -1019,6 +1030,17 @@ function buildTabMenu(
       label: 'Reveal in file explorer',
       disabled: path.startsWith('untitled://'),
       onClick: () => window.suxai.fs.revealInFolder?.(path),
+    },
+    'separator',
+    {
+      // v0.16.7 — File local history (auto-snapshots on save).
+      // Disabled for untitled buffers + history:// snapshot tabs
+      // (no source file to look up).
+      label: 'Show local history',
+      hint: 'recent saves',
+      disabled:
+        path.startsWith('untitled://') || path.startsWith('history://'),
+      onClick: () => actions.showHistory(path),
     },
   ];
 }

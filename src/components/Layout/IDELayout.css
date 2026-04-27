@@ -1,6 +1,6 @@
 /* ============================================================
    IDE Layout — top-level grid
-   v0.17.0 — refined panel borders for crisp boundaries.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .ide {
@@ -8,7 +8,7 @@
   flex-direction: column;
   height: 100%;
   width: 100%;
-  background: var(--color-bg);
+  background: var(--color-bg-base);
 }
 
 .ide__body {
@@ -19,16 +19,15 @@
     minmax(0, 1fr)
     var(--ai-panel-width);
   height: calc(100% - var(--titlebar-height));
-  /* v0.17.0 — gap rendered as a 1px column-gap of border colour
-     gives crisp panel separators without per-component borders.
-     The gap doubles as the divider line. */
+  /* 1 px column gap rendered via grid background = crisp panel
+     separators without per-component borders. */
   gap: 0;
-  background: var(--color-border-strong);
-  border-top: 1px solid var(--color-border-strong);
+  background: var(--color-border-subtle);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .ide__body > * {
-  background: var(--color-bg);
+  background: var(--color-bg-base);
   min-height: 0;
   min-width: 0;
 }
@@ -40,9 +39,8 @@
     minmax(0, 1fr)
     var(--ai-panel-width);
 }
-.ide__body--no-sidebar > :nth-child(2) {
-  display: none;
-}
+.ide__body--no-sidebar > :nth-child(2) { display: none; }
+
 .ide__body--no-ai {
   grid-template-columns:
     var(--activity-bar-width)
@@ -50,9 +48,8 @@
     minmax(0, 1fr)
     0;
 }
-.ide__body--no-ai > :nth-child(4) {
-  display: none;
-}
+.ide__body--no-ai > :nth-child(4) { display: none; }
+
 .ide__body--no-sidebar.ide__body--no-ai {
   grid-template-columns:
     var(--activity-bar-width)

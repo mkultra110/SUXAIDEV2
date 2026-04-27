@@ -1,6 +1,6 @@
 /* ============================================================
-   StatusBar — bottom info strip
-   v0.17.0 — visual refresh, class names stable for JSX.
+   StatusBar — bottom info strip (24 px)
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .statusbar {
@@ -9,16 +9,13 @@
   align-items: center;
   padding: 0 6px;
   gap: 0;
-  background:
-    linear-gradient(180deg, #0d1322 0%, #080c18 100%);
-  border-top: 1px solid var(--color-border-strong);
+  background: var(--color-bg-surface);
+  border-top: 1px solid var(--color-border-subtle);
   font-family: var(--font-sans);
-  font-size: var(--fs-sm);
-  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
   -webkit-app-region: no-drag;
   position: relative;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .statusbar__group {
@@ -36,7 +33,7 @@
   align-items: center;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  letter-spacing: 0.015em;
+  letter-spacing: var(--tracking-wide);
 }
 
 .statusbar__btn {
@@ -47,35 +44,32 @@
   border-radius: var(--radius-xs);
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard);
 }
 .statusbar__btn:hover {
-  background: var(--color-hover-soft);
-  color: var(--color-text);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 .statusbar__btn--active {
-  color: #d8dbff;
-  background: linear-gradient(180deg, rgba(125, 130, 248, 0.20), rgba(125, 130, 248, 0.10));
-  box-shadow: inset 0 0 0 1px rgba(125, 130, 248, 0.22);
+  color: var(--color-accent);
+  background: color-mix(in oklch, var(--color-accent) 14%, transparent);
 }
 .statusbar__btn--active:hover {
-  background: linear-gradient(180deg, rgba(125, 130, 248, 0.28), rgba(125, 130, 248, 0.16));
-  color: #fff;
+  background: color-mix(in oklch, var(--color-accent) 22%, transparent);
 }
 
-/* Branch indicator on the left side. Tightly-packed with the
-   Terminal toggle, ahead/behind counts as small superscripts. */
+/* Branch indicator (left side) */
 .statusbar__branch {
   display: inline-flex;
   align-items: center;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
 }
 .statusbar__branch-count {
   margin-left: 5px;
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
-  color: var(--color-accent-hover);
+  color: var(--color-accent);
   font-variant-numeric: tabular-nums;
 }

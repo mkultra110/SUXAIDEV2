@@ -216,6 +216,37 @@
   --color-diff-remove:        rgba(224, 108, 108, 0.16);
   --color-diff-remove-strong: rgba(224, 108, 108, 0.36);
 
+  /* File kind colours — intentionally chromatic (langage = identité).
+     Désaturés pour harmoniser avec le warm-espresso, restent
+     distinctifs au premier coup d'œil. */
+  --kind-folder:  #C49A48;
+  --kind-ts:      #6FA8C9;
+  --kind-js:      #D4B860;
+  --kind-json:    #C49A48;
+  --kind-md:      #9DA8B8;
+  --kind-css:     #82A4C2;
+  --kind-html:    #D87850;
+  --kind-image:   #A88BC0;
+  --kind-shell:   #88B582;
+  --kind-lock:    #C46060;
+  --kind-config:  #909090;
+  --kind-lua:     #6080DC;
+  --kind-cpp:     #76A4C2;
+  --kind-python:  #D8B538;
+  --kind-rust:    #C07050;
+  --kind-go:      #6FBED6;
+  --kind-java:    #D08060;
+  --kind-csharp:  #8060B0;
+  --kind-php:     #8E96BE;
+  --kind-ruby:    #B83C40;
+  --kind-sql:     #C49060;
+  --kind-yaml:    #C8A06E;
+  --kind-xml:     #B89060;
+  --kind-pdf:     #C45050;
+  --kind-archive: #B89060;
+  --kind-binary:  #828896;
+  --kind-plain:   #8A93A8;
+
   /* Dimensions de layout (stable) */
   --titlebar-height:  36px;
   --sidebar-width:    260px;

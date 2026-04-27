@@ -24,10 +24,10 @@ Tokens en OKLCH avec hex fallback en commentaire.
 - [x] **Lot 1** — `theme.css` Obsidian Warm + `grain.css` + `monaco-suxai-theme.ts`. Commit `4ba74a6`.
 - [x] **Lot 2** — `main.tsx` (fontsource imports) + `index.html` (anti-FOUC inline script + meta theme-color) + `globals.css` (réécrit). Commit `3af5e07`.
 - [x] **Lot 3** — `electron/main.ts` BrowserWindow (vibrancy/mica/trafficLights) + nativeTheme IPC handlers. Commit `b0ac169`.
+- [x] **Lot 4** — `TitleBar.css` réécrit + `SuxaiLogo.tsx/.css` token-driven. Commit `6d9a708`.
 
 ## Lots restants
 
-- [ ] **Lot 4** — `TitleBar.tsx/.css` + `WindowState.tsx`. Drag region + brand mark amber.
 - [ ] **Lot 5** — `Sidebar.tsx/.css` (header overline, row 24 px, active stripe slide).
 - [ ] **Lot 6** — `SourceControlPanel.css` + `BranchPicker.css`.
 - [ ] **Lot 7** — `EditorPanel.css` tab bar (strip 34 px, top accent stripe).

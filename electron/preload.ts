@@ -158,7 +158,10 @@ const api = {
     list: (workspaceRoot: string): Promise<
       { id: string; ts: number; files: string[]; conversationId?: string; trigger?: string }[]
     > => ipcRenderer.invoke('checkpoint:list', workspaceRoot),
-    restore: (workspaceRoot: string, turnId: string): Promise<{ restored: string[] }> =>
+    restore: (workspaceRoot: string, turnId: string): Promise<{
+      restored: string[];
+      failed: Array<{ path: string; reason: string }>;
+    }> =>
       ipcRenderer.invoke('checkpoint:restore', workspaceRoot, turnId),
   },
   terminal: {

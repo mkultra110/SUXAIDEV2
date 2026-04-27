@@ -498,12 +498,19 @@ function registerIpc() {
         return all.find((p) => p === abs);
       };
       const restored: string[] = [];
+      const failed: Array<{ path: string; reason: string }> = [];
       for (const abs of manifest.files) {
         const original = safePathFor(abs);
-        if (!original) continue;
+        if (!original) {
+          failed.push({ path: abs, reason: 'path not in manifest' });
+          continue;
+        }
         let safe: string;
         try { safe = sanitizeFsPath(original); }
-        catch { continue; }
+        catch (err) {
+          failed.push({ path: abs, reason: (err as Error).message });
+          continue;
+        }
         // The bak filename uses the ORIGINAL path with separators
         // replaced by __. To find it without the original-path map, we
         // walk the dir; for performance, we just compute the same
@@ -512,16 +519,20 @@ function registerIpc() {
         const target = baks.find(
           (b) => b.endsWith('.bak') && safe.endsWith(b.slice(0, -4).replace(/__/g, path.sep)),
         );
-        if (!target) continue;
+        if (!target) {
+          failed.push({ path: abs, reason: 'backup file not found' });
+          continue;
+        }
         try {
           const buf = await fs.readFile(path.join(dir, target));
           await fs.writeFile(safe, buf);
           restored.push(safe);
         } catch (err) {
           console.warn('[checkpoint] could not restore', abs, err);
+          failed.push({ path: abs, reason: (err as Error).message });
         }
       }
-      return { restored };
+      return { restored, failed };
     },
   );
 
@@ -929,6 +940,14 @@ function registerIpc() {
     const safeOld = sanitizeFsPath(oldPath, { mustExist: true });
     const safeNew = sanitizeFsPath(newPath);
     await fs.rename(safeOld, safeNew);
+    // Migrate cache from old path to new path so the next write to
+    // the renamed file doesn't get a false STALE_FILE error.
+    const oldMtime = lastSeenMtime.get(safeOld);
+    const oldQuirks = lastSeenQuirks.get(safeOld);
+    lastSeenMtime.delete(safeOld);
+    lastSeenQuirks.delete(safeOld);
+    if (oldMtime !== undefined) rememberMtime(safeNew, oldMtime);
+    if (oldQuirks !== undefined) lastSeenQuirks.set(safeNew, oldQuirks);
     return true;
   });
 
@@ -940,6 +959,10 @@ function registerIpc() {
     } else {
       await fs.unlink(safe);
     }
+    // Clear stale cache entries so a new file created at the same path
+    // doesn't hit a false-positive STALE_FILE on its first write.
+    lastSeenMtime.delete(safe);
+    lastSeenQuirks.delete(safe);
     return true;
   });
 

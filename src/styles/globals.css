@@ -1,7 +1,6 @@
 /* ============================================================
    Globals — base reset, ambient surface, scrollbars, primitives.
-   v0.17.0 visual refresh : refined ambient gradients, premium
-   scrollbars, refined glass utilities, new motion utilities.
+   v1.0.0 — premium V1 release.
    ============================================================ */
 
 *,
@@ -22,23 +21,24 @@ body,
 
 body {
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--fs-base);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-base);
   color: var(--color-text);
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   user-select: none;
-  /* v0.17.0 — kerning + variant ligatures so the UI numerals and
-     small-caps tokens read as polished, not "browser default". */
-  font-feature-settings: 'kern' 1, 'ss01' 1, 'cv11' 1;
+  /* v1.0 — full feature settings : kerning, contextual ligatures,
+     stylistic set 1 (Inter), tabular numbers in UI labels. */
+  font-feature-settings: 'kern' 1, 'calt' 1, 'ss01' 1, 'cv11' 1;
 }
 
-/* Ambient backdrop — layered radial gradients, slow drift + faint
-   grain so the surface has subtle organic texture rather than a
-   flat dark slab. v0.17.0 : warmer indigo tone-on-tone, plus a
-   third subtle cyan gradient for diagonal depth. */
+/* ============================================================
+   Ambient backdrop — v1.0 cinematic 4-source radial + slow drift
+   + subtle vignette overlay. Builds depth without distraction.
+   ============================================================ */
 body::before {
   content: '';
   position: fixed;
@@ -46,11 +46,12 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(1200px 600px at 8% -10%,  rgba(99, 102, 241, 0.14), transparent 60%),
-    radial-gradient(1000px 500px at 100% 110%, rgba(56, 189, 248, 0.07), transparent 60%),
-    radial-gradient(900px 500px at 50% 0%,    rgba(139, 142, 252, 0.06), transparent 60%);
-  filter: saturate(115%);
-  animation: suxai-ambient-drift 28s var(--ease-in-out) infinite alternate;
+    radial-gradient(900px 500px at 8% -10%,   rgba(99, 102, 241, 0.16), transparent 62%),
+    radial-gradient(800px 460px at 100% 110%, rgba(56, 189, 248, 0.08), transparent 62%),
+    radial-gradient(700px 420px at 50% 0%,    rgba(139, 142, 252, 0.07), transparent 62%),
+    radial-gradient(700px 460px at 100% 0%,   rgba(192, 132, 252, 0.05), transparent 62%);
+  filter: saturate(118%);
+  animation: suxai-ambient-drift 32s var(--ease-in-out) infinite alternate;
 }
 body::after {
   content: '';
@@ -58,26 +59,29 @@ body::after {
   inset: 0;
   pointer-events: none;
   z-index: 0;
-  /* faint vignette → focuses attention toward the editor */
   background:
-    radial-gradient(120% 80% at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.32) 100%);
+    radial-gradient(120% 80% at 50% 50%, transparent 56%, rgba(0, 0, 0, 0.34) 100%);
   mix-blend-mode: multiply;
 }
 
 @keyframes suxai-ambient-drift {
-  0%   { transform: translate3d(0, 0, 0)   scale(1); }
-  100% { transform: translate3d(0, -14px, 0) scale(1.03); }
+  0%   { transform: translate3d(0, 0, 0)   scale(1);    }
+  50%  { transform: translate3d(6px, -8px, 0) scale(1.02); }
+  100% { transform: translate3d(0, -16px, 0) scale(1.04); }
 }
 
-/* Native text selection — match accent palette. */
+/* ============================================================
+   Selection — v1.0 with subtle accent halo via text-shadow.
+   ============================================================ */
 ::selection {
-  background: rgba(125, 130, 248, 0.36);
+  background: rgba(125, 130, 248, 0.40);
   color: #ffffff;
+  text-shadow: 0 0 14px rgba(125, 130, 248, 0.45);
 }
 
 #root {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-base);
 }
 
 button,
@@ -110,12 +114,11 @@ code,
 pre {
   font-family: var(--font-mono);
   font-size: 12.5px;
-  font-feature-settings: 'liga' 1, 'calt' 1;
+  font-feature-settings: 'liga' 1, 'calt' 1, 'zero' 1;
 }
 
 /* ============================================================
-   Scrollbars — VS Code-style thin, transparent track, dim thumb
-   that brightens on hover. v0.17.0 : tuned to the new palette.
+   Scrollbars — v1.0 premium with subtle accent on active state.
    ============================================================ */
 ::-webkit-scrollbar {
   width: 10px;
@@ -134,14 +137,15 @@ pre {
   background-clip: padding-box;
 }
 ::-webkit-scrollbar-thumb:active {
-  background: rgba(125, 130, 248, 0.45);
+  background: linear-gradient(180deg, rgba(125, 130, 248, 0.55), rgba(99, 102, 241, 0.42));
   background-clip: padding-box;
+  box-shadow: 0 0 10px rgba(125, 130, 248, 0.30);
 }
 ::-webkit-scrollbar-corner { background: transparent; }
 
 /* ============================================================
-   Focus ring — uses tokens. v0.17.0 : adds inner-line so the
-   ring reads even on glassy surfaces.
+   Focus ring — uses tokens. v1.0 keeps the same value but it now
+   goes through the unified --focus-ring variable.
    ============================================================ */
 :focus-visible {
   outline: none;
@@ -161,21 +165,15 @@ pre {
   border: 1px solid var(--color-border);
 }
 
-/* Premium modal / palette surface — bicouche gradient (haut clair
-   → bas dense), inset highlight 1px, cushioned shadow + halo accent.
-   v0.17.0 : accent halo is more present, top inset doubled to read
-   as machined glass. */
 .glass-strong {
   background:
     linear-gradient(180deg, rgba(38, 46, 72, 0.82), rgba(22, 28, 48, 0.90));
   backdrop-filter: blur(26px) saturate(170%);
   -webkit-backdrop-filter: blur(26px) saturate(170%);
   border: 1px solid var(--color-border-strong);
-  box-shadow: var(--shadow-modal);
+  box-shadow: var(--elevation-modal);
 }
 
-/* Floating popover (tooltips, context menus) — lighter than modal
-   but still distinctly elevated. v0.17.0 new utility. */
 .glass-pop {
   background:
     linear-gradient(180deg, rgba(30, 38, 62, 0.94), rgba(20, 26, 46, 0.96));
@@ -217,4 +215,9 @@ pre {
 @keyframes suxai-shimmer {
   0%   { background-position: -120% 0; }
   100% { background-position:  220% 0; }
+}
+/* v1.0 — gentle "breathing" used by the agent dot, brand mark, etc. */
+@keyframes suxai-breathe {
+  0%, 100% { transform: scale(1);    opacity: 0.85; }
+  50%      { transform: scale(1.05); opacity: 1;    }
 }

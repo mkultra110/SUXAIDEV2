@@ -43,22 +43,27 @@
 .titlebar__brand {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  color: var(--color-text);
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-wide);
+  color: var(--color-text-strong);
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.34);
 }
 
+/* v1.0 — brand mark: dual-radial gradient + outer halo + breathe
+   animation. Matches the welcome screen's brand pill dot. */
 .titlebar__dot {
-  width: 9px; height: 9px;
+  width: 10px; height: 10px;
   border-radius: 50%;
   background:
-    radial-gradient(120% 120% at 30% 25%, #a4a7ff, #6366f1 65%, #4548c0 100%);
+    radial-gradient(120% 120% at 30% 25%, #b3b8fc 0%, #6366f1 60%, #4548c0 100%);
   box-shadow:
-    0 0 12px rgba(125, 130, 248, 0.7),
+    0 0 14px rgba(125, 130, 248, 0.78),
+    0 0 0 1.5px rgba(125, 130, 248, 0.18),
     0 0 0 1px rgba(255, 255, 255, 0.10) inset;
+  animation: suxai-breathe 4s var(--ease-in-out) infinite;
 }
 
 .titlebar__version {

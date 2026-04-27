@@ -12,7 +12,7 @@
 
 ## En cours
 
-_Aucun chantier actif. Démarrer par un plan ici avant la première édition de code._
+_Aucun chantier actif._
 
 ## Backlog (priorisé)
 
@@ -37,6 +37,34 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-27 — V1.0.0 refonte premium "digne du nom V1"
+- **Fait** :
+  - Phase A : type scale complet (--fs-2xs → --fs-3xl), poids
+    (--fw-regular/medium/semibold/bold), line-heights, letter-
+    spacing tokens. Système d'élévation explicite (--elevation-0 à
+    -4 + -modal). Z-index ladder consolidé (--z-base/floor/tooltip/
+    dropdown/overlay/modal/popover/toast). Tokens additionnels :
+    --color-bg-overlay, --color-text-strong-2, --ease-snap.
+  - Phase B : globals.css refait avec ambient 4-source + drift plus
+    long (32 s) + vignette. Selection avec text-shadow halo accent.
+    Scrollbar active state avec gradient indigo + glow. Animation
+    suxai-breathe ajoutée (gentle pulse 3-4 s).
+  - Phase B-Monaco : theme `suxai-dark` upgradé — palette indigo
+    plus saturée (8b8efc keywords, b3b8fc operators), bracket
+    highlight 6 niveaux, suggest/hover widgets stylés, gutter avec
+    indicateurs add/modified/deleted, scrollbar slider en accent.
+  - Phase C : Welcome cinematic — hero h2 26→34 px en font-display
+    avec drop-shadow accent, brand pill avec dot animé (breathe) +
+    halo, ambient parallax via animation drift, padding élargi.
+  - Phase D : Button utilise font tokens (sans/medium/snug),
+    transitions harmonisées sur dur-fast, hover ajoute lift 1 px
+    partout. TitleBar brand mark avec halo + breathe. Sidebar label
+    + StatusBar typo via tokens.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Suivi** : la suite logique serait un onglet de réglages de
+  thème (dark / dark+ / high-contrast) qui swap entre palettes.
+  Hors-scope V1.
 
 ### 2026-04-27 — refonte visuelle v0.17.0 → v0.17.4
 - **Fait** : refonte complète du système de tokens (theme.css 5-step

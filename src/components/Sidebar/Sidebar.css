@@ -27,9 +27,9 @@
 }
 
 .sidebar__label {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-widest);
   text-transform: uppercase;
   color: var(--color-text-muted);
 }

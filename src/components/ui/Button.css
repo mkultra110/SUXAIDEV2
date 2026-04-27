@@ -17,13 +17,14 @@
   color: var(--btn-fg);
   border: 1px solid var(--btn-border);
   box-shadow: var(--btn-shadow);
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-family: var(--font-sans);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-snug);
   transition:
-    background var(--dur-base) var(--ease-out),
-    color var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out),
-    box-shadow var(--dur-base) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
   cursor: pointer;
   white-space: nowrap;
@@ -32,10 +33,11 @@
 
 .sx-btn:hover:not(:disabled) {
   background: var(--btn-bg-hover);
+  transform: translateY(-1px);
 }
 
 .sx-btn:active:not(:disabled) {
-  transform: translateY(1px);
+  transform: translateY(0);
 }
 
 .sx-btn:disabled {

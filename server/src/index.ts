@@ -50,20 +50,20 @@ app.use(
   }),
 );
 
-// 64 MB body limit (v0.11.1, was 32 MB). Lets a single agent turn
-// carry several big attachments (8 MB per block × a handful of
-// files) plus a long rolling tool history without hitting 413.
-// The per-field zod caps in server/src/schemas/ai.ts remain the
-// real safety net; this value is the outer wall so the JSON
-// parser doesn't blow up before schema validation can give a
-// precise error.
-app.use(express.json({ limit: '64mb' }));
-
 app.get('/health', (_req, res) => res.json({ ok: true, version: env.UPDATE_VERSION }));
 
-app.use('/auth', authRouter);
-app.use('/ai', aiRouter);
+// Auth endpoints only need small payloads (credentials, refresh tokens,
+// license keys). Capping at 4 KB prevents bandwidth-waste attacks
+// against the login endpoint where a 64 MB body would parse before
+// schema validation runs.
+app.use('/auth', express.json({ limit: '4kb' }), authRouter);
+
+// Update endpoint is GET-only — body parser not needed.
 app.use('/update', updateRouter);
+
+// AI routes carry large attachments (agent context, file contents).
+// 64 MB outer cap; per-field Zod limits are the real safety net.
+app.use('/ai', express.json({ limit: '64mb' }), aiRouter);
 
 app.use(notFound);
 app.use(errorHandler);
@@ -81,7 +81,9 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', (reason) => {
   console.error('[unhandledRejection]', reason);
+  process.exit(1);
 });
 process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err);
+  process.exit(1);
 });

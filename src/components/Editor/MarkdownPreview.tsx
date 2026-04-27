@@ -51,7 +51,9 @@ export function MarkdownPreview({ source, basePath }: Props) {
         ADD_ATTR: ['target', 'rel'],
       });
     } catch (err) {
-      return `<p class="mdpreview__error">Markdown render failed: ${(err as Error).message}</p>`;
+      const safeMsg = String((err as Error).message)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      return `<p class="mdpreview__error">Markdown render failed: ${safeMsg}</p>`;
     }
   }, [source]);
 
@@ -76,12 +78,14 @@ export function MarkdownPreview({ source, basePath }: Props) {
         return;
       }
       // Relative path — try to reveal in the OS file explorer next
-      // to the markdown file. We don't auto-open in the editor here
-      // because the link could be a pdf/png/etc.
+      // to the markdown file. Reject any href that escapes the workspace
+      // via path traversal (e.g. ../../../etc/passwd).
       if (basePath && window.suxai?.fs?.revealInFolder) {
         const dir = basePath.replace(/[\\/][^\\/]+$/, '');
-        const target = href.replace(/^\.\//, '');
-        const abs = dir + '/' + target;
+        const rawTarget = href.replace(/^\.\//, '');
+        // Block traversal sequences: segments that are ".." or start with them.
+        if (/(?:^|[/\\])\.\.(?:[/\\]|$)/.test(rawTarget)) return;
+        const abs = dir + '/' + rawTarget;
         try { void window.suxai.fs.revealInFolder(abs); } catch { /* */ }
       }
     };

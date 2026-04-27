@@ -262,7 +262,9 @@ function registerIpc() {
     // without bound. The cap is generous enough for thousands of
     // typical conversations + thinking blocks + tool I/O.
     const json = JSON.stringify(data);
-    if (json.length > 16 * 1024 * 1024) {
+    // Use byte length (not string length) — multi-byte UTF-8 chars can
+    // expand the on-disk size by up to 4× vs the JS string length.
+    if (Buffer.byteLength(json, 'utf8') > 16 * 1024 * 1024) {
       throw new Error('Conversations payload too large (>16 MB)');
     }
     await fs.mkdir(USER_DATA(), { recursive: true });

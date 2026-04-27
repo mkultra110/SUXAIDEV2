@@ -13,7 +13,7 @@ import { useEditorContextTracker } from '../../lib/editor-context-tracker';
 import { registerTabCompletion } from '../../lib/tab-completion';
 import { consumePendingReveal } from '../../lib/reveal';
 import { useRecent, removeRecentIfMissing } from '../../lib/recent';
-import { syncTypeScriptExtraLibs } from '../../lib/lsp-ts';
+import { syncTypeScriptExtraLibs, syncNodeModulesTypes } from '../../lib/lsp-ts';
 import { ensureSnippetProvider } from '../../lib/snippets';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
@@ -87,6 +87,7 @@ export function EditorPanel() {
     updateActiveContent,
     setSelection,
     pendingDiff,
+    workspaceRoot,
     newUntitled,
     reopenLastClosed,
     saveActiveFile,
@@ -177,6 +178,15 @@ export function EditorPanel() {
   useEffect(() => {
     syncTypeScriptExtraLibs(openFiles);
   }, [openFiles]);
+
+  // v0.16.14 — when the workspace flips, walk node_modules/@types/*
+  // and each direct dep's typings entry, addExtraLib them all to
+  // Monaco's TS service. One-shot per workspace (idempotent if
+  // workspaceRoot stays the same). Fire-and-forget : if node_modules
+  // is missing we just don't register any typings.
+  useEffect(() => {
+    void syncNodeModulesTypes(workspaceRoot);
+  }, [workspaceRoot]);
 
   // v0.16.11 — register the user-snippets completion provider once.
   // Cache loads asynchronously ; subsequent saves refresh in-place

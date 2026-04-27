@@ -2012,6 +2012,101 @@ function registerIpc() {
     }
   });
 
+  // v0.16.14 — Walk node_modules/@types/*/index.d.ts and node_modules/
+  // <pkg>/<entry>.d.ts so the renderer-side TypeScript service can
+  // resolve `import { useState } from 'react'` etc. without spawning
+  // a full typescript-language-server.
+  //
+  // Strategy : start at safeCwd, walk up to find package.json with
+  // dependencies, then enumerate node_modules/@types/* + the
+  // typings: / types: fields of each direct dep's package.json.
+  //
+  // Hard caps to keep boot time + bundle bounded :
+  //   100 packages max
+  //   200 KB per .d.ts (plenty for almost every real-world type pkg)
+  //   8 MB total payload
+  ipcMain.handle('lsp:node-modules-types', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+
+    // Find the closest package.json upwards (max 6 levels).
+    let pkgRoot = safeCwd;
+    let pkg: { dependencies?: Record<string, string>; devDependencies?: Record<string, string> } | null = null;
+    for (let depth = 0; depth < 6; depth++) {
+      try {
+        const raw = await fs.readFile(path.join(pkgRoot, 'package.json'), 'utf8');
+        pkg = JSON.parse(raw);
+        break;
+      } catch {
+        const parent = path.dirname(pkgRoot);
+        if (parent === pkgRoot) break;
+        pkgRoot = parent;
+      }
+    }
+    if (!pkg) return { ok: true, libs: [], pkgRoot: null };
+
+    const nodeModules = path.join(pkgRoot, 'node_modules');
+    const libs: { uri: string; content: string }[] = [];
+    let totalBytes = 0;
+    const TYPES_PER_FILE_MAX = 200 * 1024;
+    const TYPES_TOTAL_MAX = 8 * 1024 * 1024;
+    const TYPES_PKG_MAX = 100;
+
+    async function tryRead(rel: string, packageName: string): Promise<void> {
+      if (libs.length >= TYPES_PKG_MAX) return;
+      if (totalBytes >= TYPES_TOTAL_MAX) return;
+      const full = path.join(nodeModules, rel);
+      try {
+        const stat = await fs.stat(full);
+        if (!stat.isFile()) return;
+        if (stat.size > TYPES_PER_FILE_MAX) return;
+        const content = await fs.readFile(full, 'utf8');
+        if (totalBytes + content.length > TYPES_TOTAL_MAX) return;
+        totalBytes += content.length;
+        // URI scheme matches what the renderer's lsp-ts.ts uses.
+        libs.push({
+          uri: `file:///node_modules/${rel.replace(/\\/g, '/')}`,
+          content: `declare module '${packageName}' {\n${content}\n}`,
+        });
+      } catch { /* file vanished or perm denied — skip */ }
+    }
+
+    // Pass 1 : DefinitelyTyped @types/* packages.
+    try {
+      const atTypes = path.join(nodeModules, '@types');
+      const dirs = await fs.readdir(atTypes);
+      for (const d of dirs) {
+        if (libs.length >= TYPES_PKG_MAX) break;
+        await tryRead(path.join('@types', d, 'index.d.ts'), d);
+      }
+    } catch { /* no @types — fine */ }
+
+    // Pass 2 : packages that ship their own typings (typings field
+    // or types field in package.json, OR a default index.d.ts).
+    const directDeps = {
+      ...(pkg.dependencies ?? {}),
+      ...(pkg.devDependencies ?? {}),
+    };
+    for (const dep of Object.keys(directDeps)) {
+      if (libs.length >= TYPES_PKG_MAX) break;
+      if (dep.startsWith('@types/')) continue;
+      try {
+        const depPkgRaw = await fs.readFile(path.join(nodeModules, dep, 'package.json'), 'utf8');
+        const depPkg = JSON.parse(depPkgRaw) as { types?: string; typings?: string; main?: string };
+        const dts = depPkg.types ?? depPkg.typings;
+        if (dts) {
+          await tryRead(path.join(dep, dts), dep);
+        } else {
+          // Fall back to index.d.ts next to main, or just the package root.
+          await tryRead(path.join(dep, 'index.d.ts'), dep);
+        }
+      } catch { /* missing pkg or no typings — fine */ }
+    }
+
+    return { ok: true, libs, pkgRoot };
+  });
+
   // v0.16.12 — Workspace tasks (.suxai/tasks.json). VSCode-style :
   //   { "version": "1.0", "tasks": [{ "label": "Build", "command": "npm run build", "group": "build" }] }
   // Command (string) is run via terminal:run-once when the user picks

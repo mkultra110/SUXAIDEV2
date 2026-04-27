@@ -140,4 +140,47 @@ export function disposeAllTsExtraLibs(): void {
     try { d.dispose(); } catch { /* */ }
   }
   registered.clear();
+  for (const d of nodeModulesRegistered.values()) {
+    try { d.dispose(); } catch { /* */ }
+  }
+  nodeModulesRegistered.clear();
+}
+
+// ============================================================
+// v0.16.14 — node_modules @types resolution. One-shot per workspace
+// (re-fetched whenever workspaceRoot changes). The IPC handler in
+// main.ts walks node_modules/@types/* + reads each direct dep's
+// `types` / `typings` package.json field. Capped at 100 packages /
+// 200 KB per file / 8 MB total so the TS service doesn't choke on
+// a 5K-package monorepo.
+// ============================================================
+
+const nodeModulesRegistered = new Map<string, monaco.IDisposable>();
+let lastSyncedWorkspaceRoot: string | null = null;
+
+export async function syncNodeModulesTypes(workspaceRoot: string | null): Promise<void> {
+  if (lastSyncedWorkspaceRoot === workspaceRoot) return;
+  lastSyncedWorkspaceRoot = workspaceRoot;
+  // Tear down previous registrations whenever the workspace flips.
+  for (const d of nodeModulesRegistered.values()) {
+    try { d.dispose(); } catch { /* */ }
+  }
+  nodeModulesRegistered.clear();
+  if (!workspaceRoot || !window.suxai?.lsp?.nodeModulesTypes) return;
+  configureOnce();
+  try {
+    const res = await window.suxai.lsp.nodeModulesTypes({ cwd: workspaceRoot });
+    if (!res.ok) return;
+    const ts = monaco.languages.typescript;
+    for (const lib of res.libs) {
+      // addExtraLib accepts (content, filePath?). The filePath is the
+      // URI Monaco's TS service uses to resolve `import 'react'` etc.
+      const dispose = ts.typescriptDefaults.addExtraLib(lib.content, lib.uri);
+      ts.javascriptDefaults.addExtraLib(lib.content, lib.uri);
+      nodeModulesRegistered.set(lib.uri, dispose);
+    }
+  } catch {
+    /* node_modules absent / IPC down — fine, the LSP-lite still works
+       for cross-tab files even without third-party typings. */
+  }
 }

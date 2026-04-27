@@ -181,6 +181,17 @@ const api = {
       ok: true
     } | { ok: false; error: string }> => ipcRenderer.invoke('mcp:save-config', input),
   },
+  lsp: {
+    /** v0.16.14 — walk node_modules/@types/* + each direct dep's
+     *  typings entry to feed Monaco's TS service so cross-package
+     *  imports resolve (React, Express, lodash, …). Capped at
+     *  100 packages / 200 KB per file / 8 MB total. */
+    nodeModulesTypes: (input: { cwd: string }): Promise<{
+      ok: true;
+      libs: { uri: string; content: string }[];
+      pkgRoot: string | null;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('lsp:node-modules-types', input),
+  },
   tasks: {
     /** v0.16.12 — read .suxai/tasks.json from a workspace root.
      *  Returns at most 100 tasks ; each has label + command + optional

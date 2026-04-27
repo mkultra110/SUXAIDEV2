@@ -631,7 +631,10 @@ function registerIpc() {
     // subsequent read would happily return /etc/passwd content.
     // realpath also collapses any chain so loops throw ELOOP from
     // the OS — we let that bubble up as "Access denied".
-    if (mustExist) {
+    // v0.17: run the symlink check whenever the path exists, not just
+    // when mustExist=true — a write through a symlink pointing to a
+    // deny-listed target is just as dangerous as a read.
+    if (fsSync.existsSync(normalized)) {
       try {
         const real = fsSync.realpathSync.native(normalized);
         if (real !== normalized) {
@@ -1029,7 +1032,7 @@ function registerIpc() {
     // child process or get serialised oddly. Return false on bad input
     // instead of throwing so the renderer sees a clean rejection.
     if (typeof id !== 'string' || id.length === 0) return false;
-    if (typeof data !== 'string') return false;
+    if (typeof data !== 'string' || data.length === 0) return false;
     const s = sessions.get(id);
     if (!s) return false;
     try {

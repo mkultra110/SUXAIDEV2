@@ -228,7 +228,11 @@ export function streamAi(
       if ((err as Error).name === 'AbortError') return;
       handlers.onError?.(err as Error);
     }
-  })();
+  })().catch((err: unknown) => {
+    if ((err as Error)?.name !== 'AbortError') {
+      handlers.onError?.(err instanceof Error ? err : new Error(String(err)));
+    }
+  });
 
   return () => controller.abort();
 }

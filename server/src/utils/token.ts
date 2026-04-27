@@ -15,12 +15,12 @@ export interface RefreshClaims {
 }
 
 export function signAccessToken(payload: Omit<AccessClaims, 'type'>): string {
-  const opts: SignOptions = { expiresIn: env.JWT_ACCESS_TTL as SignOptions['expiresIn'] };
+  const opts: SignOptions = { algorithm: 'HS256', expiresIn: env.JWT_ACCESS_TTL as SignOptions['expiresIn'] };
   return jwt.sign({ ...payload, type: 'access' }, env.JWT_SECRET, opts);
 }
 
 export function signRefreshToken(payload: Omit<RefreshClaims, 'type'>): string {
-  const opts: SignOptions = { expiresIn: env.JWT_REFRESH_TTL as SignOptions['expiresIn'] };
+  const opts: SignOptions = { algorithm: 'HS256', expiresIn: env.JWT_REFRESH_TTL as SignOptions['expiresIn'] };
   return jwt.sign({ ...payload, type: 'refresh' }, env.JWT_SECRET, opts);
 }
 

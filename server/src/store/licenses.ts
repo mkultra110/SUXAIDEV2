@@ -54,7 +54,7 @@ async function readAll(): Promise<LicenseRecord[]> {
 
 async function writeAll(records: LicenseRecord[]): Promise<void> {
   await ensureDataDir();
-  const tmp = `${DB_FILE}.${process.pid}.tmp`;
+  const tmp = `${DB_FILE}.${process.pid}.${Date.now()}.${crypto.randomBytes(4).toString('hex')}.tmp`;
   // v0.15.10 (audit-4 #3) — open/write/fsync/close/rename so a power
   // loss between the writeFile and the rename can't lose redeemed-state.
   // Without fsync the kernel may buffer the write and the rename

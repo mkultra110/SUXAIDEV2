@@ -93,6 +93,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!cancelled) setState({ user, token, status: 'authenticated', error: null });
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {
+            // Before giving up, try to refresh using the stored refresh token.
+            // The refresh hook isn't installed yet at bootstrap time, so we
+            // call the refresh API directly here.
+            try {
+              const refreshToken = await window.suxai.auth.getRefreshToken();
+              if (refreshToken && !cancelled) {
+                const res = await authApi.refresh(refreshToken);
+                if (!cancelled) {
+                  await window.suxai.auth.setToken(res.token);
+                  if (res.refreshToken) {
+                    await window.suxai.auth.setRefreshToken(res.refreshToken);
+                  }
+                  setState({ user: res.user, token: res.token, status: 'authenticated', error: null });
+                  return;
+                }
+              }
+            } catch {
+              // Refresh also failed — fall through to full logout.
+            }
             await window.suxai.auth.clearToken();
             await window.suxai.auth.clearRefreshToken();
           }

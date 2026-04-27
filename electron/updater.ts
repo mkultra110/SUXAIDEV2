@@ -111,7 +111,7 @@ export class UpdateManager {
     return true;
   }
 
-  private downloadWithProgress(url: string, destPath: string, expectedSize?: number) {
+  private downloadWithProgress(url: string, destPath: string, expectedSize?: number, redirectDepth = 0) {
     return new Promise<void>((resolve, reject) => {
       // v0.15.10 (audit-2 #1, #4) — installer downloads MUST use HTTPS,
       // never HTTP. A misconfig / env-var injection on URL_BASE would
@@ -119,6 +119,12 @@ export class UpdateManager {
       // against MITM rewriting.
       if (!url.startsWith('https://')) {
         reject(new Error('Installer URL must use HTTPS'));
+        return;
+      }
+      // Guard against redirect loops (e.g. server redirecting to itself
+      // indefinitely). 5 hops is generous for any legitimate CDN chain.
+      if (redirectDepth > 5) {
+        reject(new Error('Too many redirects'));
         return;
       }
       const client = https;
@@ -149,7 +155,7 @@ export class UpdateManager {
           }
           file.close();
           fs.unlink(destPath, () => {});
-          this.downloadWithProgress(nextUrl.toString(), destPath, expectedSize).then(resolve, reject);
+          this.downloadWithProgress(nextUrl.toString(), destPath, expectedSize, redirectDepth + 1).then(resolve, reject);
           return;
         }
         if (res.statusCode !== 200) {
@@ -182,7 +188,7 @@ export class UpdateManager {
     });
   }
 
-  private fetchJson<T>(url: string): Promise<T> {
+  private fetchJson<T>(url: string, redirectDepth = 0): Promise<T> {
     return new Promise((resolve, reject) => {
       // v0.15.10 (audit-2 #4, #7) — manifest fetch is the entire trust
       // root for the updater (the SHA-256 verifying the binary lives
@@ -190,6 +196,10 @@ export class UpdateManager {
       // and the SHA — refuse it.
       if (!url.startsWith('https://')) {
         reject(new Error('Manifest URL must use HTTPS'));
+        return;
+      }
+      if (redirectDepth > 5) {
+        reject(new Error('Too many redirects'));
         return;
       }
       const client = https;
@@ -207,7 +217,7 @@ export class UpdateManager {
             reject(new Error('Cross-origin manifest redirect refused'));
             return;
           }
-          this.fetchJson<T>(nextUrl.toString()).then(resolve, reject);
+          this.fetchJson<T>(nextUrl.toString(), redirectDepth + 1).then(resolve, reject);
           return;
         }
         if (res.statusCode !== 200) {

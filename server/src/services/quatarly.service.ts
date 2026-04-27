@@ -617,9 +617,10 @@ async function streamAnthropic(modelId: string, req: AiRequestInput, h: StreamHa
         try {
           obj = JSON.parse(payload);
         } catch {
-          // Malformed JSON in a data: payload should NEVER happen
-          // from Anthropic. Log silently and keep going — continuing
-          // is safer than tearing the whole stream down.
+          // Malformed JSON in a data: payload is unexpected from Anthropic.
+          // Log so it shows up in /opt/suxai/logs/server.log, then
+          // keep going — continuing is safer than tearing down the stream.
+          console.warn('[quatarly] malformed SSE JSON (truncated):', payload.slice(0, 120));
           continue;
         }
 

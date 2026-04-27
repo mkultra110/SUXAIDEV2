@@ -24,7 +24,7 @@ export const AI_MODELS: AiModel[] = [
   { id: 'gemini-3.1-pro',             label: 'Gemini 3.1 Pro',               provider: 'openai',    tag: 'balanced' },
   { id: 'gemini-3-flash',             label: 'Gemini 3 Flash',               provider: 'openai',    tag: 'fast' },
   { id: 'gpt-5.4',                    label: 'GPT-5.4',                      provider: 'openai',    tag: 'balanced' },
-  { id: 'gpt-5.2',                    label: 'GPT-5.2',                      provider: 'openai' },
+  { id: 'gpt-5.2',                    label: 'GPT-5.2',                      provider: 'openai',    tag: 'balanced' },
   { id: 'gpt-5.1-codex',              label: 'GPT-5.1 Codex',                provider: 'openai',    tag: 'code' },
   { id: 'gpt-5.1-codex-max',          label: 'GPT-5.1 Codex Max',            provider: 'openai',    tag: 'code' },
   { id: 'gpt-5.2-codex',              label: 'GPT-5.2 Codex',                provider: 'openai',    tag: 'code' },

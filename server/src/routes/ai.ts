@@ -215,9 +215,13 @@ router.post(
     const startedAt = Date.now();
     const result = await applyLazyEdit(req.body);
     // Track elapsed against the daily budget — apply calls are cheap
-    // but they still cost real money on Quatarly.
+    // but they still cost real money on Quatarly. Awaited here because
+    // the response hasn't been sent yet; ensures usage is persisted
+    // before returning.
     const elapsed = Date.now() - startedAt;
-    userStore.trackUsage(userId, elapsed).catch(() => { /* */ });
+    await userStore.trackUsage(userId, elapsed).catch((err: unknown) => {
+      console.error('[ai] failed to track apply usage:', err);
+    });
     if (result == null) {
       res.status(502).json({
         message: 'Apply model failed; falling back to the raw lazy edit.',

@@ -116,8 +116,10 @@ async function rawRequest<T>(pathname: string, opts: RequestOptions): Promise<T>
     const json = text ? safeParse(text) : null;
 
     if (!res.ok) {
-      const msg = (json && (json.message || json.error)) || `Request failed: ${res.status}`;
-      throw new ApiError(msg, res.status, json?.code);
+      const msg =
+        (json && ((json.message as string | undefined) || (json.error as string | undefined))) ||
+        `Request failed: ${res.status}`;
+      throw new ApiError(msg, res.status, json?.code as string | undefined);
     }
     return json as T;
   } catch (err) {
@@ -155,9 +157,13 @@ async function request<T = unknown>(pathname: string, opts: RequestOptions = {})
   }
 }
 
-function safeParse(text: string): any {
+function safeParse(text: string): Record<string, unknown> | null {
   try {
-    return JSON.parse(text);
+    const val: unknown = JSON.parse(text);
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+      return val as Record<string, unknown>;
+    }
+    return null;
   } catch {
     return null;
   }

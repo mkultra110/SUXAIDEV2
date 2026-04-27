@@ -1416,7 +1416,7 @@ function registerIpc() {
   // absolute if outside the workspaceRoot path normalisation), and we
   // re-resolve them server-side via `git rev-parse --show-toplevel`
   // to be defensive against renderer compromise.
-  const runGitNoTimeout = (cwd: string, args: string[], stdin?: string): Promise<{ code: number; stdout: string; stderr: string }> =>
+  const runGitCapped = (cwd: string, args: string[], stdin?: string): Promise<{ code: number; stdout: string; stderr: string }> =>
     new Promise((resolve) => {
       let stdout = '';
       let stderr = '';
@@ -1460,7 +1460,7 @@ function registerIpc() {
     });
 
   const resolveRepoRoot = async (cwd: string): Promise<string | null> => {
-    const r = await runGitNoTimeout(cwd, ['rev-parse', '--show-toplevel']);
+    const r = await runGitCapped(cwd, ['rev-parse', '--show-toplevel']);
     if (r.code !== 0) return null;
     try { return sanitizeFsPath(r.stdout.trim(), { mustExist: true }); }
     catch { return null; }
@@ -1492,7 +1492,7 @@ function registerIpc() {
       safePaths.push(rel);
     }
     if (safePaths.length === 0) return { ok: false, error: 'no valid paths' };
-    const r = await runGitNoTimeout(root, ['add', '--', ...safePaths]);
+    const r = await runGitCapped(root, ['add', '--', ...safePaths]);
     if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'git add failed' };
     return { ok: true };
   });
@@ -1524,9 +1524,9 @@ function registerIpc() {
     // `git restore --staged` is the modern equivalent of `reset HEAD`.
     // Falls back to `reset HEAD` on git < 2.23 which still ships on
     // older Debian/RHEL.
-    let r = await runGitNoTimeout(root, ['restore', '--staged', '--', ...safePaths]);
+    let r = await runGitCapped(root, ['restore', '--staged', '--', ...safePaths]);
     if (r.code !== 0 && /unknown subcommand|unknown switch|usage:/i.test(r.stderr)) {
-      r = await runGitNoTimeout(root, ['reset', 'HEAD', '--', ...safePaths]);
+      r = await runGitCapped(root, ['reset', 'HEAD', '--', ...safePaths]);
     }
     if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'unstage failed' };
     return { ok: true };
@@ -1546,7 +1546,7 @@ function registerIpc() {
     if (!root) return { ok: false, error: 'not_a_git_repo' };
     // Pass the message via stdin (-F -) to avoid argv-length limits and
     // to side-step shell-escape headaches on multiline commits.
-    const r = await runGitNoTimeout(root, ['commit', '-F', '-'], input.message);
+    const r = await runGitCapped(root, ['commit', '-F', '-'], input.message);
     if (r.code !== 0) {
       const err = (r.stderr || r.stdout).trim();
       // Distinguish "nothing to commit" (return as friendly error) from

@@ -152,6 +152,35 @@ const api = {
       sha: string | null;
     } | { ok: false; error: string }> => ipcRenderer.invoke('git:commit', input),
   },
+  mcp: {
+    /** v0.16.10 — list configured MCP servers + their connection status. */
+    listServers: (): Promise<Array<{
+      name: string;
+      command: string;
+      args: string[];
+      status: 'starting' | 'ready' | 'error';
+      errorMsg?: string;
+      toolCount: number;
+    }>> => ipcRenderer.invoke('mcp:list-servers'),
+    /** List tools across all (or one specific) connected server. */
+    listTools: (input: { server?: string } = {}): Promise<Array<{
+      server: string;
+      name: string;
+      description?: string;
+    }>> => ipcRenderer.invoke('mcp:list-tools', input),
+    /** Invoke an MCP tool by server + name. */
+    callTool: (input: { server: string; tool: string; arguments?: unknown }): Promise<{
+      ok: true; result: unknown
+    } | { ok: false; error: string }> => ipcRenderer.invoke('mcp:call-tool', input),
+    /** Read the on-disk config (mcp.json under userData). */
+    readConfig: (): Promise<{
+      ok: true; config: { servers?: Record<string, unknown> }; path: string
+    }> => ipcRenderer.invoke('mcp:read-config'),
+    /** Persist a new config + reload affected servers. */
+    saveConfig: (input: { config: unknown }): Promise<{
+      ok: true
+    } | { ok: false; error: string }> => ipcRenderer.invoke('mcp:save-config', input),
+  },
   history: {
     /** v0.16.7 — fire-and-forget snapshot of file content. Skips if
      *  identical to last snapshot, if < 5s since last, or if > 4 MB.

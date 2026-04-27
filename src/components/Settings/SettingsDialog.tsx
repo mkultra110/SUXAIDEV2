@@ -5,6 +5,7 @@ import { useSettings } from '../../lib/settings';
 import { AI_MODELS } from '../../config';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useMemories, deleteMemory } from '../../lib/memories';
+import { useMcpServers, readMcpConfig } from '../../lib/mcp';
 import './SettingsDialog.css';
 
 export function SettingsDialog() {
@@ -162,6 +163,8 @@ export function SettingsDialog() {
               </div>
             )}
           </Section>
+
+          <McpSection />
         </div>
 
         <div className="settings__foot">
@@ -204,5 +207,67 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     >
       <span className="settings__toggle-thumb" />
     </button>
+  );
+}
+
+/**
+ * v0.16.10 — MCP servers panel. Shows the list of configured servers
+ * (read-only for foundations release) with their connection status
+ * and a hint to the on-disk config path. Edit-by-form ships in a
+ * later release once we've validated the wire protocol works in the
+ * wild.
+ */
+function McpSection() {
+  const servers = useMcpServers();
+  const [configPath, setConfigPath] = useState<string>('');
+
+  useEffect(() => {
+    void readMcpConfig().then((res) => setConfigPath(res.path));
+  }, []);
+
+  const total = servers.length;
+  const ready = servers.filter((s) => s.status === 'ready').length;
+
+  return (
+    <div className="settings__section">
+      <div className="settings__section-title">
+        MCP Servers ({ready}/{total} connected)
+      </div>
+      <div className="settings__section-body">
+        {servers.length === 0 ? (
+          <div className="settings__hint">
+            No MCP server configured. Drop a JSON config at <code>{configPath || 'userData/mcp.json'}</code> with the shape{' '}
+            <code>{'{ "servers": { "fs": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/your/folder"] } } }'}</code>{' '}
+            then re-open Settings to see it appear here. Tools are discovered automatically once a server connects ; agent loop integration ships in a later version.
+          </div>
+        ) : (
+          <ul className="settings__mcp-list">
+            {servers.map((s) => (
+              <li key={s.name} className={`settings__mcp settings__mcp--${s.status}`}>
+                <div className="settings__mcp-row">
+                  <span className={`settings__mcp-dot settings__mcp-dot--${s.status}`} aria-hidden />
+                  <span className="settings__mcp-name">{s.name}</span>
+                  <span className="settings__mcp-status">{s.status}</span>
+                  <span className="settings__mcp-tools">
+                    {s.toolCount > 0 ? `${s.toolCount} tool${s.toolCount > 1 ? 's' : ''}` : '—'}
+                  </span>
+                </div>
+                <div className="settings__mcp-cmd" title={`${s.command} ${(s.args ?? []).join(' ')}`}>
+                  <code>{s.command} {(s.args ?? []).join(' ')}</code>
+                </div>
+                {s.errorMsg && (
+                  <div className="settings__mcp-err">{s.errorMsg.slice(0, 320)}</div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {configPath && (
+          <div className="settings__hint" style={{ marginTop: 10, fontSize: 11 }}>
+            Config file: <code>{configPath}</code>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

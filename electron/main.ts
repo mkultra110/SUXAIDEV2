@@ -27,6 +27,10 @@ const CONVERSATIONS_FILE = () => path.join(USER_DATA(), 'conversations.json');
 // the human-readable filename even after a rename / move.
 const HISTORY_DIR = () => path.join(USER_DATA(), 'History');
 
+// v0.16.10 — MCP servers config. Plain JSON keyed by name :
+// { servers: { fs: { command: 'npx', args: ['-y','@modelcontextprotocol/server-filesystem','/path'] } } }
+const MCP_CONFIG = () => path.join(USER_DATA(), 'mcp.json');
+
 let mainWindow: BrowserWindow | null = null;
 let updateManager: UpdateManager | null = null;
 
@@ -1709,6 +1713,277 @@ function registerIpc() {
     try {
       const content = await fs.readFile(resolved, 'utf8');
       return { ok: true, content };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  // v0.16.10 — MCP (Model Context Protocol) foundations. Stdio JSON-RPC
+  // 2.0 client written in-house (the official @modelcontextprotocol/sdk
+  // pulls in Express + Hono + AJV ~150 MB which is overkill for a
+  // stdio-only client). MCP stdio framing is newline-delimited JSON,
+  // not LSP's Content-Length, so this is ~150 LOC.
+  //
+  // Lifecycle :
+  //   1. Read ~/userData/mcp.json on startup (lazy)
+  //   2. Spawn each enabled server, send `initialize`, then `tools/list`
+  //   3. Cache the discovered tools per-server
+  //   4. IPC `mcp:list-servers` / `mcp:list-tools` / `mcp:call-tool` /
+  //      `mcp:read-config` / `mcp:save-config`
+  //
+  // NOT integrated with the agent loop yet — that touches src/lib/agent.ts
+  // (audit-protected zone). The user can configure servers + see them
+  // connect ; agent integration ships in a later version once the
+  // foundations are validated.
+  interface McpServerSpec { command: string; args?: string[]; env?: Record<string, string>; disabled?: boolean }
+  interface McpConfig { servers?: Record<string, McpServerSpec> }
+  interface McpToolSpec { name: string; description?: string; inputSchema?: unknown }
+  interface McpClient {
+    name: string;
+    spec: McpServerSpec;
+    child: ChildProcessWithoutNullStreams;
+    nextId: number;
+    pending: Map<number, { resolve: (r: unknown) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>;
+    tools: McpToolSpec[];
+    status: 'starting' | 'ready' | 'error';
+    errorMsg?: string;
+    buffer: string;
+  }
+  const mcpClients = new Map<string, McpClient>();
+  const MCP_REQUEST_TIMEOUT_MS = 15_000;
+
+  function mcpRequest(c: McpClient, method: string, params?: unknown): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const id = c.nextId++;
+      const timer = setTimeout(() => {
+        c.pending.delete(id);
+        reject(new Error(`mcp request "${method}" timed out`));
+      }, MCP_REQUEST_TIMEOUT_MS);
+      c.pending.set(id, { resolve, reject, timer });
+      const msg = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
+      try { c.child.stdin.write(msg); }
+      catch (err) {
+        clearTimeout(timer);
+        c.pending.delete(id);
+        reject(err as Error);
+      }
+    });
+  }
+
+  async function startMcpServer(name: string, spec: McpServerSpec): Promise<McpClient> {
+    if (spec.disabled) throw new Error('disabled');
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = spawn(spec.command, spec.args ?? [], {
+        env: { ...process.env, ...(spec.env ?? {}) },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+    } catch (err) {
+      throw new Error(`spawn failed: ${(err as Error).message}`);
+    }
+    const c: McpClient = {
+      name,
+      spec,
+      child,
+      nextId: 1,
+      pending: new Map(),
+      tools: [],
+      status: 'starting',
+      buffer: '',
+    };
+    child.stdout.on('data', (chunk: Buffer) => {
+      c.buffer += chunk.toString('utf8');
+      // Cap buffer so a misbehaving server can't OOM us.
+      if (c.buffer.length > 16 * 1024 * 1024) {
+        c.buffer = '';
+        c.status = 'error';
+        c.errorMsg = 'output buffer overflow';
+        try { child.kill('SIGKILL'); } catch { /* */ }
+        return;
+      }
+      let nl;
+      while ((nl = c.buffer.indexOf('\n')) >= 0) {
+        const line = c.buffer.slice(0, nl);
+        c.buffer = c.buffer.slice(nl + 1);
+        if (!line) continue;
+        try {
+          const msg = JSON.parse(line) as { id?: number; result?: unknown; error?: { message?: string } };
+          if (typeof msg.id === 'number') {
+            const p = c.pending.get(msg.id);
+            if (p) {
+              c.pending.delete(msg.id);
+              clearTimeout(p.timer);
+              if (msg.error) p.reject(new Error(msg.error.message ?? 'mcp error'));
+              else p.resolve(msg.result);
+            }
+          }
+          // Notifications (no id) are ignored for foundations.
+        } catch { /* malformed JSON line — ignore */ }
+      }
+    });
+    let stderrBuf = '';
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderrBuf += chunk.toString('utf8');
+      if (stderrBuf.length > 64 * 1024) stderrBuf = stderrBuf.slice(-32 * 1024);
+    });
+    child.on('error', (err) => {
+      c.status = 'error';
+      c.errorMsg = err.message;
+      // Reject all pending requests.
+      for (const [id, p] of c.pending) {
+        clearTimeout(p.timer);
+        p.reject(err);
+        c.pending.delete(id);
+      }
+    });
+    child.on('close', (code) => {
+      if (c.status === 'starting' || c.status === 'ready') {
+        c.status = 'error';
+        c.errorMsg = `exited (code ${code})\n${stderrBuf.trim().slice(-2000)}`;
+      }
+      for (const [id, p] of c.pending) {
+        clearTimeout(p.timer);
+        p.reject(new Error('mcp server exited'));
+        c.pending.delete(id);
+      }
+    });
+    // Send `initialize` then `tools/list`.
+    try {
+      await mcpRequest(c, 'initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        clientInfo: { name: 'suxai', version: '0.16.10' },
+      });
+      // Post-initialize notification per the spec.
+      try {
+        c.child.stdin.write(
+          JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) + '\n',
+        );
+      } catch { /* */ }
+      const toolsResp = await mcpRequest(c, 'tools/list') as { tools?: McpToolSpec[] };
+      c.tools = toolsResp?.tools ?? [];
+      c.status = 'ready';
+    } catch (err) {
+      c.status = 'error';
+      c.errorMsg = (err as Error).message;
+      try { c.child.kill(); } catch { /* */ }
+    }
+    return c;
+  }
+
+  async function readMcpConfig(): Promise<McpConfig> {
+    try {
+      const raw = await fs.readFile(MCP_CONFIG(), 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') return parsed as McpConfig;
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code !== 'ENOENT') console.warn('[mcp] config read failed:', e.message);
+    }
+    return { servers: {} };
+  }
+
+  async function refreshMcpClients(): Promise<void> {
+    const config = await readMcpConfig();
+    const wanted = new Set(Object.keys(config.servers ?? {}));
+    // Tear down servers no longer in config.
+    for (const [name, c] of mcpClients) {
+      if (!wanted.has(name)) {
+        try { c.child.kill(); } catch { /* */ }
+        mcpClients.delete(name);
+      }
+    }
+    // Start newly-configured / disabled-flipped servers.
+    for (const [name, spec] of Object.entries(config.servers ?? {})) {
+      if (spec.disabled) {
+        const existing = mcpClients.get(name);
+        if (existing) {
+          try { existing.child.kill(); } catch { /* */ }
+          mcpClients.delete(name);
+        }
+        continue;
+      }
+      if (mcpClients.has(name)) continue;  // already running
+      try {
+        const c = await startMcpServer(name, spec);
+        mcpClients.set(name, c);
+      } catch (err) {
+        // Stash a placeholder error client so the UI can show why
+        // we couldn't connect.
+        mcpClients.set(name, {
+          name,
+          spec,
+          child: null as unknown as ChildProcessWithoutNullStreams,
+          nextId: 1,
+          pending: new Map(),
+          tools: [],
+          status: 'error',
+          errorMsg: (err as Error).message,
+          buffer: '',
+        });
+      }
+    }
+  }
+  // Boot — fire-and-forget on app ready.
+  void refreshMcpClients();
+
+  ipcMain.handle('mcp:list-servers', async () => {
+    return Array.from(mcpClients.values()).map((c) => ({
+      name: c.name,
+      command: c.spec.command,
+      args: c.spec.args ?? [],
+      status: c.status,
+      errorMsg: c.errorMsg,
+      toolCount: c.tools.length,
+    }));
+  });
+
+  ipcMain.handle('mcp:list-tools', async (_e, input: { server?: string }) => {
+    const all: { server: string; name: string; description?: string }[] = [];
+    for (const c of mcpClients.values()) {
+      if (input?.server && c.name !== input.server) continue;
+      if (c.status !== 'ready') continue;
+      for (const t of c.tools) {
+        all.push({ server: c.name, name: t.name, description: t.description });
+      }
+    }
+    return all;
+  });
+
+  ipcMain.handle('mcp:call-tool', async (_e, input: { server: string; tool: string; arguments?: unknown }) => {
+    const c = mcpClients.get(input?.server ?? '');
+    if (!c) return { ok: false, error: `server "${input?.server}" not found` };
+    if (c.status !== 'ready') return { ok: false, error: `server "${input?.server}" status=${c.status}` };
+    try {
+      const result = await mcpRequest(c, 'tools/call', {
+        name: input.tool,
+        arguments: input.arguments ?? {},
+      });
+      return { ok: true, result };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  ipcMain.handle('mcp:read-config', async () => {
+    const config = await readMcpConfig();
+    return { ok: true, config, path: MCP_CONFIG() };
+  });
+
+  ipcMain.handle('mcp:save-config', async (_e, input: { config: unknown }) => {
+    if (!input || typeof input.config !== 'object' || input.config === null) {
+      return { ok: false, error: 'invalid config' };
+    }
+    try {
+      const json = JSON.stringify(input.config, null, 2);
+      if (json.length > 1024 * 1024) {
+        return { ok: false, error: 'config too large' };
+      }
+      await fs.mkdir(USER_DATA(), { recursive: true });
+      await fs.writeFile(MCP_CONFIG(), json, { mode: 0o600 });
+      // Reload servers per the new config.
+      await refreshMcpClients();
+      return { ok: true };
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }

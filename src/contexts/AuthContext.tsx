@@ -63,10 +63,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               window.dispatchEvent(
                 new CustomEvent('suxai:storage-warning', {
                   detail: {
-                    title: 'Tokens stockés en clair',
+                    title: 'Tokens stored in plaintext',
                     body:
-                      'Aucun trousseau (gnome-keyring/kwallet) détecté. ' +
-                      'Vos tokens de session sont sur disque sans chiffrement.',
+                      'No keychain (gnome-keyring/kwallet) detected. ' +
+                      'Session tokens are stored on disk without encryption.',
                   },
                 }),
               );

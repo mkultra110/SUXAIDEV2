@@ -330,9 +330,9 @@ function ThinkingPanel({
       >
         <span aria-hidden>{open ? '▾' : '▸'}</span>
         <span>
-          🧠 Réflexion
-          {totalChars > 0 ? ` (${Math.max(1, Math.round(totalChars / 1000))}K caractères)` : ''}
-          {redactedCount > 0 ? ` · ${redactedCount} bloc${redactedCount > 1 ? 's' : ''} censuré${redactedCount > 1 ? 's' : ''}` : ''}
+          🧠 Thinking
+          {totalChars > 0 ? ` (${Math.max(1, Math.round(totalChars / 1000))}K chars)` : ''}
+          {redactedCount > 0 ? ` · ${redactedCount} redacted block${redactedCount > 1 ? 's' : ''}` : ''}
         </span>
       </button>
       {open && (
@@ -342,7 +342,7 @@ function ThinkingPanel({
           ))}
           {redactedCount > 0 && (
             <div className="msg__reasoning-redacted">
-              {redactedCount} bloc{redactedCount > 1 ? 's' : ''} de réflexion masqué{redactedCount > 1 ? 's' : ''} par Anthropic (politique de sûreté).
+              {redactedCount} thinking block{redactedCount > 1 ? 's' : ''} hidden by Anthropic (safety policy).
             </div>
           )}
         </div>
@@ -362,7 +362,7 @@ function DivertedChip({ path }: { path: string }) {
         </svg>
       </span>
       <div className="msg__diverted-body">
-        <div className="msg__diverted-title">Modifications proposées dans l'éditeur</div>
+        <div className="msg__diverted-title">Proposed changes in editor</div>
         <div className="msg__diverted-path">{name}</div>
       </div>
       <span className="msg__diverted-hint">Accept Alt+↵ · Reject Shift+Alt+⌫</span>

@@ -11,11 +11,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(180deg, rgba(17, 22, 33, 0.92), rgba(11, 15, 23, 0.88));
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--color-border-strong);
+  background:
+    linear-gradient(180deg, rgba(28, 36, 60, 0.85), rgba(13, 18, 30, 0.85));
+  backdrop-filter: blur(20px) saturate(170%);
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .diffview__title {
@@ -139,19 +141,23 @@
 }
 
 .diff-hunk__line--removed {
-  background: rgba(255, 99, 99, 0.12);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0.06) 70%);
+  border-left: 2px solid rgba(239, 68, 68, 0.55);
+  padding-left: 8px;
 }
 .diff-hunk__line--removed .diff-hunk__gutter {
   color: #ff8f8f;
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .diff-hunk__line--added {
-  background: rgba(52, 199, 89, 0.15);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.18), rgba(34, 197, 94, 0.06) 70%);
+  border-left: 2px solid rgba(34, 197, 94, 0.55);
+  padding-left: 8px;
 }
 .diff-hunk__line--added .diff-hunk__gutter {
   color: #7ae08f;
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .diff-hunk__toolbar {

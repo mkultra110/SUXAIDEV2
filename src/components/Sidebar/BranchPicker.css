@@ -12,7 +12,7 @@
   justify-content: center;
   align-items: flex-start;
   padding-top: 12vh;
-  background: rgba(5, 7, 12, 0.5);
+  background: rgba(3, 5, 10, 0.62);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   animation: suxai-fade-in var(--dur-base) var(--ease-out);
@@ -113,9 +113,12 @@
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
+.bpk__item:hover {
+  background: var(--color-hover-soft);
+}
 .bpk__item--active {
-  background: rgba(125, 130, 248, 0.16);
-  border-left-color: var(--color-accent);
+  background: linear-gradient(90deg, rgba(125, 130, 248, 0.22), rgba(125, 130, 248, 0.08));
+  border-left-color: var(--color-accent-hover);
 }
 .bpk__item--current {
   background: rgba(110, 228, 151, 0.06);

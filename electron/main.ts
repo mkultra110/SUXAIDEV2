@@ -1287,6 +1287,56 @@ function registerIpc() {
   //   - propagate stderr on rev-parse failure (not_a_repo vs no-git)
   const GIT_SPAWN_TIMEOUT_MS = 8_000;
   const GIT_MAX_STDOUT_BYTES = 32 * 1024 * 1024;
+
+  // Shared git subprocess helper used by git:status, git:stage, git:unstage,
+  // git:commit. Enforces the same timeout + stdout-cap everywhere.
+  const spawnGit = (
+    cwd: string,
+    args: string[],
+    opts?: { stdin?: string },
+  ): Promise<{ code: number; stdout: string; stderr: string }> =>
+    new Promise((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      const settle = (r: { code: number; stdout: string; stderr: string }) => {
+        if (settled) return;
+        settled = true;
+        resolve(r);
+      };
+      let child: ChildProcessWithoutNullStreams;
+      try {
+        child = spawn('git', args, { cwd });
+      } catch (err) {
+        settle({ code: -1, stdout: '', stderr: (err as Error).message });
+        return;
+      }
+      const killTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch { /* already gone */ }
+        settle({ code: -1, stdout, stderr: stderr + '\n[timeout]' });
+      }, GIT_SPAWN_TIMEOUT_MS);
+      child.stdout.on('data', (c) => {
+        stdout += c.toString();
+        if (stdout.length > GIT_MAX_STDOUT_BYTES) {
+          try { child.kill('SIGKILL'); } catch { /* */ }
+          clearTimeout(killTimer);
+          settle({ code: -1, stdout, stderr: stderr + '\n[output_too_large]' });
+        }
+      });
+      child.stderr.on('data', (c) => { stderr += c.toString(); });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        settle({ code: -1, stdout, stderr: stderr + err.message });
+      });
+      child.on('close', (code) => {
+        clearTimeout(killTimer);
+        settle({ code: code ?? -1, stdout, stderr });
+      });
+      if (opts?.stdin !== undefined) {
+        try { child.stdin.write(opts.stdin); child.stdin.end(); } catch { /* */ }
+      }
+    });
+
   ipcMain.handle('git:status', async (_e, input: { cwd: string }) => {
     let safeCwd: string;
     try {
@@ -1294,46 +1344,7 @@ function registerIpc() {
     } catch (err) {
       return { ok: false, error: (err as Error).message };
     }
-    const runGit = (args: string[]): Promise<{ code: number; stdout: string; stderr: string }> =>
-      new Promise((resolve) => {
-        let stdout = '';
-        let stderr = '';
-        let settled = false;
-        const settle = (r: { code: number; stdout: string; stderr: string }) => {
-          if (settled) return;
-          settled = true;
-          resolve(r);
-        };
-        let child: ChildProcessWithoutNullStreams;
-        try {
-          child = spawn('git', args, { cwd: safeCwd });
-        } catch (err) {
-          settle({ code: -1, stdout: '', stderr: (err as Error).message });
-          return;
-        }
-        const killTimer = setTimeout(() => {
-          try { child.kill('SIGKILL'); } catch { /* already gone */ }
-          settle({ code: -1, stdout, stderr: stderr + '\n[timeout]' });
-        }, GIT_SPAWN_TIMEOUT_MS);
-        child.stdout.on('data', (c) => {
-          stdout += c.toString();
-          if (stdout.length > GIT_MAX_STDOUT_BYTES) {
-            try { child.kill('SIGKILL'); } catch { /* */ }
-            clearTimeout(killTimer);
-            settle({ code: -1, stdout, stderr: stderr + '\n[output_too_large]' });
-          }
-        });
-        child.stderr.on('data', (c) => { stderr += c.toString(); });
-        child.on('error', (err) => {
-          clearTimeout(killTimer);
-          settle({ code: -1, stdout, stderr: stderr + err.message });
-        });
-        child.on('close', (code) => {
-          clearTimeout(killTimer);
-          settle({ code: code ?? -1, stdout, stderr });
-        });
-      });
-    const toplevel = await runGit(['rev-parse', '--show-toplevel']);
+    const toplevel = await spawnGit(safeCwd, ['rev-parse', '--show-toplevel']);
     if (toplevel.code !== 0) {
       return { ok: false, error: toplevel.stderr.trim() || 'not_a_git_repo' };
     }
@@ -1355,7 +1366,7 @@ function registerIpc() {
       return { ok: false, error: (err as Error).message };
     }
     if (!root) return { ok: false, error: 'not_a_git_repo' };
-    const status = await runGit([
+    const status = await spawnGit(safeCwd, [
       '-c', 'core.quotepath=false',
       'status', '--porcelain=v1', '-z', '-uall', '--no-renames',
     ]);
@@ -1410,57 +1421,14 @@ function registerIpc() {
     };
   });
 
-  // v0.16.0 — git:stage / git:unstage / git:commit. Reuses the same
-  // GIT_SPAWN_TIMEOUT_MS + buffer caps + sanitizeFsPath as git:status.
+  // v0.16.0 — git:stage / git:unstage / git:commit. All use spawnGit
+  // (defined above) which enforces GIT_SPAWN_TIMEOUT_MS + buffer caps.
   // Paths are passed RELATIVE to the repo root from the renderer (or
   // absolute if outside the workspaceRoot path normalisation), and we
   // re-resolve them server-side via `git rev-parse --show-toplevel`
   // to be defensive against renderer compromise.
-  const runGitNoTimeout = (cwd: string, args: string[], stdin?: string): Promise<{ code: number; stdout: string; stderr: string }> =>
-    new Promise((resolve) => {
-      let stdout = '';
-      let stderr = '';
-      let settled = false;
-      const settle = (r: { code: number; stdout: string; stderr: string }) => {
-        if (settled) return;
-        settled = true;
-        resolve(r);
-      };
-      let child: ChildProcessWithoutNullStreams;
-      try {
-        child = spawn('git', args, { cwd });
-      } catch (err) {
-        settle({ code: -1, stdout: '', stderr: (err as Error).message });
-        return;
-      }
-      const killTimer = setTimeout(() => {
-        try { child.kill('SIGKILL'); } catch { /* gone */ }
-        settle({ code: -1, stdout, stderr: stderr + '\n[timeout]' });
-      }, GIT_SPAWN_TIMEOUT_MS);
-      child.stdout.on('data', (c) => {
-        stdout += c.toString();
-        if (stdout.length > GIT_MAX_STDOUT_BYTES) {
-          try { child.kill('SIGKILL'); } catch { /* */ }
-          clearTimeout(killTimer);
-          settle({ code: -1, stdout, stderr: stderr + '\n[output_too_large]' });
-        }
-      });
-      child.stderr.on('data', (c) => { stderr += c.toString(); });
-      child.on('error', (err) => {
-        clearTimeout(killTimer);
-        settle({ code: -1, stdout, stderr: stderr + err.message });
-      });
-      child.on('close', (code) => {
-        clearTimeout(killTimer);
-        settle({ code: code ?? -1, stdout, stderr });
-      });
-      if (stdin !== undefined) {
-        try { child.stdin.write(stdin); child.stdin.end(); } catch { /* */ }
-      }
-    });
-
   const resolveRepoRoot = async (cwd: string): Promise<string | null> => {
-    const r = await runGitNoTimeout(cwd, ['rev-parse', '--show-toplevel']);
+    const r = await spawnGit(cwd, ['rev-parse', '--show-toplevel']);
     if (r.code !== 0) return null;
     try { return sanitizeFsPath(r.stdout.trim(), { mustExist: true }); }
     catch { return null; }
@@ -1492,7 +1460,7 @@ function registerIpc() {
       safePaths.push(rel);
     }
     if (safePaths.length === 0) return { ok: false, error: 'no valid paths' };
-    const r = await runGitNoTimeout(root, ['add', '--', ...safePaths]);
+    const r = await spawnGit(root, ['add', '--', ...safePaths]);
     if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'git add failed' };
     return { ok: true };
   });
@@ -1524,9 +1492,9 @@ function registerIpc() {
     // `git restore --staged` is the modern equivalent of `reset HEAD`.
     // Falls back to `reset HEAD` on git < 2.23 which still ships on
     // older Debian/RHEL.
-    let r = await runGitNoTimeout(root, ['restore', '--staged', '--', ...safePaths]);
+    let r = await spawnGit(root, ['restore', '--staged', '--', ...safePaths]);
     if (r.code !== 0 && /unknown subcommand|unknown switch|usage:/i.test(r.stderr)) {
-      r = await runGitNoTimeout(root, ['reset', 'HEAD', '--', ...safePaths]);
+      r = await spawnGit(root, ['reset', 'HEAD', '--', ...safePaths]);
     }
     if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'unstage failed' };
     return { ok: true };
@@ -1546,7 +1514,7 @@ function registerIpc() {
     if (!root) return { ok: false, error: 'not_a_git_repo' };
     // Pass the message via stdin (-F -) to avoid argv-length limits and
     // to side-step shell-escape headaches on multiline commits.
-    const r = await runGitNoTimeout(root, ['commit', '-F', '-'], input.message);
+    const r = await spawnGit(root, ['commit', '-F', '-'], { stdin: input.message });
     if (r.code !== 0) {
       const err = (r.stderr || r.stdout).trim();
       // Distinguish "nothing to commit" (return as friendly error) from

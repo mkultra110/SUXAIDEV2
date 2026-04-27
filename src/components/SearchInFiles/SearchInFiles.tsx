@@ -124,7 +124,7 @@ export function SearchInFiles() {
     if (!workspaceRoot) return [];
     const map = new Map<string, GroupedHits>();
     for (const h of hits) {
-      const abs = h.path.startsWith('/') || /^[a-zA-Z]:/.test(h.path)
+      const abs: string = h.path.startsWith('/') || /^[a-zA-Z]:/.test(h.path)
         ? h.path
         : workspaceRoot.replace(/[\\/]+$/, '') + '/' + h.path;
       const rel = abs.startsWith(workspaceRoot)

@@ -9,17 +9,22 @@
      Le `auto` au milieu se dimensionne sur le user cluster,
      les deux 1fr qui l'encadrent partagent l'espace restant
      → user cluster naturellement centré dans la barre, indépendamment
-     de la longueur du nom d'utilisateur. */
+     de la longueur du nom d'utilisateur.
+     v0.16.17 polish — bg plus opaque + border-bottom strong + tiny
+     shadow pour que la titlebar soit clairement une bande distincte
+     de l'AI panel header en dessous. Sans ça les boutons − □ ×
+     paraissaient flotter sur la même rangée que le model selector. */
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: stretch;
   background:
-    linear-gradient(180deg, rgba(17, 22, 36, 0.96), rgba(11, 15, 23, 0.96));
+    linear-gradient(180deg, rgba(22, 28, 44, 1), rgba(13, 17, 27, 1));
   backdrop-filter: blur(20px) saturate(140%);
   -webkit-backdrop-filter: blur(20px) saturate(140%);
   user-select: none;
   position: relative;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border-strong);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
 .titlebar__zone {
@@ -139,14 +144,22 @@
 .titlebar__controls {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+  /* v0.16.17 polish — soft pill wrapper so the 3 controls feel like
+     a single coherent cluster instead of 3 isolated icons. Same
+     pattern as titlebar__user pill in v0.15.12, but matched to the
+     window-controls style language (rectangular, not 999px). */
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
 }
 
 .titlebar__btn {
-  width: 30px; height: 24px;
+  width: 28px; height: 22px;
   display: grid; place-items: center;
   color: var(--color-text-muted);
-  border-radius: var(--radius-xs);
+  border-radius: 4px;
   transition:
     background var(--dur-fast) var(--ease-out),
     color var(--dur-fast) var(--ease-out);

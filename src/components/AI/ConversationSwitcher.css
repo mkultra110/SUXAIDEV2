@@ -1,9 +1,10 @@
+/* ============================================================
+   ConversationSwitcher — left pill in AI header
+   v2.0 — Obsidian Warm.
+   ============================================================ */
+
 .cswitch {
   position: relative;
-  /* v0.12.11: allow the switcher to shrink inside the header flex row
-     when the conversation title is long. Without min-width: 0 the
-     trigger stays at 180px and pushes the model pill into the action
-     cluster on narrow panels. */
   min-width: 0;
   flex-shrink: 1;
 }
@@ -12,45 +13,30 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 26px;
+  height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  font-size: 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
   cursor: pointer;
-  /* v0.14.1 — defensive overflow clamp so the inner refresh icon /
-     name / chevron can't visually escape the trigger when the
-     parent header-main shrinks below the trigger's natural size. */
   overflow: hidden;
-  /* v0.14.1 — capped 180→130 because the AI panel is 420px wide by
-     default. Both pills (cswitch 180 + model 140) + actions cluster
-     could not coexist on the line and overlapped. Container queries
-     (@container) would be the proper fix; for now the static caps
-     are tight enough to fit. */
-  /* v0.15.12 — bumped 130→200 because the AI header now wraps onto
-     2 rows (header-actions falls below header-main), so cswitch +
-     model share the full 420 px row alone. Conversation titles like
-     "Audit du serveur" now fit without aggressive truncation. */
   max-width: 200px;
   min-width: 0;
   transition:
-    background var(--dur-base) var(--ease-out),
-    border-color var(--dur-base) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
-/* v0.14.1 — viewport media queries are useless for an embedded panel
-   (the AI panel is always 420px regardless of viewport). Keeping
-   them only as a defensive lower bound. */
 @media (max-width: 540px) { .cswitch__trigger { max-width: 110px; } }
 @media (max-width: 420px) { .cswitch__trigger { max-width: 80px; } }
 .cswitch__trigger:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--color-border-strong);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-default);
 }
 .cswitch__trigger--open {
-  background: rgba(99, 102, 241, 0.10);
-  border-color: var(--color-border-accent);
+  background: color-mix(in oklch, var(--color-accent) 14%, transparent);
+  border-color: color-mix(in oklch, var(--color-accent) 40%, transparent);
 }
 
 .cswitch__name {
@@ -62,25 +48,24 @@
 
 .cswitch__menu {
   position: fixed;
-  z-index: 9999;
-  padding: 6px;
-  border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, rgba(34, 42, 68, 0.94), rgba(22, 28, 50, 0.96));
-  border: 1px solid var(--color-border-strong);
-  backdrop-filter: blur(22px) saturate(170%);
-  -webkit-backdrop-filter: blur(22px) saturate(170%);
-  box-shadow:
-    0 26px 60px rgba(0, 0, 0, 0.55),
-    0 0 22px rgba(99, 102, 241, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  animation: suxai-scale-in var(--dur-fast) var(--ease-out);
+  z-index: var(--z-dropdown);
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-overlay);
+  border: 1px solid var(--color-border-subtle);
+  border-top-color: color-mix(in oklch, white 10%, transparent);
+  box-shadow: var(--shadow-lg);
+  animation: cswitch-in var(--dur-base) var(--ease-out-expo);
   transform-origin: top center;
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-height: 60vh;
   min-width: 300px;
+}
+@keyframes cswitch-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .cswitch__list {
@@ -94,8 +79,8 @@
 .cswitch__empty {
   padding: 16px;
   text-align: center;
-  color: var(--color-text-dim);
-  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
 }
 
 .cswitch__item {
@@ -106,18 +91,18 @@
   border-radius: var(--radius-sm);
   border-left: 2px solid transparent;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
 .cswitch__item--active {
-  background: rgba(125, 130, 248, 0.16);
+  background: color-mix(in oklch, var(--color-accent) 14%, transparent);
   border-left-color: var(--color-accent);
 }
 .cswitch__item:hover {
-  background: var(--color-hover-soft);
+  background: var(--color-bg-hover);
 }
 .cswitch__item--active:hover {
-  background: rgba(125, 130, 248, 0.22);
+  background: color-mix(in oklch, var(--color-accent) 22%, transparent);
 }
 
 .cswitch__pick {
@@ -128,8 +113,8 @@
   padding: 8px 10px;
   background: transparent;
   border: none;
-  color: var(--color-text);
-  font-size: 12.5px;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
   text-align: left;
   cursor: pointer;
   min-width: 0;
@@ -143,8 +128,8 @@
 }
 
 .cswitch__meta {
-  font-size: 10.5px;
-  color: var(--color-text-dim);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
 }
 
@@ -153,30 +138,29 @@
   height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 4px;
-  color: var(--color-text-dim);
+  border-radius: var(--radius-xs);
+  color: var(--color-text-tertiary);
   background: transparent;
   border: none;
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+  transition:
+    opacity var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard);
 }
-.cswitch__item:hover .cswitch__del {
-  opacity: 1;
-}
+.cswitch__item:hover .cswitch__del { opacity: 1; }
 .cswitch__del:hover {
-  color: #ff8e8e;
-  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+  background: color-mix(in oklch, var(--color-danger) 12%, transparent);
 }
 .cswitch__del--armed {
   opacity: 1 !important;
   width: auto;
   padding: 0 8px;
-  color: #ff8e8e;
-  background: rgba(239, 68, 68, 0.18);
-  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: var(--color-danger);
+  background: color-mix(in oklch, var(--color-danger) 18%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-danger) 45%, transparent);
 }
 
 .cswitch__rename {
@@ -184,11 +168,11 @@
   height: 28px;
   padding: 0 10px;
   margin: 4px 0;
-  background: rgba(8, 12, 22, 0.7);
-  border: 1px solid var(--color-border-accent);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-focus-ring);
   border-radius: var(--radius-sm);
-  color: var(--color-text);
-  font-size: 12.5px;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
   outline: none;
 }
 
@@ -198,20 +182,20 @@
   gap: 9px;
   padding: 9px 12px;
   margin-top: 4px;
-  border-top: 1px solid var(--color-border);
+  border-top: 1px solid var(--color-border-subtle);
   background: transparent;
-  color: var(--color-accent-hover);
-  font-size: 12px;
+  color: var(--color-accent);
+  font-size: var(--text-xs);
   font-weight: 600;
   cursor: pointer;
   border-radius: var(--radius-sm);
   border-top-left-radius: 0;
   border-top-right-radius: 0;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard);
 }
 .cswitch__new:hover {
-  background: rgba(125, 130, 248, 0.14);
-  color: #fff;
+  background: color-mix(in oklch, var(--color-accent) 14%, transparent);
+  color: var(--color-text-primary);
 }

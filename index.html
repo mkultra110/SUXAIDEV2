@@ -7,7 +7,32 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' http://localhost:* https:; worker-src 'self' blob:;"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0F0E0D" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F8F6F1" media="(prefers-color-scheme: light)" />
     <title>SUXAI</title>
+    <script>
+      // v2.0 anti-FOUC : resolve the chosen theme BEFORE React mounts so
+      // the first paint is already on the right palette. Reads
+      // localStorage('theme') ∈ 'dark'|'light'|'system'|null. Falls back
+      // to the OS preference. Sets html[data-theme] which all CSS reads.
+      (function () {
+        try {
+          var saved = localStorage.getItem('theme');
+          var prefersDark = matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolved =
+            !saved || saved === 'system' ? (prefersDark ? 'dark' : 'light') : saved;
+          document.documentElement.dataset.theme = resolved;
+          // Pre-paint background so the white flash never happens — Vite
+          // dev server, Electron file://, or fresh installer all start
+          // with the right colour underneath the React tree.
+          document.documentElement.style.backgroundColor =
+            resolved === 'light' ? '#F8F6F1' : '#0F0E0D';
+        } catch (_) {
+          document.documentElement.dataset.theme = 'dark';
+          document.documentElement.style.backgroundColor = '#0F0E0D';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

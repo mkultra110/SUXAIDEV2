@@ -2,9 +2,17 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
+
+// v2.0 — local font bundles. Inter Variable for UI, Geist Mono for
+// code. Importing here lets Vite copy the woff2 to dist/ → no network
+// fetch at runtime, Electron offline-first stays intact.
+import '@fontsource-variable/inter';
+import '@fontsource-variable/geist-mono';
+
 import { App } from './App';
 import './styles/theme.css';
 import './styles/globals.css';
+import './styles/grain.css';
 
 // Bundle Monaco locally instead of loading from jsDelivr CDN — Electron
 // packaged apps load index.html via file:// and CDN requests were hanging,

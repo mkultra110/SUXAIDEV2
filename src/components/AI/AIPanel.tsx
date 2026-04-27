@@ -2886,10 +2886,17 @@ export function AIPanel() {
                 }
                 try {
                   const r = await window.suxai.checkpoint.restore(workspaceRoot, id);
-                  toast.success(
-                    `Restored ${r.restored.length} file${r.restored.length === 1 ? '' : 's'}`,
-                    'Workspace rolled back to its pre-turn state.',
-                  );
+                  if (r.failed.length > 0) {
+                    toast.error(
+                      `Restored ${r.restored.length}, failed ${r.failed.length}`,
+                      r.failed.map((f) => f.path.split('/').pop()).join(', '),
+                    );
+                  } else {
+                    toast.success(
+                      `Restored ${r.restored.length} file${r.restored.length === 1 ? '' : 's'}`,
+                      'Workspace rolled back to its pre-turn state.',
+                    );
+                  }
                   // Reload any restored file that's currently open so
                   // the editor doesn't keep showing stale post-edit
                   // content. We re-read each one then re-openFile to

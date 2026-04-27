@@ -4,6 +4,12 @@ import { Button } from '../ui/Button';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { useToast } from '../ui/Toast';
 import { useGitStatus, normalizeGitPath, type GitStatusCode } from '../../lib/git';
+import {
+  setSelectedForCompare,
+  getSelectedForCompare,
+  clearSelectedForCompare,
+  openCompare,
+} from '../../lib/compare';
 import { SourceControlPanel } from './SourceControlPanel';
 import './Sidebar.css';
 
@@ -176,6 +182,44 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
           window.suxai.fs.revealInFolder?.(entry.path);
         },
       },
+      // v0.16.8 — compare two files. Disabled on directories. The
+      // "Compare with selected" entry is also disabled when no path
+      // is currently selected (the user has to pick one first).
+      ...(entry.isDirectory
+        ? []
+        : ([
+            'separator',
+            {
+              label:
+                getSelectedForCompare() === entry.path
+                  ? 'Selected ✓ — pick another to compare'
+                  : 'Select for compare',
+              onClick: () => {
+                if (getSelectedForCompare() === entry.path) {
+                  clearSelectedForCompare();
+                  toast.info('Compare selection cleared');
+                } else {
+                  setSelectedForCompare(entry.path);
+                  toast.info('Selected for compare', entry.name);
+                }
+              },
+            },
+            {
+              label: 'Compare with selected',
+              hint: getSelectedForCompare()
+                ? (getSelectedForCompare() ?? '').split(/[\\/]/).pop() ?? ''
+                : undefined,
+              disabled:
+                !getSelectedForCompare() ||
+                getSelectedForCompare() === entry.path,
+              onClick: () => {
+                const a = getSelectedForCompare();
+                if (!a || a === entry.path) return;
+                openCompare(a, entry.path);
+                clearSelectedForCompare();
+              },
+            },
+          ] as (MenuItem | 'separator')[])),
     ];
   };
 

@@ -145,18 +145,19 @@ export function streamAi(
       }
 
       const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      const decoder = new TextDecoder('utf-8', { fatal: false });
       let buffer = '';
 
-      // Parse lines: `data: {"delta": "..."}\n\n` and `data: [DONE]\n\n`
+      // Parse SSE frames: `data: {"delta": "..."}\n\n` and `data: [DONE]\n\n`
+      // Handle both LF and CRLF line endings for robustness with proxies.
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let idx: number;
-        while ((idx = buffer.indexOf('\n')) >= 0) {
+        while ((idx = buffer.search(/\r?\n/)) >= 0) {
           const line = buffer.slice(0, idx).trim();
-          buffer = buffer.slice(idx + 1);
+          buffer = buffer.slice(idx + (buffer[idx] === '\r' ? 2 : 1));
           if (!line || !line.startsWith('data:')) continue;
           const payload = line.slice(5).trim();
           if (payload === '[DONE]') {

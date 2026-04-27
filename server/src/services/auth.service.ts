@@ -118,13 +118,7 @@ export const authService = {
     // pre-flight findByKey would only create a TOCTOU window where two
     // simultaneous requests could both pass the check, then both try
     // to redeem.
-    let updated: import('../store/licenses.js').LicenseRecord | null;
-    try {
-      updated = await licenseStore.redeem(key, userId);
-    } catch (err) {
-      // Re-throw 409 ALREADY_REDEEMED unchanged.
-      throw err;
-    }
+    const updated = await licenseStore.redeem(key, userId);
     if (!updated) {
       throw Object.assign(new Error('Invalid license key'), {
         status: 404,

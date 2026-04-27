@@ -653,17 +653,65 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // v0.12.10: openDiff queues if there's already an active diff so
   // parallel edit_file calls don't clobber each other. The user
   // resolves them one at a time, promoting from the queue.
+  // v0.16.4 — CRITICAL FIX : also ensure the diff's file is in
+  // openFiles AND becomes the active tab. Without this, the agent
+  // could call edit_file on a file the user didn't have focused
+  // (or didn't have open at all) — openDiff would set pendingDiff,
+  // but EditorPanel's v0.12.13 visibility gate
+  //   `pendingDiff && activeFile?.path === pendingDiff.path`
+  // would hide the InlineDiff overlay. The user would see "agent
+  // does read_file but never modifies anything" while the agent
+  // sits forever waiting for an approval that never reaches the UI.
   const openDiff = useCallback((d: PendingDiff) => {
     setState((s) => {
-      if (!s.pendingDiff) return { ...s, pendingDiff: d };
-      return { ...s, pendingDiffQueue: [...s.pendingDiffQueue, d] };
+      // Ensure the file is open. If the agent edits a file not yet
+      // in the tab strip, we open it using `original` as initial
+      // content so the user has a real buffer to compare against.
+      let openFiles = s.openFiles;
+      if (!openFiles.some((f) => f.path === d.path)) {
+        const fileName = d.path.split(/[\\/]/).pop() ?? d.path;
+        openFiles = [
+          ...openFiles,
+          {
+            path: d.path,
+            name: fileName,
+            content: d.original,
+            language: langFromPath(d.path),
+          },
+        ];
+      }
+      // No current diff → show this one and focus its file.
+      if (!s.pendingDiff) {
+        return {
+          ...s,
+          openFiles,
+          activePath: d.path,
+          pendingDiff: d,
+        };
+      }
+      // A diff is already showing → queue without disturbing focus
+      // (the user is mid-review, don't yank the editor out from
+      // under them). The queued diff will gain focus when promoted.
+      return {
+        ...s,
+        openFiles,
+        pendingDiffQueue: [...s.pendingDiffQueue, d],
+      };
     });
   }, []);
 
   const closeDiff = useCallback(() => {
     setState((s) => {
       const [next, ...rest] = s.pendingDiffQueue;
-      return { ...s, pendingDiff: next ?? null, pendingDiffQueue: rest };
+      return {
+        ...s,
+        pendingDiff: next ?? null,
+        pendingDiffQueue: rest,
+        // v0.16.4 — when promoting the next queued diff, follow it to
+        // its file so the InlineDiff stays visible. If queue is empty,
+        // leave activePath as-is.
+        activePath: next ? next.path : s.activePath,
+      };
     });
   }, []);
 
@@ -684,7 +732,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         openFiles: nextOpenFiles,
         pendingDiff: nextDiff ?? null,
         pendingDiffQueue: rest,
-        activePath: d.path,
+        // v0.16.4 — follow the queue : if there's a next diff, switch
+        // to its file so the InlineDiff overlay stays visible. Without
+        // this, accepting a diff for FileA with FileB queued left the
+        // tab on FileA and FileB's diff was hidden by EditorPanel's
+        // path-match gate.
+        activePath: nextDiff ? nextDiff.path : d.path,
       };
     });
     // Refresh badges in case the agent already wrote the file via

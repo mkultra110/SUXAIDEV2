@@ -2933,6 +2933,51 @@ export function AIPanel() {
         </button>
       )}
 
+      {/* v0.16.4 — Plan-mode banner above the composer. When mode === 'ask'
+          the agent is read-only and can ONLY call read_file / list_dir /
+          grep / codebase_search / create_plan. Without this banner, users
+          accidentally toggle Plan mode, then ask the agent to edit a file,
+          and wonder why it "only thinks + reads but never modifies". One
+          click on the X (or the Plan toggle in the header) flips mode
+          back to 'composer' and edits resume. */}
+      {activeConv?.mode === 'ask' && (
+        <div className="ai__plan-banner" role="note">
+          <span className="ai__plan-banner-icon" aria-hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path
+                d="M9 5H4v14h16V9h-5M9 5l5 5h6"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+          <span className="ai__plan-banner-text">
+            <strong>Plan mode</strong> · read-only (no file edits, no commands).
+            The agent will write a plan to <code>.suxai/plans/</code>.
+          </span>
+          <button
+            type="button"
+            className="ai__plan-banner-close"
+            onClick={() => {
+              if (!activeConvId) return;
+              setConversations((list) =>
+                list.map((c) =>
+                  c.id === activeConvId ? { ...c, mode: 'composer' } : c,
+                ),
+              );
+              toast.info('Plan mode OFF', 'Agent can now edit files and run commands.');
+            }}
+            title="Disable Plan mode"
+            aria-label="Disable Plan mode"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
       <form
         className={`ai__composer ${dragOver ? 'ai__composer--dragover' : ''} ${streaming ? 'ai__composer--streaming' : ''}`}
         onDragOver={(e) => {

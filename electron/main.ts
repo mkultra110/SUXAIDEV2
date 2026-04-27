@@ -366,8 +366,8 @@ function registerIpc() {
       if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
         throw new Error('plan:write requires a workspaceRoot');
       }
-      if (typeof slug !== 'string' || !/^[a-z0-9_-]+$/.test(slug)) {
-        throw new Error('plan:write slug must be kebab-case');
+      if (typeof slug !== 'string' || !/^[a-z0-9_-]{1,128}$/.test(slug)) {
+        throw new Error('plan:write slug must be kebab-case (max 128 chars)');
       }
       if (typeof content !== 'string' || content.length === 0) {
         throw new Error('plan:write content cannot be empty');

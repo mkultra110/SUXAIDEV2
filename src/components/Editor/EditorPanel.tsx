@@ -14,6 +14,7 @@ import { registerTabCompletion } from '../../lib/tab-completion';
 import { consumePendingReveal } from '../../lib/reveal';
 import { useRecent, removeRecentIfMissing } from '../../lib/recent';
 import { syncTypeScriptExtraLibs } from '../../lib/lsp-ts';
+import { ensureSnippetProvider } from '../../lib/snippets';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
@@ -176,6 +177,13 @@ export function EditorPanel() {
   useEffect(() => {
     syncTypeScriptExtraLibs(openFiles);
   }, [openFiles]);
+
+  // v0.16.11 — register the user-snippets completion provider once.
+  // Cache loads asynchronously ; subsequent saves refresh in-place
+  // without re-registering (no Monaco churn).
+  useEffect(() => {
+    ensureSnippetProvider();
+  }, []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

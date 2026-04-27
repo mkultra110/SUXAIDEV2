@@ -31,6 +31,10 @@ const HISTORY_DIR = () => path.join(USER_DATA(), 'History');
 // { servers: { fs: { command: 'npx', args: ['-y','@modelcontextprotocol/server-filesystem','/path'] } } }
 const MCP_CONFIG = () => path.join(USER_DATA(), 'mcp.json');
 
+// v0.16.11 — User snippets. Shape :
+// { "javascript": { "log": { "prefix": "log", "body": "console.log($1)", "description": "..." } }, "*": { ... global ... } }
+const SNIPPETS_FILE = () => path.join(USER_DATA(), 'snippets.json');
+
 let mainWindow: BrowserWindow | null = null;
 let updateManager: UpdateManager | null = null;
 
@@ -1983,6 +1987,42 @@ function registerIpc() {
       await fs.writeFile(MCP_CONFIG(), json, { mode: 0o600 });
       // Reload servers per the new config.
       await refreshMcpClients();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+
+  // v0.16.11 — User snippets. Stored in userData/snippets.json with
+  // VSCode-compatible shape. Read at app start + on every save, fed
+  // to a Monaco CompletionItemProvider in the renderer that surfaces
+  // them in the autocomplete dropdown matching their language scope.
+  ipcMain.handle('snippets:read', async () => {
+    try {
+      const raw = await fs.readFile(SNIPPETS_FILE(), 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ok: true, snippets: parsed, path: SNIPPETS_FILE() };
+      }
+      return { ok: true, snippets: {}, path: SNIPPETS_FILE() };
+    } catch (err) {
+      const e = err as NodeJS.ErrnoException;
+      if (e.code === 'ENOENT') return { ok: true, snippets: {}, path: SNIPPETS_FILE() };
+      return { ok: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('snippets:save', async (_e, input: { snippets: unknown }) => {
+    if (!input || typeof input.snippets !== 'object' || input.snippets === null || Array.isArray(input.snippets)) {
+      return { ok: false, error: 'invalid snippets payload' };
+    }
+    try {
+      const json = JSON.stringify(input.snippets, null, 2);
+      if (json.length > 1024 * 1024) {
+        return { ok: false, error: 'snippets payload too large (>1 MB)' };
+      }
+      await fs.mkdir(USER_DATA(), { recursive: true });
+      await fs.writeFile(SNIPPETS_FILE(), json, { mode: 0o600 });
       return { ok: true };
     } catch (err) {
       return { ok: false, error: (err as Error).message };

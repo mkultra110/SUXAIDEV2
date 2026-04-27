@@ -6,6 +6,7 @@ import { AI_MODELS } from '../../config';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useMemories, deleteMemory } from '../../lib/memories';
 import { useMcpServers, readMcpConfig } from '../../lib/mcp';
+import { useSnippets } from '../../lib/snippets';
 import './SettingsDialog.css';
 
 export function SettingsDialog() {
@@ -165,6 +166,8 @@ export function SettingsDialog() {
           </Section>
 
           <McpSection />
+
+          <SnippetsSection />
         </div>
 
         <div className="settings__foot">
@@ -207,6 +210,56 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     >
       <span className="settings__toggle-thumb" />
     </button>
+  );
+}
+
+/**
+ * v0.16.11 — User snippets panel. Displays the count per language
+ * scope ("*" = global) and gives the user the path to edit the JSON
+ * directly. Inline form-based editor ships in a future release once
+ * the JSON-edit workflow is validated.
+ */
+function SnippetsSection() {
+  const map = useSnippets();
+  const buckets = Object.entries(map);
+  const total = buckets.reduce((acc, [, defs]) => acc + Object.keys(defs).length, 0);
+  return (
+    <div className="settings__section">
+      <div className="settings__section-title">Snippets ({total})</div>
+      <div className="settings__section-body">
+        {total === 0 ? (
+          <div className="settings__hint">
+            No user snippets yet. Drop a JSON file at{' '}
+            <code>userData/snippets.json</code> with the VSCode-compatible shape{' '}
+            <code>{'{ "javascript": { "log": { "prefix": "log", "body": "console.log($1)" } } }'}</code>.
+            Use <code>"*"</code> as the language key for snippets that apply everywhere.
+            They surface in the autocomplete dropdown matching their language scope, with{' '}
+            <code>$1</code> / <code>${'{1:default}'}</code> placeholders.
+          </div>
+        ) : (
+          <ul className="settings__snippets-list">
+            {buckets.map(([lang, defs]) => (
+              <li key={lang} className="settings__snippets-bucket">
+                <div className="settings__snippets-lang">
+                  {lang === '*' ? 'global' : lang}
+                  <span className="settings__snippets-count">{Object.keys(defs).length}</span>
+                </div>
+                <div className="settings__snippets-prefixes">
+                  {Object.entries(defs).slice(0, 12).map(([name, def]) => (
+                    <code key={name} className="settings__snippets-prefix" title={def.description ?? name}>
+                      {def.prefix}
+                    </code>
+                  ))}
+                  {Object.keys(defs).length > 12 && (
+                    <span className="settings__snippets-more">+{Object.keys(defs).length - 12}</span>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
 

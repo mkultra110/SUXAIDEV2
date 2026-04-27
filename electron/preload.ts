@@ -181,6 +181,16 @@ const api = {
       ok: true
     } | { ok: false; error: string }> => ipcRenderer.invoke('mcp:save-config', input),
   },
+  snippets: {
+    /** v0.16.11 — read user snippets from userData/snippets.json. */
+    read: (): Promise<{
+      ok: true; snippets: Record<string, Record<string, { prefix: string; body: string | string[]; description?: string }>>; path: string;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('snippets:read'),
+    /** Persist user snippets ; renderer broadcasts a refresh after. */
+    save: (input: { snippets: unknown }): Promise<{
+      ok: true
+    } | { ok: false; error: string }> => ipcRenderer.invoke('snippets:save', input),
+  },
   history: {
     /** v0.16.7 — fire-and-forget snapshot of file content. Skips if
      *  identical to last snapshot, if < 5s since last, or if > 4 MB.

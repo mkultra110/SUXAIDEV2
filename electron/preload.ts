@@ -195,7 +195,7 @@ const api = {
       ipcRenderer.invoke('update:check'),
     downloadAndInstall: (): Promise<boolean> => ipcRenderer.invoke('update:download-and-install'),
     onProgress: (cb: (p: { percent: number; transferred: number; total: number }) => void) => {
-      const listener = (_: unknown, payload: any) => cb(payload);
+      const listener = (_: unknown, payload: { percent: number; transferred: number; total: number }) => cb(payload);
       ipcRenderer.on('update:progress', listener);
       return () => ipcRenderer.removeListener('update:progress', listener);
     },

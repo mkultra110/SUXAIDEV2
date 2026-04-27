@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises';
-import { timingSafeEqual } from 'node:crypto';
+import path from 'node:path';
+import crypto, { timingSafeEqual } from 'node:crypto';
+import { env } from '../config/env.js';
 
 /**
  * v0.15.10 (audit-4 #8) — constant-time string compare so an
  * attacker can't time-side-channel which licenses exist. The schema
- * already enforces a fixed format (SUXAI-XXXXX-XXXXX-XXXXX-XXXXX),
- * so all valid keys are the same byte length — perfect fit for
- * timingSafeEqual which throws on length mismatch.
+ * enforces a fixed format (SUXAI-XXXX-XXXX-XXXX), so all valid keys
+ * are the same byte length — perfect fit for timingSafeEqual which
+ * throws on length mismatch.
  */
 function keysEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -16,9 +18,6 @@ function keysEqual(a: string, b: string): boolean {
     return false;
   }
 }
-import path from 'node:path';
-import crypto from 'node:crypto';
-import { env } from '../config/env.js';
 
 export interface LicenseRecord {
   key: string;
@@ -54,7 +53,7 @@ async function readAll(): Promise<LicenseRecord[]> {
 
 async function writeAll(records: LicenseRecord[]): Promise<void> {
   await ensureDataDir();
-  const tmp = `${DB_FILE}.${process.pid}.tmp`;
+  const tmp = `${DB_FILE}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
   // v0.15.10 (audit-4 #3) — open/write/fsync/close/rename so a power
   // loss between the writeFile and the rename can't lose redeemed-state.
   // Without fsync the kernel may buffer the write and the rename
@@ -71,7 +70,7 @@ async function writeAll(records: LicenseRecord[]): Promise<void> {
 }
 
 function generateKey(): string {
-  // 4×5-char blocks: SUXAI-XXXXX-XXXXX-XXXXX-XXXXX
+  // 3×4-char blocks: SUXAI-XXXX-XXXX-XXXX
   const bytes = crypto.randomBytes(12);
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Crockford-ish, no 0/O/1/I
   let out = '';

@@ -26,6 +26,78 @@
   background-clip: padding-box;
 }
 
+/* v0.16.0 — commit composer pinned at the top of the panel.
+   Multiline textarea + Commit button. Disabled state when nothing
+   is staged or message is empty. */
+.scp__commit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.scp__commit-input {
+  width: 100%;
+  resize: vertical;
+  min-height: 48px;
+  max-height: 160px;
+  padding: 7px 9px;
+  background: rgba(6, 10, 20, 0.55);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-family: var(--font-sans);
+  outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+}
+.scp__commit-input:focus {
+  border-color: var(--color-border-accent);
+  box-shadow: var(--focus-ring-soft);
+  background: rgba(6, 10, 20, 0.85);
+}
+.scp__commit-input::placeholder { color: var(--color-text-dim); }
+.scp__commit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 12px;
+  background: linear-gradient(180deg, #7d82f8 0%, #5457d8 100%);
+  color: #fff;
+  border: 1px solid rgba(125, 130, 248, 0.32);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition:
+    box-shadow var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out),
+    opacity var(--dur-fast) var(--ease-out);
+  box-shadow:
+    0 4px 12px rgba(99, 102, 241, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.scp__commit-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow:
+    0 6px 18px rgba(99, 102, 241, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+.scp__commit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: rgba(125, 130, 248, 0.12);
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
 .scp__empty {
   padding: 24px 16px;
   color: var(--color-text-muted);
@@ -48,27 +120,81 @@
   margin-top: 4px;
 }
 
+/* v0.16.0 — section head is now a flex row with toggle button on the
+   left and stage/unstage actions on the right. The toggle takes the
+   full clickable area minus the action buttons. */
 .scp__section-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
+  padding: 4px 8px 4px 0;
   background: transparent;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-text-dim);
-  border-bottom: 1px solid transparent;
+}
+.scp__section-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  border-radius: var(--radius-xs);
   transition: background var(--dur-fast) var(--ease-out);
 }
-.scp__section-head:hover {
+.scp__section-toggle:hover {
   background: var(--color-hover-soft);
+  color: var(--color-text);
 }
+.scp__section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.scp__section-head:hover .scp__section-actions {
+  opacity: 1;
+}
+.scp__section-act {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.scp__section-act:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+.scp__section-act--stage:hover {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.4);
+}
+.scp__section-act--unstage:hover {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+
+.scp__section-head--staged    { color: #86efac; }
 .scp__section-head--conflicts { color: #fca5a5; }
 .scp__section-head--changes   { color: var(--color-text-muted); }
 .scp__section-head--untracked { color: #6ee497; }
@@ -116,12 +242,54 @@
   font-size: 12px;
   text-align: left;
   cursor: pointer;
+  position: relative;
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out);
 }
 .scp__row:hover {
   background: var(--color-hover-soft);
+}
+
+/* v0.16.0 — per-row stage/unstage actions, hidden by default,
+   revealed on row hover. Sits between the dir hint and the badge. */
+.scp__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+.scp__row:hover .scp__row-actions {
+  opacity: 1;
+}
+.scp__row-act {
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.scp__row-act:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.scp__row-act--stage:hover {
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.4);
+}
+.scp__row-act--unstage:hover {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
 }
 
 .scp__row-name {

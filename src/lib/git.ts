@@ -18,10 +18,18 @@ import { useEffect, useState } from 'react';
 
 export type GitStatusCode = 'M' | 'A' | 'D' | 'U' | 'R' | 'C';
 
+/** v0.16.0 — raw porcelain XY codes (X = index/staged, Y = worktree). */
+export interface GitDetail {
+  x: string;
+  y: string;
+}
+
 interface CacheEntry {
   fetchedAt: number;
   /** Absolute path → status code. Empty when the workspace isn't a repo. */
   statuses: Record<string, GitStatusCode>;
+  /** v0.16.0 — per-path raw XY for staged/unstaged bucketing. */
+  detail: Record<string, GitDetail>;
   /** Repo toplevel — populated only when ok. */
   root: string | null;
 }
@@ -62,20 +70,31 @@ async function fetchStatus(cwd: string): Promise<CacheEntry> {
   const gen = generation.get(cwd) ?? 0;
   const promise = (async () => {
     if (!window.suxai?.git?.status) {
-      return { fetchedAt: Date.now(), statuses: {}, root: null };
+      return { fetchedAt: Date.now(), statuses: {}, detail: {}, root: null };
     }
     try {
       const res = await window.suxai.git.status({ cwd });
       if (!res.ok) {
-        return { fetchedAt: Date.now(), statuses: {}, root: null };
+        return { fetchedAt: Date.now(), statuses: {}, detail: {}, root: null };
       }
       const filtered: Record<string, GitStatusCode> = {};
       for (const [p, code] of Object.entries(res.statuses)) {
         if (isStatusCode(code)) filtered[normalizeGitPath(p)] = code;
       }
-      return { fetchedAt: Date.now(), statuses: filtered, root: res.root };
+      const filteredDetail: Record<string, GitDetail> = {};
+      for (const [p, d] of Object.entries(res.detail ?? {})) {
+        if (d && typeof d === 'object' && typeof d.x === 'string' && typeof d.y === 'string') {
+          filteredDetail[normalizeGitPath(p)] = { x: d.x, y: d.y };
+        }
+      }
+      return {
+        fetchedAt: Date.now(),
+        statuses: filtered,
+        detail: filteredDetail,
+        root: res.root,
+      };
     } catch {
-      return { fetchedAt: Date.now(), statuses: {}, root: null };
+      return { fetchedAt: Date.now(), statuses: {}, detail: {}, root: null };
     }
   })();
   inflight.set(cwd, promise);
@@ -136,4 +155,91 @@ export function useGitStatus(workspaceRoot: string | null): Record<string, GitSt
   }, [workspaceRoot]);
 
   return statuses;
+}
+
+/** v0.16.0 — richer hook for the Source Control panel : returns
+ *  the same statuses map PLUS the per-path XY detail and the repo
+ *  root so we can bucket Staged / Unstaged / Untracked / Conflicts
+ *  without re-querying. Same cache + refresh-event plumbing. */
+export interface GitFullStatus {
+  statuses: Record<string, GitStatusCode>;
+  detail: Record<string, GitDetail>;
+  root: string | null;
+}
+export function useGitFullStatus(workspaceRoot: string | null): GitFullStatus {
+  const [state, setState] = useState<GitFullStatus>({
+    statuses: {},
+    detail: {},
+    root: null,
+  });
+
+  useEffect(() => {
+    if (!workspaceRoot) {
+      setState({ statuses: {}, detail: {}, root: null });
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const entry = await fetchStatus(workspaceRoot);
+      if (!cancelled) {
+        setState({
+          statuses: entry.statuses,
+          detail: entry.detail,
+          root: entry.root,
+        });
+      }
+    };
+    void load();
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string | null>).detail;
+      if (detail === null || detail === workspaceRoot) {
+        cache.delete(workspaceRoot);
+        void load();
+      }
+    };
+    window.addEventListener(REFRESH_EVENT, handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(REFRESH_EVENT, handler);
+    };
+  }, [workspaceRoot]);
+
+  return state;
+}
+
+/** v0.16.0 — stage paths and refresh badges. Returns the IPC error
+ *  message if anything failed (toast it client-side). */
+export async function stagePaths(cwd: string, paths: string[]): Promise<string | null> {
+  if (!window.suxai?.git?.stage) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.stage({ cwd, paths });
+    invalidateGitStatus(cwd);
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message ?? 'stage failed';
+  }
+}
+
+/** v0.16.0 — unstage paths (git restore --staged + reset HEAD fallback). */
+export async function unstagePaths(cwd: string, paths: string[]): Promise<string | null> {
+  if (!window.suxai?.git?.unstage) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.unstage({ cwd, paths });
+    invalidateGitStatus(cwd);
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message ?? 'unstage failed';
+  }
+}
+
+/** v0.16.0 — commit. Returns short SHA on success, error message on failure. */
+export async function commitStaged(cwd: string, message: string): Promise<{ ok: true; sha: string | null; branch: string | null } | { ok: false; error: string }> {
+  if (!window.suxai?.git?.commit) return { ok: false, error: 'git IPC unavailable' };
+  try {
+    const res = await window.suxai.git.commit({ cwd, message });
+    invalidateGitStatus(cwd);
+    return res;
+  } catch (err) {
+    return { ok: false, error: (err as Error).message ?? 'commit failed' };
+  }
 }

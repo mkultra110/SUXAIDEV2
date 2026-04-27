@@ -1363,6 +1363,11 @@ function registerIpc() {
       return { ok: false, error: status.stderr.trim() || 'git_status_failed' };
     }
     const statuses: Record<string, string> = {};
+    // v0.16.0 — also expose the raw X (index) and Y (worktree) codes
+    // per path so the Source Control panel can bucket files into
+    // Staged vs Changes vs Untracked vs Conflicts. Sidebar badge code
+    // still reads from `statuses` for backward compat.
+    const detail: Record<string, { x: string; y: string }> = {};
     let count = 0;
     // -z output: each entry is `XY <space> <path>\0`. Split on NUL,
     // drop the trailing empty entry.
@@ -1394,9 +1399,171 @@ function registerIpc() {
       // against fs:read-dir output regardless of platform/Unicode form.
       const abs = path.join(root, rel).replace(/\\/g, '/').normalize('NFC');
       statuses[abs] = code;
+      detail[abs] = { x, y };
       count++;
     }
-    return { ok: true, root: root.replace(/\\/g, '/').normalize('NFC'), statuses };
+    return {
+      ok: true,
+      root: root.replace(/\\/g, '/').normalize('NFC'),
+      statuses,
+      detail,
+    };
+  });
+
+  // v0.16.0 — git:stage / git:unstage / git:commit. Reuses the same
+  // GIT_SPAWN_TIMEOUT_MS + buffer caps + sanitizeFsPath as git:status.
+  // Paths are passed RELATIVE to the repo root from the renderer (or
+  // absolute if outside the workspaceRoot path normalisation), and we
+  // re-resolve them server-side via `git rev-parse --show-toplevel`
+  // to be defensive against renderer compromise.
+  const runGitNoTimeout = (cwd: string, args: string[], stdin?: string): Promise<{ code: number; stdout: string; stderr: string }> =>
+    new Promise((resolve) => {
+      let stdout = '';
+      let stderr = '';
+      let settled = false;
+      const settle = (r: { code: number; stdout: string; stderr: string }) => {
+        if (settled) return;
+        settled = true;
+        resolve(r);
+      };
+      let child: ChildProcessWithoutNullStreams;
+      try {
+        child = spawn('git', args, { cwd });
+      } catch (err) {
+        settle({ code: -1, stdout: '', stderr: (err as Error).message });
+        return;
+      }
+      const killTimer = setTimeout(() => {
+        try { child.kill('SIGKILL'); } catch { /* gone */ }
+        settle({ code: -1, stdout, stderr: stderr + '\n[timeout]' });
+      }, GIT_SPAWN_TIMEOUT_MS);
+      child.stdout.on('data', (c) => {
+        stdout += c.toString();
+        if (stdout.length > GIT_MAX_STDOUT_BYTES) {
+          try { child.kill('SIGKILL'); } catch { /* */ }
+          clearTimeout(killTimer);
+          settle({ code: -1, stdout, stderr: stderr + '\n[output_too_large]' });
+        }
+      });
+      child.stderr.on('data', (c) => { stderr += c.toString(); });
+      child.on('error', (err) => {
+        clearTimeout(killTimer);
+        settle({ code: -1, stdout, stderr: stderr + err.message });
+      });
+      child.on('close', (code) => {
+        clearTimeout(killTimer);
+        settle({ code: code ?? -1, stdout, stderr });
+      });
+      if (stdin !== undefined) {
+        try { child.stdin.write(stdin); child.stdin.end(); } catch { /* */ }
+      }
+    });
+
+  const resolveRepoRoot = async (cwd: string): Promise<string | null> => {
+    const r = await runGitNoTimeout(cwd, ['rev-parse', '--show-toplevel']);
+    if (r.code !== 0) return null;
+    try { return sanitizeFsPath(r.stdout.trim(), { mustExist: true }); }
+    catch { return null; }
+  };
+
+  ipcMain.handle('git:stage', async (_e, input: { cwd: string; paths: string[] }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    if (!Array.isArray(input?.paths) || input.paths.length === 0) {
+      return { ok: false, error: 'paths required' };
+    }
+    if (input.paths.length > 1000) {
+      return { ok: false, error: 'too many paths' };
+    }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    // Defensive : reject paths with traversal segments.
+    const safePaths: string[] = [];
+    for (const p of input.paths) {
+      if (typeof p !== 'string' || p.length === 0) continue;
+      if (p.includes('..') || p.includes('\0')) continue;
+      // Convert to repo-relative if absolute and inside repo.
+      const norm = p.replace(/\\/g, '/').normalize('NFC');
+      const rel = norm.startsWith(root + '/') || norm === root
+        ? path.relative(root, norm)
+        : norm;
+      if (rel.length === 0 || rel.startsWith('/') || rel.includes('..')) continue;
+      safePaths.push(rel);
+    }
+    if (safePaths.length === 0) return { ok: false, error: 'no valid paths' };
+    const r = await runGitNoTimeout(root, ['add', '--', ...safePaths]);
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'git add failed' };
+    return { ok: true };
+  });
+
+  ipcMain.handle('git:unstage', async (_e, input: { cwd: string; paths: string[] }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    if (!Array.isArray(input?.paths) || input.paths.length === 0) {
+      return { ok: false, error: 'paths required' };
+    }
+    if (input.paths.length > 1000) {
+      return { ok: false, error: 'too many paths' };
+    }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const safePaths: string[] = [];
+    for (const p of input.paths) {
+      if (typeof p !== 'string' || p.length === 0) continue;
+      if (p.includes('..') || p.includes('\0')) continue;
+      const norm = p.replace(/\\/g, '/').normalize('NFC');
+      const rel = norm.startsWith(root + '/') || norm === root
+        ? path.relative(root, norm)
+        : norm;
+      if (rel.length === 0 || rel.startsWith('/') || rel.includes('..')) continue;
+      safePaths.push(rel);
+    }
+    if (safePaths.length === 0) return { ok: false, error: 'no valid paths' };
+    // `git restore --staged` is the modern equivalent of `reset HEAD`.
+    // Falls back to `reset HEAD` on git < 2.23 which still ships on
+    // older Debian/RHEL.
+    let r = await runGitNoTimeout(root, ['restore', '--staged', '--', ...safePaths]);
+    if (r.code !== 0 && /unknown subcommand|unknown switch|usage:/i.test(r.stderr)) {
+      r = await runGitNoTimeout(root, ['reset', 'HEAD', '--', ...safePaths]);
+    }
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'unstage failed' };
+    return { ok: true };
+  });
+
+  ipcMain.handle('git:commit', async (_e, input: { cwd: string; message: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    if (typeof input?.message !== 'string' || input.message.trim().length === 0) {
+      return { ok: false, error: 'commit message required' };
+    }
+    if (input.message.length > 16_000) {
+      return { ok: false, error: 'commit message too long' };
+    }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    // Pass the message via stdin (-F -) to avoid argv-length limits and
+    // to side-step shell-escape headaches on multiline commits.
+    const r = await runGitNoTimeout(root, ['commit', '-F', '-'], input.message);
+    if (r.code !== 0) {
+      const err = (r.stderr || r.stdout).trim();
+      // Distinguish "nothing to commit" (return as friendly error) from
+      // hook failures and other genuine commit errors.
+      if (/nothing (added )?to commit/i.test(err)) {
+        return { ok: false, error: 'nothing to commit (stage some changes first)' };
+      }
+      return { ok: false, error: err || 'commit failed' };
+    }
+    // Parse the short SHA + summary from `git commit` output for the
+    // toast confirmation. Format example: "[main 1a2b3c4] commit msg"
+    const m = /\[([^\] ]+) ([0-9a-f]{4,40})\]/i.exec(r.stdout);
+    return {
+      ok: true,
+      branch: m?.[1] ?? null,
+      sha: m?.[2] ?? null,
+    };
   });
 }
 

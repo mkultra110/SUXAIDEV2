@@ -128,7 +128,29 @@ const api = {
       ok: true;
       root: string;
       statuses: Record<string, string>;
+      /** v0.16.0 — raw porcelain XY per path (X = index, Y = worktree).
+       *  Lets callers bucket Staged vs Unstaged vs Untracked vs
+       *  Conflicts without re-querying. */
+      detail: Record<string, { x: string; y: string }>;
     } | { ok: false; error: string }> => ipcRenderer.invoke('git:status', input),
+    /** v0.16.0 — stage one or more paths (`git add --`). Paths are
+     *  absolute or repo-relative ; the main process re-resolves the
+     *  toplevel and rejects traversal segments. */
+    stage: (input: { cwd: string; paths: string[] }): Promise<{
+      ok: true;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:stage', input),
+    /** v0.16.0 — unstage (`git restore --staged --` with reset HEAD
+     *  fallback for git < 2.23). */
+    unstage: (input: { cwd: string; paths: string[] }): Promise<{
+      ok: true;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:unstage', input),
+    /** v0.16.0 — commit. Message piped via stdin to side-step argv
+     *  length limits + multiline shell-escape headaches. */
+    commit: (input: { cwd: string; message: string }): Promise<{
+      ok: true;
+      branch: string | null;
+      sha: string | null;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:commit', input),
   },
   checkpoint: {
     create: (workspaceRoot: string, turnId: string, files: string[]): Promise<{ id: string }> =>

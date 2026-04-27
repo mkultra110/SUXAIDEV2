@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
+import { SuxaiLogo } from '../ui/SuxaiLogo';
 import './LoginScreen.css';
 
 type Mode = 'login' | 'register';
@@ -71,20 +72,7 @@ export function LoginScreen() {
       <div className="login__card glass-strong">
         <div className="login__brand">
           <div className="login__logo" aria-hidden>
-            <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-              <defs>
-                <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#7d82f8" />
-                  <stop offset="100%" stopColor="#5457d8" />
-                </linearGradient>
-              </defs>
-              <rect x="3" y="3" width="26" height="26" rx="8" fill="url(#lg)" />
-              <path
-                d="M10 20c0-3 2.5-4 5-4 1.6 0 2.8.4 3.7 1l-1.5 2c-.6-.4-1.3-.6-2.1-.6-1.2 0-2 .5-2 1.3 0 .9.7 1.1 2.3 1.5 2.2.5 3.8 1.2 3.8 3.4 0 2.4-2.2 3.8-5.1 3.8-2 0-3.8-.6-5.1-1.7l1.6-2c.9.8 2.1 1.2 3.4 1.2 1.3 0 2-.4 2-1.2 0-.9-.6-1.1-2.4-1.5-2.2-.5-3.6-1.1-3.6-3.2Z"
-                fill="#fff"
-                opacity="0.9"
-              />
-            </svg>
+            <SuxaiLogo size={52} glow />
           </div>
           <div>
             <div className="login__title">SUXAI</div>

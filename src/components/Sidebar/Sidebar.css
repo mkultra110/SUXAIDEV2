@@ -182,23 +182,29 @@
   line-height: 1;
   border-radius: 0;
   border-left: 2px solid transparent;
-  transition: background var(--dur-fast) var(--ease-out),
+  transition:
+    background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    padding-left var(--dur-fast) var(--ease-out);
   text-align: left;
   position: relative;
 }
+/* v1.0.1 — micro-shift sur hover. La ligne se décale d'1 px pour
+   donner le sentiment d'un bouton qui réagit, sans la cassure
+   d'un translate-Y qui ferait sauter le tree. */
 .sidebar__entry:hover {
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--color-text-strong-2);
 }
 .sidebar__entry--active {
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.22), rgba(99, 102, 241, 0.08));
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.24), rgba(99, 102, 241, 0.08) 80%);
   border-left-color: var(--color-accent-hover);
-  color: #ffffff;
+  color: var(--color-text-strong);
+  box-shadow: inset 0 0 0 1px rgba(125, 130, 248, 0.06);
 }
 .sidebar__entry--active:hover {
-  background: linear-gradient(90deg, rgba(99, 102, 241, 0.30), rgba(99, 102, 241, 0.12));
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.32), rgba(99, 102, 241, 0.12) 80%);
 }
 
 .sidebar__chev {

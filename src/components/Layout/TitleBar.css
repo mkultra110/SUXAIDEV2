@@ -50,20 +50,30 @@
   letter-spacing: var(--ls-wide);
   color: var(--color-text-strong);
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.34);
+  -webkit-app-region: no-drag;
+  cursor: default;
+}
+.titlebar__brand svg {
+  transition: transform var(--dur-base) var(--ease-spring),
+    filter var(--dur-base) var(--ease-out);
+}
+.titlebar__brand:hover svg {
+  transform: scale(1.08) rotate(-3deg);
+  filter: drop-shadow(0 0 14px rgba(125, 130, 248, 0.55));
+}
+.titlebar__brand-name {
+  background: linear-gradient(180deg, #ffffff 0%, #d8dbff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-/* v1.0 — brand mark: dual-radial gradient + outer halo + breathe
-   animation. Matches the welcome screen's brand pill dot. */
+/* Legacy alias — kept so anywhere still rendering .titlebar__dot
+   (e.g. older e2e selectors) doesn't blow up. */
 .titlebar__dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  background:
-    radial-gradient(120% 120% at 30% 25%, #b3b8fc 0%, #6366f1 60%, #4548c0 100%);
-  box-shadow:
-    0 0 14px rgba(125, 130, 248, 0.78),
-    0 0 0 1.5px rgba(125, 130, 248, 0.18),
-    0 0 0 1px rgba(255, 255, 255, 0.10) inset;
-  animation: suxai-breathe 4s var(--ease-in-out) infinite;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .titlebar__version {

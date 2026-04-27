@@ -287,24 +287,38 @@
 
 /* ----- Animated typing dots ------------------------------- */
 
+/* v1.0.1 — wave animation. Each dot scales + shifts vertically on a
+   staggered loop, creating a soft « breathing » signature instead of
+   the previous stiff bounce. The middle dot has the longest travel
+   so the wave feels like a sine-curve, not a row of equal beats. */
 .msg__thinking {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  height: 18px;
-  padding: 0 4px;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
 }
 .msg__thinking-dot {
-  width: 5px; height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--color-text-muted);
-  animation: msg-blink 1.2s ease-in-out infinite;
+  background: linear-gradient(180deg, #b3b8fc, #7d80f8);
+  box-shadow: 0 0 6px rgba(125, 130, 248, 0.55);
+  animation: msg-wave 1.4s var(--ease-in-out) infinite;
 }
-.msg__thinking-dot:nth-child(2) { animation-delay: 0.18s; }
-.msg__thinking-dot:nth-child(3) { animation-delay: 0.36s; }
-@keyframes msg-blink {
-  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
-  30%           { opacity: 1;    transform: translateY(-2px); }
+.msg__thinking-dot:nth-child(2) { animation-delay: 0.16s; }
+.msg__thinking-dot:nth-child(3) { animation-delay: 0.32s; }
+@keyframes msg-wave {
+  0%, 60%, 100% {
+    opacity: 0.32;
+    transform: translateY(0)    scale(0.85);
+    box-shadow: 0 0 4px rgba(125, 130, 248, 0.30);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px) scale(1.1);
+    box-shadow: 0 0 12px rgba(125, 130, 248, 0.85);
+  }
 }
 
 /* ----- Reasoning panel (extended thinking) --------------- */

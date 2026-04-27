@@ -58,16 +58,18 @@
   color: var(--color-text);
   background: var(--color-hover-soft);
 }
-.actbar__btn:active {
-  transform: scale(0.94);
+.actbar__btn:active { transform: scale(0.92); }
+.actbar__btn:hover svg { transform: scale(1.06); }
+.actbar__btn svg {
+  transition: transform var(--dur-base) var(--ease-spring);
 }
 
-/* Active icon : color-shift + 2px accent stripe down the left
-   edge — matches VSCode's selected-view indicator. v0.17.0
-   adds a subtle accent halo for premium feel. */
+/* v1.0.1 — accent stripe with spring transition. The pseudo
+   element animates height + glow when the button becomes active,
+   giving a "slide-in" feel between view switches. */
 .actbar__btn--active {
-  color: #fff;
-  background: rgba(99, 102, 241, 0.10);
+  color: var(--color-text-strong);
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.04));
 }
 .actbar__btn--active::before {
   content: '';
@@ -75,10 +77,17 @@
   left: -8px;
   top: 6px;
   bottom: 6px;
-  width: 2.5px;
+  width: 3px;
   background: linear-gradient(180deg, var(--color-accent-hover), var(--color-accent-press));
-  box-shadow: 0 0 12px rgba(125, 130, 248, 0.65);
+  box-shadow:
+    0 0 16px rgba(125, 130, 248, 0.78),
+    0 0 0 1px rgba(125, 130, 248, 0.22);
   border-radius: 0 3px 3px 0;
+  animation: actbar-stripe-in 320ms var(--ease-spring);
+}
+@keyframes actbar-stripe-in {
+  from { transform: scaleY(0.3); opacity: 0; }
+  to   { transform: scaleY(1);   opacity: 1; }
 }
 
 .actbar__btn:focus-visible {

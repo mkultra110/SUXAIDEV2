@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { UpgradeDialog } from '../UpgradeDialog/UpgradeDialog';
+import { SuxaiLogo } from '../ui/SuxaiLogo';
 import './TitleBar.css';
 
 export function TitleBar() {
@@ -43,8 +44,8 @@ export function TitleBar() {
           peu importe la longueur du nom d'utilisateur. */}
       <div className="titlebar__zone titlebar__zone--left titlebar__drag">
         <div className="titlebar__brand">
-          <div className="titlebar__dot" />
-          <span>SUXAI</span>
+          <SuxaiLogo size={20} />
+          <span className="titlebar__brand-name">SUXAI</span>
           {version && <span className="titlebar__version">v{version}</span>}
         </div>
       </div>

@@ -4,6 +4,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { InlineDiff } from './InlineDiff';
 import { InlineEdit } from './InlineEdit';
 import { Breadcrumbs } from './Breadcrumbs';
+import { MarkdownPreview } from './MarkdownPreview';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { emitAiCommand } from '../../lib/commands';
 import { useSettings } from '../../lib/settings';
@@ -125,6 +126,14 @@ export function EditorPanel() {
   }, []);
   const [tabMenu, setTabMenu] = useState<{ x: number; y: number; path: string } | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
+  // v0.16.2 — per-file markdown view mode (edit vs preview). Persisted
+  // in a Map so toggling between tabs preserves the user's choice ;
+  // unlimited growth isn't a concern (1 entry per file ever opened in
+  // this session, capped naturally by the open-tabs lifecycle).
+  const [mdViewMode, setMdViewMode] = useState<Map<string, 'edit' | 'preview'>>(() => new Map());
+  const isMarkdown =
+    !!activeFile && /\.(md|markdown|mdown|mkd)$/i.test(activeFile.name);
+  const currentMdView = activeFile ? (mdViewMode.get(activeFile.path) ?? 'edit') : 'edit';
   const [zoomOffset, setZoomOffset] = useState(0);
   const [inlineEdit, setInlineEdit] = useState<{
     top: number;
@@ -658,39 +667,97 @@ export function EditorPanel() {
           </div>
         )}
         {activeFile ? (
-          <Editor
-            key={activeFile.path}
-            height="100%"
-            language={activeFile.language ?? 'plaintext'}
-            value={activeFile.content}
-            onChange={(v) => updateActiveContent(v ?? '')}
-            onMount={onMount}
-            options={{
-              fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
-              fontSize: effectiveFontSize,
-              fontLigatures: true,
-              minimap: { enabled: settings.minimap },
-              smoothScrolling: true,
-              cursorBlinking: 'smooth',
-              cursorSmoothCaretAnimation: 'on',
-              padding: { top: 14, bottom: 14 },
-              scrollBeyondLastLine: false,
-              renderLineHighlight: 'all',
-              lineNumbersMinChars: 3,
-              automaticLayout: true,
-              tabSize: settings.tabSize,
-              wordWrap: settings.wordWrap ? 'on' : 'off',
-              guides: { indentation: true, bracketPairs: true },
-              // Tab autocomplete (ghost text). Even when the toggle
-              // is off in settings, leaving this enabled is fine —
-              // the provider returns no items, so no ghost text shows.
-              inlineSuggest: {
-                enabled: true,
-                mode: 'subwordSmart',
-                showToolbar: 'onHover',
-              },
-            }}
-          />
+          <>
+            {/* v0.16.2 — Edit/Preview toggle, only on markdown files. */}
+            {isMarkdown && (
+              <div className="editor__viewmode" role="group" aria-label="Markdown view mode">
+                <button
+                  type="button"
+                  className={`editor__viewmode-btn ${currentMdView === 'edit' ? 'editor__viewmode-btn--active' : ''}`}
+                  onClick={() =>
+                    setMdViewMode((m) => {
+                      const next = new Map(m);
+                      next.set(activeFile.path, 'edit');
+                      return next;
+                    })
+                  }
+                  title="Edit mode"
+                  aria-pressed={currentMdView === 'edit'}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M14 4l6 6-11 11H3v-6L14 4z"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className={`editor__viewmode-btn ${currentMdView === 'preview' ? 'editor__viewmode-btn--active' : ''}`}
+                  onClick={() =>
+                    setMdViewMode((m) => {
+                      const next = new Map(m);
+                      next.set(activeFile.path, 'preview');
+                      return next;
+                    })
+                  }
+                  title="Preview mode"
+                  aria-pressed={currentMdView === 'preview'}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                    <path
+                      d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+                  </svg>
+                  Preview
+                </button>
+              </div>
+            )}
+            {isMarkdown && currentMdView === 'preview' ? (
+              <MarkdownPreview source={activeFile.content} basePath={activeFile.path} />
+            ) : (
+              <Editor
+                key={activeFile.path}
+                height="100%"
+                language={activeFile.language ?? 'plaintext'}
+                value={activeFile.content}
+                onChange={(v) => updateActiveContent(v ?? '')}
+                onMount={onMount}
+                options={{
+                  fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
+                  fontSize: effectiveFontSize,
+                  fontLigatures: true,
+                  minimap: { enabled: settings.minimap },
+                  smoothScrolling: true,
+                  cursorBlinking: 'smooth',
+                  cursorSmoothCaretAnimation: 'on',
+                  padding: { top: 14, bottom: 14 },
+                  scrollBeyondLastLine: false,
+                  renderLineHighlight: 'all',
+                  lineNumbersMinChars: 3,
+                  automaticLayout: true,
+                  tabSize: settings.tabSize,
+                  wordWrap: settings.wordWrap ? 'on' : 'off',
+                  guides: { indentation: true, bracketPairs: true },
+                  // Tab autocomplete (ghost text). Even when the toggle
+                  // is off in settings, leaving this enabled is fine —
+                  // the provider returns no items, so no ghost text shows.
+                  inlineSuggest: {
+                    enabled: true,
+                    mode: 'subwordSmart',
+                    showToolbar: 'onHover',
+                  },
+                }}
+              />
+            )}
+          </>
         ) : (
           <EditorWelcome />
         )}

@@ -1,26 +1,21 @@
 /* ============================================================
    InlineEdit — Cmd+K floating prompt above editor selection
-   v0.15.2 — visual refresh.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .inline-edit {
   position: absolute;
-  z-index: 55;
+  z-index: var(--z-popover);
   display: flex;
   flex-direction: column;
   padding: 11px;
   border-radius: var(--radius-md);
-  background:
-    linear-gradient(180deg, rgba(34, 42, 68, 0.94), rgba(20, 26, 46, 0.96));
+  background: var(--color-bg-overlay);
   backdrop-filter: blur(20px) saturate(170%);
   -webkit-backdrop-filter: blur(20px) saturate(170%);
-  border: 1px solid var(--color-border-accent);
-  box-shadow:
-    0 26px 60px rgba(0, 0, 0, 0.62),
-    0 0 0 1px rgba(125, 130, 248, 0.22),
-    0 0 38px rgba(125, 130, 248, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  animation: suxai-scale-in 200ms var(--ease-spring);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 35%, transparent);
+  box-shadow: var(--shadow-lg), var(--shadow-accent-glow);
+  animation: suxai-scale-in var(--dur-base) var(--ease-spring);
   transform-origin: top center;
   min-width: 400px;
 }
@@ -38,67 +33,67 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 2.5px 8px;
-  border-radius: 999px;
-  background: rgba(125, 130, 248, 0.2);
-  color: #d0d4ff;
-  border: 1px solid rgba(125, 130, 248, 0.35);
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, var(--color-accent) 20%, transparent);
+  color: var(--color-accent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 35%, transparent);
 }
 
 .inline-edit__hint {
   flex: 1;
-  font-size: 11px;
-  color: var(--color-text-dim);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
 }
 
 .inline-edit__close {
-  width: 22px; height: 22px;
-  display: grid; place-items: center;
-  color: var(--color-text-dim);
-  font-size: 16px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-md);
   line-height: 1;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
   transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard);
 }
 .inline-edit__close:hover {
-  color: var(--color-text);
-  background: var(--color-hover);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
 
 .inline-edit__input {
   width: 100%;
   padding: 10px 12px;
-  background: rgba(6, 10, 20, 0.6);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
-  color: var(--color-text);
-  font-size: 13px;
-  line-height: 1.5;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-base);
   font-family: inherit;
   outline: none;
   resize: vertical;
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    border-color var(--dur-quick) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard);
 }
 .inline-edit__input:focus {
-  border-color: var(--color-border-accent);
-  box-shadow: var(--focus-ring-soft);
-  background: rgba(6, 10, 20, 0.85);
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-accent-glow);
 }
-.inline-edit__input::placeholder { color: var(--color-text-dim); }
+.inline-edit__input::placeholder { color: var(--color-text-tertiary); }
 .inline-edit__input:disabled { opacity: 0.6; cursor: wait; }
 
 .inline-edit__error {
   margin-top: 8px;
   padding: 8px 12px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.32);
+  background: color-mix(in oklch, var(--color-danger) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-danger) 32%, transparent);
   border-radius: var(--radius-sm);
-  color: #fca5a5;
-  font-size: 11.5px;
+  color: var(--color-danger);
+  font-size: var(--text-2xs);
 }
 
 .inline-edit__foot {
@@ -106,15 +101,15 @@
   justify-content: space-between;
   align-items: center;
   margin-top: 8px;
-  font-size: 10.5px;
-  color: var(--color-text-dim);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
 }
 
 .inline-edit__model {
   padding: 2.5px 7px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
   font-family: var(--font-mono);
 }
 
@@ -122,14 +117,14 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--color-accent-hover);
+  color: var(--color-accent);
 }
 
 .inline-edit__kbd {
   padding: 1.5px 7px;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-elevated);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }

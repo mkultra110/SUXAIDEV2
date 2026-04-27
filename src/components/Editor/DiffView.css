@@ -1,10 +1,15 @@
+/* ============================================================
+   DiffView — accept/reject hunk by hunk after agent edit
+   v2.0 — Obsidian Warm.
+   ============================================================ */
+
 .diffview {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-bg);
-  z-index: 30;
+  background: var(--color-bg-base);
+  z-index: var(--z-raised);
 }
 
 .diffview__bar {
@@ -12,33 +17,30 @@
   align-items: center;
   justify-content: space-between;
   padding: 11px 16px;
-  border-bottom: 1px solid var(--color-border-strong);
-  background:
-    linear-gradient(180deg, rgba(28, 36, 60, 0.85), rgba(13, 18, 30, 0.85));
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface);
   backdrop-filter: blur(20px) saturate(170%);
   -webkit-backdrop-filter: blur(20px) saturate(170%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .diffview__title {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12.5px;
-  color: var(--color-text);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
 }
 
 .diffview__badge {
-  background: linear-gradient(135deg, rgba(125, 130, 248, 0.24), rgba(84, 87, 216, 0.16));
-  border: 1px solid rgba(125, 130, 248, 0.5);
-  color: #d8dbff;
+  background: color-mix(in oklch, var(--color-accent) 22%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 50%, transparent);
+  color: var(--color-accent);
   padding: 2.5px 9px;
-  border-radius: 999px;
-  font-size: 10.5px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   font-weight: 600;
   text-transform: uppercase;
-  box-shadow: 0 0 8px rgba(125, 130, 248, 0.18);
 }
 
 .diffview__file {
@@ -47,17 +49,17 @@
 }
 
 .diffview__label {
-  color: var(--color-text-muted);
-  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-2xs);
   font-family: var(--font-mono);
   padding: 2px 6px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 4px;
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-xs);
 }
 
 .diffview__counter {
-  color: var(--color-text-muted);
-  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-2xs);
   margin-left: 4px;
 }
 
@@ -71,44 +73,45 @@
   overflow-y: auto;
   padding: 16px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-size: var(--text-xs);
+  line-height: var(--leading-base);
 }
 
 .diffview__empty {
   display: grid;
   place-items: center;
   height: 100%;
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
 }
 
-/* ---- Hunk ---- */
 .diff-hunk {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
   overflow: hidden;
   margin-bottom: 14px;
-  transition: border-color 0.2s, background 0.2s, opacity 0.2s;
+  transition: border-color var(--dur-base) var(--ease-standard),
+    background var(--dur-base) var(--ease-standard),
+    opacity var(--dur-base) var(--ease-standard);
   position: relative;
 }
 
 .diff-hunk--accepted {
-  border-color: rgba(52, 199, 89, 0.5);
-  box-shadow: 0 0 0 1px rgba(52, 199, 89, 0.3) inset;
+  border-color: color-mix(in oklch, var(--color-success) 50%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--color-success) 30%, transparent) inset;
 }
 
 .diff-hunk--rejected {
   opacity: 0.55;
-  border-color: rgba(255, 99, 99, 0.35);
+  border-color: color-mix(in oklch, var(--color-danger) 35%, transparent);
 }
 
 .diff-hunk__context {
-  background: rgba(255, 255, 255, 0.015);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .diff-hunk__changes {
-  background: rgba(255, 255, 255, 0.01);
+  background: transparent;
 }
 
 .diff-hunk__line {
@@ -123,7 +126,7 @@
   flex: 0 0 14px;
   text-align: center;
   font-weight: 700;
-  color: var(--color-text-muted);
+  color: var(--color-text-tertiary);
   opacity: 0.5;
   user-select: none;
 }
@@ -132,31 +135,35 @@
   flex: 1;
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--color-text);
+  color: var(--color-text-primary);
 }
 
 .diff-hunk__line--context .diff-hunk__text {
-  color: var(--color-text-muted);
+  color: var(--color-text-secondary);
   opacity: 0.75;
 }
 
 .diff-hunk__line--removed {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.18), rgba(239, 68, 68, 0.06) 70%);
-  border-left: 2px solid rgba(239, 68, 68, 0.55);
+  background: linear-gradient(90deg,
+    color-mix(in oklch, var(--color-danger) 18%, transparent),
+    color-mix(in oklch, var(--color-danger) 06%, transparent) 70%);
+  border-left: 2px solid color-mix(in oklch, var(--color-danger) 55%, transparent);
   padding-left: 8px;
 }
 .diff-hunk__line--removed .diff-hunk__gutter {
-  color: #ff8f8f;
+  color: var(--color-danger);
   opacity: 1;
 }
 
 .diff-hunk__line--added {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.18), rgba(34, 197, 94, 0.06) 70%);
-  border-left: 2px solid rgba(34, 197, 94, 0.55);
+  background: linear-gradient(90deg,
+    color-mix(in oklch, var(--color-success) 18%, transparent),
+    color-mix(in oklch, var(--color-success) 06%, transparent) 70%);
+  border-left: 2px solid color-mix(in oklch, var(--color-success) 55%, transparent);
   padding-left: 8px;
 }
 .diff-hunk__line--added .diff-hunk__gutter {
-  color: #7ae08f;
+  color: var(--color-success);
   opacity: 1;
 }
 
@@ -165,8 +172,8 @@
   justify-content: flex-end;
   gap: 6px;
   padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.25);
-  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-canvas);
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .diff-hunk__btn {
@@ -174,25 +181,28 @@
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11.5px;
+  border-radius: var(--radius-xs);
+  font-size: var(--text-2xs);
   font-weight: 600;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--color-text-muted);
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  color: var(--color-text-tertiary);
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
   cursor: pointer;
 }
 
 .diff-hunk__btn--accept:hover,
 .diff-hunk__btn--accept.is-active {
-  color: #7ae08f;
-  border-color: rgba(52, 199, 89, 0.4);
-  background: rgba(52, 199, 89, 0.12);
+  color: var(--color-success);
+  border-color: color-mix(in oklch, var(--color-success) 40%, transparent);
+  background: color-mix(in oklch, var(--color-success) 12%, transparent);
 }
 .diff-hunk__btn--reject:hover,
 .diff-hunk__btn--reject.is-active {
-  color: #ff8f8f;
-  border-color: rgba(255, 99, 99, 0.4);
-  background: rgba(255, 99, 99, 0.12);
+  color: var(--color-danger);
+  border-color: color-mix(in oklch, var(--color-danger) 40%, transparent);
+  background: color-mix(in oklch, var(--color-danger) 12%, transparent);
 }

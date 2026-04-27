@@ -1,6 +1,6 @@
 /* ============================================================
    TerminalPanel — bottom xterm.js host
-   v0.15.0 — visual refresh.
+   v2.0 — Obsidian Warm.
    ============================================================ */
 
 .termpanel {
@@ -8,9 +8,8 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  background:
-    linear-gradient(180deg, #0a0e17 0%, #07090f 100%);
-  border-top: 1px solid var(--color-border-strong);
+  background: var(--color-bg-base);
+  border-top: 1px solid var(--color-border-subtle);
   overflow: hidden;
   flex-shrink: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
@@ -18,16 +17,18 @@
 
 .termpanel__grip {
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 4px;
   cursor: row-resize;
   background: transparent;
-  transition: background var(--dur-fast) var(--ease-out);
-  z-index: 5;
+  transition: background var(--dur-quick) var(--ease-standard);
+  z-index: var(--z-raised);
 }
 .termpanel__grip:hover {
-  background: rgba(125, 130, 248, 0.4);
-  box-shadow: 0 0 12px rgba(125, 130, 248, 0.4);
+  background: color-mix(in oklch, var(--color-accent) 40%, transparent);
+  box-shadow: 0 0 12px color-mix(in oklch, var(--color-accent) 35%, transparent);
 }
 
 .termpanel__head {
@@ -35,11 +36,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px 6px 14px;
-  background:
-    linear-gradient(180deg, rgba(20, 26, 42, 0.85), rgba(13, 18, 30, 0.85));
-  border-bottom: 1px solid var(--color-border);
-  font-size: 11px;
-  color: var(--color-text-muted);
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
   flex-shrink: 0;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
@@ -52,15 +52,16 @@
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  font-size: 10.5px;
-  color: var(--color-text-dim);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
 }
 .termpanel__title::before {
   content: '';
-  width: 7px; height: 7px;
-  border-radius: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
   background: var(--color-success);
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.55);
+  box-shadow: 0 0 6px color-mix(in oklch, var(--color-success) 50%, transparent);
 }
 
 .termpanel__actions {
@@ -70,83 +71,85 @@
 }
 
 .termpanel__btn {
-  width: 24px; height: 22px;
-  display: grid; place-items: center;
-  color: var(--color-text-dim);
+  width: 24px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
   border-radius: var(--radius-xs);
-  font-size: 12px;
+  font-size: var(--text-xs);
   line-height: 1;
   background: transparent;
   border: none;
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard);
 }
 .termpanel__btn:hover {
-  color: var(--color-text);
-  background: var(--color-hover);
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
 }
-.termpanel__btn--close:hover { color: #fff; background: rgba(232, 17, 35, 0.55); }
+.termpanel__btn--close:hover {
+  color: var(--color-text-on-accent);
+  background: var(--color-danger);
+}
 
-/* v0.16.1 — find-in-terminal mini bar (Ctrl+F). Sticky between
-   the head and the xterm host. */
 .termpanel__search {
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 5px 10px;
-  background:
-    linear-gradient(180deg, rgba(20, 26, 42, 0.92), rgba(11, 15, 23, 0.92));
-  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  border-bottom: 1px solid var(--color-border-subtle);
   flex-shrink: 0;
 }
 .termpanel__search-input {
   flex: 1;
   height: 24px;
   padding: 0 8px;
-  background: rgba(6, 10, 20, 0.6);
-  border: 1px solid var(--color-border);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-xs);
-  color: var(--color-text);
-  font-size: 12px;
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
   font-family: var(--font-mono);
   outline: none;
   transition:
-    border-color var(--dur-fast) var(--ease-out),
-    box-shadow var(--dur-fast) var(--ease-out);
+    border-color var(--dur-quick) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard);
 }
 .termpanel__search-input:focus {
-  border-color: var(--color-border-accent);
-  box-shadow: var(--focus-ring-soft);
+  border-color: var(--color-focus-ring);
+  box-shadow: var(--shadow-accent-glow);
 }
-.termpanel__search-input::placeholder { color: var(--color-text-dim); }
+.termpanel__search-input::placeholder { color: var(--color-text-tertiary); }
 .termpanel__search-btn {
   width: 22px;
   height: 22px;
   display: grid;
   place-items: center;
   background: transparent;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-xs);
-  color: var(--color-text-muted);
-  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
   line-height: 1;
   cursor: pointer;
   transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
 }
 .termpanel__search-btn:hover {
-  background: var(--color-hover);
-  color: var(--color-text);
-  border-color: var(--color-border-strong);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-default);
 }
 .termpanel__search-btn--close:hover {
-  color: #fff;
-  background: rgba(232, 17, 35, 0.55);
-  border-color: rgba(232, 17, 35, 0.6);
+  color: var(--color-text-on-accent);
+  background: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
 .termpanel__host {
@@ -157,12 +160,3 @@
 }
 .termpanel__host .xterm { height: 100%; }
 .termpanel__host .xterm-viewport { background: transparent !important; }
-.termpanel__host .xterm-viewport::-webkit-scrollbar { width: 8px; }
-.termpanel__host .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
-.termpanel__host .xterm-viewport::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
-  border-radius: 4px;
-}
-.termpanel__host .xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
-}

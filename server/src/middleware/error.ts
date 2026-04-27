@@ -11,11 +11,12 @@ export function notFound(_req: Request, res: Response) {
   res.status(404).json({ message: 'Not found', code: 'NOT_FOUND' });
 }
 
+// _next is required by Express's 4-arg error-handler signature even
+// though we never call it — underscore prefix suppresses lint warnings.
 export function errorHandler(
   err: AppError,
   _req: Request,
   res: Response,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _next: NextFunction,
 ) {
   const status = typeof err.status === 'number' ? err.status : 500;

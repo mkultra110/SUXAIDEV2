@@ -177,9 +177,10 @@ router.post(
     try {
       const completion = await completeFIM(req.body);
       res.json({ completion: completion ?? '' });
-    } catch {
-      // Never surface autocomplete failures to the client — they'd
-      // pop up as a generic error toast every few seconds.
+    } catch (err) {
+      // Don't surface autocomplete failures to the client (would pop
+      // up as a toast every few seconds). Log server-side for debugging.
+      console.warn('[ai/complete] upstream error:', (err as Error).message ?? err);
       res.json({ completion: '' });
     }
   },

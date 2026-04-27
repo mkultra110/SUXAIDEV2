@@ -20,6 +20,7 @@ import {
   type Conversation,
 } from '../../lib/conversations';
 import { executeTool, toolsForMode, type ToolCall } from '../../lib/agent';
+import { buildAgentToolDefinitions, executeMcpTool, isMcpToolName } from '../../lib/mcp';
 import { buildAdditionalDataXml } from '../../lib/additional-data';
 import { buildRepoMap, formatRepoMapBlock } from '../../lib/repo-map';
 import { TokenUsageBar } from './TokenUsageBar';
@@ -290,6 +291,16 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
   // sees the freshest payload.
   let working = conversationMessages.slice();
 
+  // v0.16.13 — fetch MCP tools once at the top of the agent loop and
+  // merge them into the per-turn tools array. Servers rarely flip
+  // mid-conversation ; if the user adds one via Settings the next
+  // turn will pick it up (re-fetched on every runAgentLoop call).
+  // The route map (server, toolName) is rebuilt as a side effect so
+  // executeMcpTool can route the call back correctly.
+  let mcpToolDefs: Awaited<ReturnType<typeof buildAgentToolDefinitions>> = [];
+  try { mcpToolDefs = await buildAgentToolDefinitions(); }
+  catch { /* MCP not available — agent runs without those tools */ }
+
   for (let iter = 0; iter < MAX_AGENT_ITERATIONS; iter++) {
     // The streaming assistant message is the one we don't want to send
     // back as part of the prompt — we exclude it from the agent
@@ -318,7 +329,12 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
           // run_command and adds create_plan; composer keeps the full
           // write-capable surface. Computed per turn so toggling Plan
           // mid-conversation takes effect immediately.
-          tools: toolsForMode(args.mode),
+          // v0.16.13 — concat MCP tools (mcp_<server>_<tool>) so the
+          // agent can call them like any built-in tool. Plan mode
+          // intentionally KEEPS them : MCP read-only tools (e.g.
+          // search-the-web) are useful during plan investigation, and
+          // the user already approves each call via the modal.
+          tools: [...toolsForMode(args.mode), ...mcpToolDefs],
           agentMessages,
           mode: args.mode,
         },
@@ -602,19 +618,56 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
           }
         }
         try {
-          const result = await executeTool(call, {
-            approve: (c, preview) => args.requestApproval(c, preview),
-            workspaceRoot: args.workspaceRoot ?? null,
-            applyLazyEdit: args.applyLazyEdit,
-            pathLocks,
-            notifyEdit: ({ path, added, removed, partial }) => {
-              const name = path.split(/[\\/]/).pop() ?? path;
-              toast.info(
-                `Edited ${name}`,
-                `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
+          let result;
+          if (isMcpToolName(call.name)) {
+            // v0.16.13 — route MCP tool calls through the dedicated
+            // executor. The user-approval flow still gates these via
+            // requestApproval (modal) since MCP tools can have any
+            // side effect — only YOLO mode auto-approves them, and
+            // even then we let the request through (parity with
+            // other non-file-write tools).
+            const approval = await args.requestApproval(call);
+            const ok = (approval as { ok: boolean }).ok ?? false;
+            if (!ok) {
+              result = {
+                tool_use_id: call.id,
+                content: `User rejected MCP tool ${call.name}.`,
+                is_error: false,
+              };
+            } else {
+              const mcpRes = await executeMcpTool(
+                call.name,
+                (call.input as Record<string, unknown>) ?? {},
               );
-            },
-          });
+              if (mcpRes.ok) {
+                result = {
+                  tool_use_id: call.id,
+                  content: mcpRes.content,
+                  is_error: false,
+                };
+              } else {
+                result = {
+                  tool_use_id: call.id,
+                  content: mcpRes.error,
+                  is_error: true,
+                };
+              }
+            }
+          } else {
+            result = await executeTool(call, {
+              approve: (c, preview) => args.requestApproval(c, preview),
+              workspaceRoot: args.workspaceRoot ?? null,
+              applyLazyEdit: args.applyLazyEdit,
+              pathLocks,
+              notifyEdit: ({ path, added, removed, partial }) => {
+                const name = path.split(/[\\/]/).pop() ?? path;
+                toast.info(
+                  `Edited ${name}`,
+                  `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
+                );
+              },
+            });
+          }
           const status: ToolCallSnapshot['status'] = result.is_error
             ? 'error'
             : typeof result.content === 'string' &&

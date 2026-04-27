@@ -764,9 +764,11 @@ export function EditorPanel() {
                     onChange={(v) => updateActiveContent(v ?? '')}
                     onMount={onMount}
                     options={{
-                      fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
+                      fontFamily: 'Geist Mono, "JetBrains Mono", "SF Mono", Menlo, monospace',
                       fontSize: effectiveFontSize,
-                      fontLigatures: true,
+                      fontLigatures: "'calt', 'liga', 'ss01', 'zero'",
+                      lineHeight: 1.65,
+                      letterSpacing: 0.2,
                       minimap: { enabled: false },
                       smoothScrolling: true,
                       cursorBlinking: 'smooth',
@@ -798,9 +800,11 @@ export function EditorPanel() {
                 onChange={(v) => updateActiveContent(v ?? '')}
                 onMount={onMount}
                 options={{
-                  fontFamily: 'JetBrains Mono, Fira Code, Menlo, monospace',
+                  fontFamily: 'Geist Mono, "JetBrains Mono", "SF Mono", Menlo, monospace',
                   fontSize: effectiveFontSize,
-                  fontLigatures: true,
+                  fontLigatures: "'calt', 'liga', 'ss01', 'zero'",
+                  lineHeight: 1.65,
+                  letterSpacing: 0.2,
                   minimap: { enabled: settings.minimap },
                   smoothScrolling: true,
                   cursorBlinking: 'smooth',

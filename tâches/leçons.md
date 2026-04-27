@@ -107,3 +107,32 @@ _(à remplir au fur et à mesure)_
   préférer un wrapper `position:relative` + `::after` `position:
   absolute` qu'on fade conditionnellement (avec une classe ajoutée
   par JS sur scroll). Le mask est trop blunt.
+
+### V2 — Tool calls « QUEUED » à l'infini après une erreur réseau
+- **Symptôme** : agent boucle sur `list_dir` (status QUEUED) sans
+  jamais l'exécuter ; chaque turn empile un nouveau call list_dir
+  identique. Visible : « Réflexion + list_dir QUEUED » répété.
+- **Cause** : quand `streamAi` rejette mid-stream (network error,
+  abort) APRÈS qu'`onToolUse` ait créé un tool call `status: 'pending'`
+  mais AVANT que le code d'exécution post-stream ne tourne, le tool
+  reste pending. `chatToAgentMessages` filtre les pending (ligne 127)
+  → l'historique envoyé à Anthropic n'a aucun record du tool_use →
+  Claude pense n'avoir jamais appelé le tool → re-émet le même
+  tool_use. Si le réseau replante, on accumule des pending. Loop.
+- **Règle** : sur rejet du Promise streamAi, AVANT de re-throw vers
+  le `.catch` extérieur, convertir tous les tool calls `pending` du
+  current assistant message en `status: 'error'` avec un tool_result
+  synthétique. Ça maintient l'invariant tool_use ↔ tool_result requis
+  par Anthropic ET permet au modèle de voir « j'ai tenté, ça a
+  échoué » → adapter sa stratégie. Cf. AIPanel.tsx commit v2.0.1.
+
+### V3 — Méga-prompt impose contexte management explicite
+- **Symptôme** : refonte v2.0.0 demandait de toucher 60+ fichiers
+  CSS. Sans persistance, un context reset au milieu = perte d'état
+  (lots terminés vs restants, conventions choisies).
+- **Règle** : dès qu'une refonte excède ~5 lots, créer
+  `refactor-progress.md` à la racine avec : direction artistique
+  figée, branche, lots terminés (avec commit hash), lots restants,
+  notes critiques (bugs ouverts, adaptations chemins, audit cibles).
+  Mettre à jour à chaque commit. Permet `cat refactor-progress.md
+  → continue` après reset propre.

@@ -38,6 +38,33 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
 
+### 2026-04-27 — V2.0.1 fix bug « tourne en boucle » list_dir QUEUED
+- **Fait** : root cause identifiée → quand `streamAi` rejette
+  mid-stream (network) après `onToolUse`, les tool calls restent
+  `pending` ad vitam. `chatToAgentMessages` les filtre (invariant
+  Anthropic tool_use ↔ tool_result), Claude ne voit pas qu'il a
+  tenté, re-émet le même `list_dir`, boucle infinie.
+- **Fix** : try/catch autour du Promise streamAi dans `runAgentLoop`.
+  Sur rejet, convertir tous les tool calls `pending` du current
+  assistant message en `status: 'error'` avec un tool_result
+  synthétique « Stream interrupted before tool ran… » avant de
+  re-throw. Le modèle voit l'échec → adapte stratégie.
+- **Validation** : typecheck + build OK. Leçon V2 ajoutée à
+  `tâches/leçons.md`.
+
+### 2026-04-27 — V2.0.0 refonte « Obsidian Warm »
+- **Fait** : refonte visuelle totale en 18 lots (theme.css OKLCH +
+  grain.css + monaco-suxai-theme.ts ; renderer entry fontsource +
+  anti-FOUC ; Electron BrowserWindow vibrancy/mica ; toutes les
+  surfaces composants repassées sur tokens). Inter Variable +
+  Geist Mono. Light mode shippé via `[data-theme='light']`.
+- **Validation** : typecheck + build OK ; audit grep brut → 0
+  cubic-bezier hardcodé hors theme, 3 hex justifiés (SVG fallback +
+  comment), 3 rgba justifiés (SuxaiLogo glint + xterm literal),
+  21 inline style positioning légitime.
+- **Leçons** : V3 ajoutée dans `tâches/leçons.md` (refactor-
+  progress.md = méthode).
+
 ### 2026-04-27 — V1.0.0 refonte premium "digne du nom V1"
 - **Fait** :
   - Phase A : type scale complet (--fs-2xs → --fs-3xl), poids

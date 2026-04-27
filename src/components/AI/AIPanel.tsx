@@ -318,111 +318,147 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
     let stopReason = '';
     const collectedTools: ToolCall[] = [];
 
-    await new Promise<void>((resolve, reject) => {
-      const cancel = streamAi(
-        token,
-        {
-          modelId,
-          command: 'chat',
-          prompt: '',
-          // Mode-aware tool list: ask mode drops edit_file/write_file/
-          // run_command and adds create_plan; composer keeps the full
-          // write-capable surface. Computed per turn so toggling Plan
-          // mid-conversation takes effect immediately.
-          // v0.16.13 — concat MCP tools (mcp_<server>_<tool>) so the
-          // agent can call them like any built-in tool. Plan mode
-          // intentionally KEEPS them : MCP read-only tools (e.g.
-          // search-the-web) are useful during plan investigation, and
-          // the user already approves each call via the modal.
-          tools: [...toolsForMode(args.mode), ...mcpToolDefs],
-          agentMessages,
-          mode: args.mode,
-        },
-        {
-          onToken: (chunk) => {
-            setMessages((m) => {
-              const next = m.map((msg) =>
-                msg.id === currentAssistantId
-                  ? { ...msg, content: msg.content + chunk }
-                  : msg,
-              );
-              working = next;
-              return next;
-            });
+    // v2.0.1 FIX — bug « tourne en boucle ». If the stream rejects
+    // mid-stream (network error, abort, etc) AFTER onToolUse has fired
+    // but BEFORE we get to execute the tool, the tool sits at status
+    // 'pending' forever. chatToAgentMessages then filters it out (line
+    // ~127) and the model sees the conversation as if no tool_use ever
+    // happened → re-emits the same tool_use → if the network errors
+    // again, more pending tools stack up → infinite loop. We must NOT
+    // let pending tools survive a stream rejection : convert them to a
+    // synthetic error result so the model sees « I called list_dir, it
+    // failed, I should adapt » on the next iteration. This also unsticks
+    // the loop-detection (which counts tool calls in `working`).
+    let streamSucceeded = false;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const cancel = streamAi(
+          token,
+          {
+            modelId,
+            command: 'chat',
+            prompt: '',
+            tools: [...toolsForMode(args.mode), ...mcpToolDefs],
+            agentMessages,
+            mode: args.mode,
           },
-          onToolUse: (call) => {
-            collectedTools.push(call);
-            const snapshot: ToolCallSnapshot = {
-              id: call.id,
-              name: call.name,
-              input: call.input,
-              status: 'pending',
+          {
+            onToken: (chunk) => {
+              setMessages((m) => {
+                const next = m.map((msg) =>
+                  msg.id === currentAssistantId
+                    ? { ...msg, content: msg.content + chunk }
+                    : msg,
+                );
+                working = next;
+                return next;
+              });
+            },
+            onToolUse: (call) => {
+              collectedTools.push(call);
+              const snapshot: ToolCallSnapshot = {
+                id: call.id,
+                name: call.name,
+                input: call.input,
+                status: 'pending',
+              };
+              setMessages((m) => {
+                const next = m.map((msg) =>
+                  msg.id === currentAssistantId
+                    ? { ...msg, toolCalls: [...(msg.toolCalls ?? []), snapshot] }
+                    : msg,
+                );
+                working = next;
+                return next;
+              });
+            },
+            onThinkingBlock: (block) => {
+              setMessages((m) => {
+                const next = m.map((msg) =>
+                  msg.id === currentAssistantId
+                    ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
+                    : msg,
+                );
+                working = next;
+                return next;
+              });
+            },
+            onRedactedThinking: (block) => {
+              setMessages((m) => {
+                const next = m.map((msg) =>
+                  msg.id === currentAssistantId
+                    ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
+                    : msg,
+                );
+                working = next;
+                return next;
+              });
+            },
+            onServerToolUse: (block) => {
+              setMessages((m) => {
+                const next = m.map((msg) =>
+                  msg.id === currentAssistantId
+                    ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
+                    : msg,
+                );
+                working = next;
+                return next;
+              });
+            },
+            onStop: (reason) => {
+              stopReason = reason;
+            },
+            onDone: () => {
+              setMessages((m) => {
+                const next = m.map((msg) =>
+                  msg.id === currentAssistantId ? { ...msg, streaming: false } : msg,
+                );
+                working = next;
+                return next;
+              });
+              resolve();
+            },
+            onError: (err) => reject(err),
+          },
+        );
+        abortRef.current = cancel;
+      });
+      streamSucceeded = true;
+    } catch (err) {
+      // Stream errored. If onToolUse fired before the failure, those
+      // tool calls are pending. Flip them to error with a synthetic
+      // result so the next iteration carries the failure forward AND
+      // the model can change strategy. Then re-throw to the outer
+      // .catch which clears streaming + surfaces the error to the user.
+      if (collectedTools.length > 0) {
+        const errMsg = (err as Error).message || 'stream error';
+        setMessages((m) => {
+          const next = m.map((msg) => {
+            if (msg.id !== currentAssistantId) return msg;
+            return {
+              ...msg,
+              toolCalls: msg.toolCalls?.map((tc) =>
+                collectedTools.some((c) => c.id === tc.id) && tc.status === 'pending'
+                  ? {
+                      ...tc,
+                      status: 'error' as const,
+                      result: `Stream interrupted before tool ran: ${errMsg}. Adapt — try a different approach.`,
+                    }
+                  : tc,
+              ),
+              streaming: false,
             };
-            setMessages((m) => {
-              const next = m.map((msg) =>
-                msg.id === currentAssistantId
-                  ? { ...msg, toolCalls: [...(msg.toolCalls ?? []), snapshot] }
-                  : msg,
-              );
-              working = next;
-              return next;
-            });
-          },
-          // v0.12: stash thinking + redacted_thinking + server_tool_use
-          // blocks on the assistant message so chatToAgentMessages can
-          // round-trip them byte-for-byte on the next iteration.
-          // Required by Anthropic on *-thinking model variants.
-          onThinkingBlock: (block) => {
-            setMessages((m) => {
-              const next = m.map((msg) =>
-                msg.id === currentAssistantId
-                  ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
-                  : msg,
-              );
-              working = next;
-              return next;
-            });
-          },
-          onRedactedThinking: (block) => {
-            setMessages((m) => {
-              const next = m.map((msg) =>
-                msg.id === currentAssistantId
-                  ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
-                  : msg,
-              );
-              working = next;
-              return next;
-            });
-          },
-          onServerToolUse: (block) => {
-            setMessages((m) => {
-              const next = m.map((msg) =>
-                msg.id === currentAssistantId
-                  ? { ...msg, assistantBlocks: [...(msg.assistantBlocks ?? []), block] }
-                  : msg,
-              );
-              working = next;
-              return next;
-            });
-          },
-          onStop: (reason) => {
-            stopReason = reason;
-          },
-          onDone: () => {
-            setMessages((m) => {
-              const next = m.map((msg) =>
-                msg.id === currentAssistantId ? { ...msg, streaming: false } : msg,
-              );
-              working = next;
-              return next;
-            });
-            resolve();
-          },
-          onError: (err) => reject(err),
-        },
-      );
-      abortRef.current = cancel;
-    });
+          });
+          working = next;
+          return next;
+        });
+      }
+      throw err;
+    }
+    if (!streamSucceeded) {
+      // unreachable — kept for type narrowing
+      break;
+    }
 
     // v0.11.10: handle every Anthropic stop_reason explicitly.
     //

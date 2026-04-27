@@ -26,22 +26,33 @@
 
 /* ----- Avatar ---------------------------------------------- */
 
+/* v0.17.1 — avatar gets a richer dual-gradient + halo so the
+   assistant icon reads as the brand mark, not a generic dot. */
 .msg__avatar {
-  width: 28px; height: 28px;
-  border-radius: 50%;
+  width: 30px; height: 30px;
+  border-radius: 9px;
   display: grid; place-items: center;
   background:
-    radial-gradient(120% 120% at 30% 20%, #8b8ffb, #5457d8 70%),
-    linear-gradient(135deg, #7d82f8, #5457d8);
+    radial-gradient(120% 120% at 30% 20%, #a4a7ff 0%, #6366f1 55%, #4548c0 100%);
   color: #fff;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
   flex-shrink: 0;
   margin-top: 1px;
+  position: relative;
   box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06) inset,
-    0 2px 6px rgba(84, 87, 216, 0.35);
+    0 0 0 1px rgba(255, 255, 255, 0.10) inset,
+    0 4px 12px rgba(84, 87, 216, 0.42),
+    0 0 18px rgba(125, 130, 248, 0.25);
+}
+.msg__avatar::before {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: 7px;
+  background: radial-gradient(60% 60% at 30% 20%, rgba(255, 255, 255, 0.22), transparent 70%);
+  pointer-events: none;
 }
 
 /* ----- Body & head ---------------------------------------- */
@@ -108,28 +119,33 @@
 
 /* ----- User bubble ---------------------------------------- */
 
+/* v0.17.1 — refined gradient (more saturated, dual-stop) + softer
+   inset highlight up top so the bubble reads as a glass plate, not
+   a flat fill. */
 .msg__bubble--user {
   max-width: 80%;
-  padding: 10px 13px;
-  border-radius: 14px 14px 4px 14px;
+  padding: 11px 14px;
+  border-radius: 16px 16px 4px 16px;
   background:
-    linear-gradient(180deg, rgba(99, 102, 241, 0.24), rgba(99, 102, 241, 0.13));
-  border: 1px solid rgba(125, 130, 248, 0.42);
+    linear-gradient(180deg, rgba(125, 130, 248, 0.32) 0%, rgba(99, 102, 241, 0.18) 100%);
+  border: 1px solid rgba(125, 130, 248, 0.50);
   font-size: 13px;
   line-height: 1.6;
   color: var(--color-text);
   box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.22),
-    0 0 0 1px rgba(125, 130, 248, 0.06) inset;
+    0 2px 4px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(125, 130, 248, 0.08) inset,
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   transition:
     transform var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out);
 }
 .msg--user:hover .msg__bubble--user {
   box-shadow:
-    0 4px 14px rgba(99, 102, 241, 0.22),
-    0 1px 2px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(125, 130, 248, 0.1) inset;
+    0 6px 18px rgba(99, 102, 241, 0.30),
+    0 2px 4px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(125, 130, 248, 0.14) inset,
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
 
 /* ----- Command pill --------------------------------------- */
@@ -180,13 +196,29 @@
 
 /* ----- Error block ---------------------------------------- */
 
+/* v0.17.1 — error block now reads as a real alert with a leading
+   bullet + tighter typography. */
 .msg__error {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
-  padding: 9px 11px;
-  border-radius: var(--radius-sm);
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  font-weight: 500;
+  padding: 8px 13px;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(180deg, rgba(239, 68, 68, 0.16), rgba(239, 68, 68, 0.08));
+  border: 1px solid rgba(239, 68, 68, 0.36);
+  color: #fecaca;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.10);
+}
+.msg__error::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fca5a5' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='8' x2='12' y2='12'/><line x1='12' y1='16' x2='12' y2='16.01'/></svg>") center/contain no-repeat;
 }
 
 /* ----- Hover-revealed actions row ------------------------- */

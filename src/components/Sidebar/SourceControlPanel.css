@@ -198,18 +198,46 @@
   box-shadow: none;
 }
 
+/* v0.17.1 — empty state with branded icon + tighter copy so the
+   "Working tree clean" message reads as confident, not orphan. */
 .scp__empty {
-  padding: 24px 16px;
+  padding: 30px 22px;
   color: var(--color-text-muted);
   font-size: 12.5px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  margin: 14px;
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(70% 60% at 50% 30%, rgba(110, 228, 151, 0.05), transparent 70%);
+  animation: suxai-fade-in var(--dur-base) var(--ease-out);
 }
-.scp__empty p { margin: 0; }
+.scp__empty::before {
+  content: '';
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px solid rgba(110, 228, 151, 0.30);
+  background:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2386efac' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>") center/22px no-repeat,
+    radial-gradient(60% 60% at 30% 25%, rgba(110, 228, 151, 0.30), transparent 70%),
+    rgba(110, 228, 151, 0.10);
+  margin-bottom: 4px;
+  box-shadow: 0 0 14px rgba(110, 228, 151, 0.18);
+}
+.scp__empty p {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 500;
+}
 .scp__hint {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--color-text-dim);
+  font-weight: 400;
 }
 
 .scp__section {

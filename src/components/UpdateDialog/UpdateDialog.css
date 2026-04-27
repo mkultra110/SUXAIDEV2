@@ -32,17 +32,19 @@
 }
 
 .upd__icon {
-  width: 44px; height: 44px;
+  width: 48px; height: 48px;
   border-radius: 14px;
   display: grid; place-items: center;
   background:
-    radial-gradient(80% 80% at 30% 20%, rgba(125, 130, 248, 0.32), transparent 70%),
-    rgba(99, 102, 241, 0.16);
-  color: #d8dbff;
-  border: 1px solid rgba(125, 130, 248, 0.36);
+    radial-gradient(80% 80% at 30% 20%, rgba(125, 130, 248, 0.40), transparent 70%),
+    linear-gradient(180deg, rgba(99, 102, 241, 0.22), rgba(99, 102, 241, 0.10));
+  color: #e0e3ff;
+  border: 1px solid rgba(125, 130, 248, 0.46);
   box-shadow:
-    0 8px 22px rgba(99, 102, 241, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 12px 28px rgba(99, 102, 241, 0.30),
+    0 0 22px rgba(125, 130, 248, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  position: relative;
 }
 
 .upd__title {

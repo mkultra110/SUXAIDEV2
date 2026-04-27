@@ -8,10 +8,12 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  background: #0b0f17;
-  border-top: 1px solid var(--color-border);
+  background:
+    linear-gradient(180deg, #0a0e17 0%, #07090f 100%);
+  border-top: 1px solid var(--color-border-strong);
   overflow: hidden;
   flex-shrink: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .termpanel__grip {
@@ -32,13 +34,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 10px 5px 14px;
+  padding: 6px 10px 6px 14px;
   background:
-    linear-gradient(180deg, rgba(13, 18, 30, 0.96), rgba(11, 15, 23, 0.94));
+    linear-gradient(180deg, rgba(20, 26, 42, 0.85), rgba(13, 18, 30, 0.85));
   border-bottom: 1px solid var(--color-border);
   font-size: 11px;
   color: var(--color-text-muted);
   flex-shrink: 0;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
 }
 
 .termpanel__title {

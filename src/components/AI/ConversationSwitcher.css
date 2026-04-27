@@ -66,14 +66,16 @@
   padding: 6px;
   border-radius: var(--radius-md);
   background:
-    linear-gradient(180deg, rgba(28, 36, 56, 0.92), rgba(18, 24, 40, 0.94));
+    linear-gradient(180deg, rgba(34, 42, 68, 0.94), rgba(22, 28, 50, 0.96));
   border: 1px solid var(--color-border-strong);
-  backdrop-filter: blur(20px) saturate(150%);
-  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(170%);
+  -webkit-backdrop-filter: blur(22px) saturate(170%);
   box-shadow:
-    0 22px 54px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  animation: suxai-fade-in 200ms var(--ease-out);
+    0 26px 60px rgba(0, 0, 0, 0.55),
+    0 0 22px rgba(99, 102, 241, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: suxai-scale-in var(--dur-fast) var(--ease-out);
+  transform-origin: top center;
   display: flex;
   flex-direction: column;
   gap: 4px;

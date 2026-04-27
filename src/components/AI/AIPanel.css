@@ -149,9 +149,12 @@
 
 /* ----- Quick command buttons grid -------------------------- */
 
+/* v0.17.1 — auto-fit 2-col so 4 commands tile cleanly as 2×2 instead
+   of leaving the 4th orphaned alone on a 3-col row. minmax(120px, 1fr)
+   means a wider AI panel can also tile 3 or 4 across. */
 .ai__commands {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 6px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--color-border);
@@ -161,23 +164,32 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  gap: 6px;
+  height: 32px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.03);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
   border: 1px solid var(--color-border);
   color: var(--color-text);
   font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
   transition:
     background var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) var(--ease-out),
-    transform var(--dur-fast) var(--ease-out);
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
 }
 .ai__cmd:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.12);
+  background:
+    linear-gradient(180deg, rgba(125, 130, 248, 0.18), rgba(125, 130, 248, 0.08));
   border-color: var(--color-border-accent);
   color: var(--color-text-strong);
+  box-shadow: 0 0 14px rgba(125, 130, 248, 0.16);
+  transform: translateY(-1px);
 }
-.ai__cmd:active:not(:disabled) { transform: translateY(1px); }
+.ai__cmd:active:not(:disabled) { transform: translateY(0); }
 .ai__cmd:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ----- Messages list & scrollbar --------------------------- */

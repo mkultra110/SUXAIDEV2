@@ -124,22 +124,27 @@
 /* ---- Bottom command bar -------------------------------------------- */
 .indiff__bar {
   position: absolute;
-  bottom: 14px;
+  bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 9px 14px;
-  min-width: 540px;
-  max-width: min(840px, 96%);
+  padding: 10px 16px;
+  min-width: 560px;
+  max-width: min(880px, 96%);
   border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgba(34, 42, 68, 0.92), rgba(20, 26, 46, 0.96));
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  border: 1px solid var(--color-border-strong);
   box-shadow:
-    0 22px 54px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(125, 130, 248, 0.16),
-    0 0 32px rgba(125, 130, 248, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  animation: indiff-in 220ms var(--ease-out);
+    0 26px 60px rgba(0, 0, 0, 0.62),
+    0 0 0 1px rgba(125, 130, 248, 0.18),
+    0 0 36px rgba(125, 130, 248, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  animation: indiff-in 240ms var(--ease-spring);
   z-index: 30;
 }
 @keyframes indiff-in {

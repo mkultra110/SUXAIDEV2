@@ -32,17 +32,18 @@
 }
 
 .upg__icon {
-  width: 44px; height: 44px;
+  width: 48px; height: 48px;
   border-radius: 14px;
   display: grid; place-items: center;
   background:
-    radial-gradient(80% 80% at 30% 20%, rgba(255, 199, 44, 0.32), transparent 70%),
-    rgba(255, 199, 44, 0.16);
-  border: 1px solid rgba(255, 199, 44, 0.42);
-  color: #ffe2a3;
+    radial-gradient(80% 80% at 30% 20%, rgba(255, 199, 44, 0.40), transparent 70%),
+    linear-gradient(180deg, rgba(255, 199, 44, 0.22), rgba(255, 146, 44, 0.12));
+  border: 1px solid rgba(255, 199, 44, 0.50);
+  color: #ffeab8;
   box-shadow:
-    0 8px 22px rgba(255, 199, 44, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 12px 28px rgba(255, 199, 44, 0.28),
+    0 0 22px rgba(255, 199, 44, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
   flex-shrink: 0;
 }
 

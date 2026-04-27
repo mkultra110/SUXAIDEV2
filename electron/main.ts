@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol, session } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, protocol, session, nativeTheme } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
@@ -39,6 +39,17 @@ let mainWindow: BrowserWindow | null = null;
 let updateManager: UpdateManager | null = null;
 
 function createWindow() {
+  // v2.0 — Obsidian Warm window chrome.
+  // Platform-specific glass : vibrancy on macOS, mica on Windows 11.
+  // titleBarOverlay color is transparent so the user-drawn TitleBar
+  // component owns the actual fill, with platform-controlled symbols
+  // (close/minimize/etc on Win/Linux ; macOS keeps its traffic lights).
+  const isMac = process.platform === 'darwin';
+  const isWin = process.platform === 'win32';
+  const TITLEBAR_HEIGHT = 36;
+  const SYMBOL_COLOR = '#B5AC9D';      // neutral-11 from theme.css
+  const BG_COLOR = '#0F0E0D';          // neutral-2 (editor bg)
+
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -46,13 +57,24 @@ function createWindow() {
     minHeight: 600,
     show: false,
     frame: false,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: '#0b0f17',
-      symbolColor: '#e8ecf4',
-      height: 36,
-    },
-    backgroundColor: '#0b0f17',
+    titleBarStyle: isMac ? 'hiddenInset' : 'hidden',
+    backgroundColor: BG_COLOR,
+    roundedCorners: true,
+    ...(isMac && {
+      trafficLightPosition: { x: 14, y: 11 },
+      vibrancy: 'under-window',
+      visualEffectState: 'active',
+    } as const),
+    ...(!isMac && {
+      titleBarOverlay: {
+        color: '#00000000',
+        symbolColor: SYMBOL_COLOR,
+        height: TITLEBAR_HEIGHT,
+      },
+    } as const),
+    ...(isWin && {
+      backgroundMaterial: 'mica',
+    } as const),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -208,6 +230,21 @@ async function deleteBlob(file: string): Promise<void> {
 
 function registerIpc() {
   ipcMain.handle('app:get-version', () => app.getVersion());
+
+  // v2.0 — native theme sync. Renderer can ask for the OS theme,
+  // explicitly set the Electron theme source ('system' | 'dark' | 'light'),
+  // and subscribe to changes via the 'theme:system' broadcast.
+  ipcMain.handle('theme:get-system', () => nativeTheme.shouldUseDarkColors);
+  ipcMain.handle('theme:set-source', (_e, mode: 'system' | 'dark' | 'light') => {
+    if (mode === 'system' || mode === 'dark' || mode === 'light') {
+      nativeTheme.themeSource = mode;
+    }
+  });
+  nativeTheme.on('updated', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('theme:system', nativeTheme.shouldUseDarkColors);
+    }
+  });
 
   ipcMain.handle('auth:get-token', async () => readTokenBlob());
   ipcMain.handle('auth:set-token', async (_e, token: string) => {

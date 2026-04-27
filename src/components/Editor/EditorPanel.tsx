@@ -13,6 +13,7 @@ import { useEditorContextTracker } from '../../lib/editor-context-tracker';
 import { registerTabCompletion } from '../../lib/tab-completion';
 import { consumePendingReveal } from '../../lib/reveal';
 import { useRecent, removeRecentIfMissing } from '../../lib/recent';
+import { syncTypeScriptExtraLibs } from '../../lib/lsp-ts';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import './EditorPanel.css';
@@ -165,6 +166,15 @@ export function EditorPanel() {
   const openFilesRef = useRef(openFiles);
   useEffect(() => {
     openFilesRef.current = openFiles;
+  }, [openFiles]);
+
+  // v0.16.9 — keep Monaco's built-in TypeScript service in sync with
+  // every open .ts/.tsx/.js/.jsx file so cross-file imports resolve
+  // and type errors surface as red squiggles. Re-runs on every change
+  // to openFiles ; the sync is idempotent (it disposes stale extra-
+  // libs internally so memory stays bounded by the open-tabs count).
+  useEffect(() => {
+    syncTypeScriptExtraLibs(openFiles);
   }, [openFiles]);
 
   useEffect(() => {

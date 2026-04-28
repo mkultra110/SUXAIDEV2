@@ -1255,6 +1255,95 @@ function registerIpc() {
     },
   );
 
+  // v3.8 — terminal:run-stream. Même shape que run-once mais avec
+  // streaming live des chunks via `terminal:run-stream:chunk`. Le
+  // caller passe un `id` qui sert de discriminator côté renderer pour
+  // multiplexer plusieurs streams. Le handler spawn + push les chunks
+  // au fur et à mesure + send un `terminal:run-stream:end` à la
+  // complétion. Resolve une fois le process terminé pour permettre
+  // `await runStream(...)`.
+  ipcMain.handle(
+    'terminal:run-stream',
+    (e, input: { id: string; command: string; cwd?: string; timeout_ms?: number }) => {
+      return new Promise((resolve) => {
+        const sender = e.sender;
+        const id = typeof input?.id === 'string' && input.id.length > 0
+          ? input.id
+          : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        if (
+          !input ||
+          typeof input.command !== 'string' ||
+          input.command.trim().length === 0
+        ) {
+          sender.send('terminal:run-stream:end', { id, exit_code: -1, error: 'empty command' });
+          resolve({ ok: false, error: 'empty command' });
+          return;
+        }
+        const safeCwd = (() => {
+          try { return resolvePath(input.cwd); }
+          catch { return null; }
+        })();
+        if (!safeCwd) {
+          sender.send('terminal:run-stream:end', { id, exit_code: -1, error: 'invalid cwd' });
+          resolve({ ok: false, error: 'invalid cwd' });
+          return;
+        }
+        const isWin = process.platform === 'win32';
+        const cmd = isWin ? process.env.COMSPEC ?? 'cmd.exe' : '/bin/sh';
+        const args = isWin ? ['/c', input.command] : ['-c', input.command];
+        const child = spawn(cmd, args, {
+          cwd: safeCwd,
+          env: {
+            ...process.env,
+            TERM: 'dumb',
+            PAGER: 'cat',
+            GIT_PAGER: 'cat',
+            MANPAGER: 'cat',
+            CI: '1',
+            NODE_DISABLE_COLORS: '1',
+          },
+        });
+        let timedOut = false;
+        const rawTimeout =
+          typeof input.timeout_ms === 'number' && Number.isFinite(input.timeout_ms)
+            ? input.timeout_ms
+            : 120_000;
+        const timeoutMs = Math.min(Math.max(rawTimeout, 1000), 600_000);
+        const timeout = setTimeout(() => {
+          timedOut = true;
+          try { child.kill('SIGTERM'); } catch { /* */ }
+          setTimeout(() => { try { child.kill('SIGKILL'); } catch { /* */ } }, 2000).unref();
+        }, timeoutMs);
+        timeout.unref();
+        const safeSend = (channel: string, payload: unknown) => {
+          if (sender.isDestroyed()) return;
+          try { sender.send(channel, payload); } catch { /* renderer gone */ }
+        };
+        child.stdout.on('data', (c) => {
+          safeSend('terminal:run-stream:chunk', { id, level: 'stdout', text: c.toString() });
+        });
+        child.stderr.on('data', (c) => {
+          safeSend('terminal:run-stream:chunk', { id, level: 'stderr', text: c.toString() });
+        });
+        child.on('close', (code) => {
+          clearTimeout(timeout);
+          const payload = {
+            id,
+            exit_code: typeof code === 'number' ? code : -1,
+            timed_out: timedOut,
+          };
+          safeSend('terminal:run-stream:end', payload);
+          resolve({ ok: true, ...payload });
+        });
+        child.on('error', (err) => {
+          clearTimeout(timeout);
+          safeSend('terminal:run-stream:end', { id, exit_code: -1, error: err.message });
+          resolve({ ok: false, error: err.message });
+        });
+      });
+    },
+  );
+
   // ---- Codebase search (grep) --------------------------------------
   // Powers the agent's `grep` and `codebase_search` tools. Tries
   // `rg` (ripgrep) first when available — fast on big repos. Falls

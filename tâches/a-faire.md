@@ -12,9 +12,9 @@
 
 ## En cours
 
-_V3.7.0 livrée (agent wiré sur Output panel) — voir Revue ci-dessous.
-Restent : live-stream IPC pour builds longs, multi-root workspaces,
-Departure Mono ghost text._
+_V3.8.0 livrée (live-stream IPC + runTask streaming + agent
+run_command streaming) — voir Revue ci-dessous. Restent : multi-root
+workspaces + Departure Mono ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +99,45 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.8.0 live-stream IPC (chunks chemin OutputPanel)
+- **Fait** :
+  - **`terminal:run-stream`** (electron/main.ts) : nouveau IPC
+    handler en parallèle de `run-once`, qui spawn la commande
+    shell et **stream** chaque chunk stdout/stderr via
+    `webContents.send('terminal:run-stream:chunk', { id, level, text })`.
+    Émet `terminal:run-stream:end` à la complétion. Resolve
+    après le close pour permettre `await`. Même hardening que
+    run-once (timeout, kill SIGTERM puis SIGKILL après 2 s,
+    sandbox cwd via resolvePath).
+  - **Préload** : `terminal.runStream(input)` + listeners
+    `onRunStreamChunk(cb)` / `onRunStreamEnd(cb)` qui retournent
+    chacun une fonction de cleanup pour removeListener.
+  - **`lib/run-stream.ts`** : helper `runStream({command, cwd,
+    timeout_ms, source, banner?, id?})` qui :
+    1) génère un `id` (multiplexing safe),
+    2) écrit le banner `$ <command>` dans la source Output,
+    3) abonne les chunks (chacun → `appendOutput(source, text, level)`),
+    4) buffer en interne pour retourner `{ ok, stdout, exit_code,
+       timed_out, error? }` à la fin (compat shape avec runOnce
+       côté caller).
+  - **`runTask` (lib/tasks.ts)** : remplacement de `runOnce` par
+    `runStream` — les tasks workspace écrivent maintenant **chunk
+    par chunk** dans le panneau Output au lieu d'un dump final.
+    Shape de retour identique pour les appelants existants
+    (CommandPalette, etc.).
+  - **Agent `run_command`** (lib/agent.ts) : même bascule. Pendant
+    qu'une commande shell tourne via le tool agent, l'utilisateur
+    voit l'avancée en temps réel dans la source `Agent` du
+    panneau Output. Le model récupère toujours le buffer complet.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope** :
+  - `runOnce` reste exposé : utilisé par d'autres call sites
+    (server commit hooks, etc.) qui n'ont pas besoin de live —
+    pas de raison d'imposer le coût d'IPC événementiel partout.
+  - Output multi-conversation (une source `Agent` par conv id) —
+    déféré.
+  - Multi-root workspaces, Departure Mono ghost text.
 
 ### 2026-04-28 — V3.7.0 agent wiré sur Output panel
 - **Fait** : `executeTool` (lib/agent.ts) wrappé pour émettre dans

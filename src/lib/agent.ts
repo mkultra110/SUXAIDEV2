@@ -11,6 +11,7 @@
  */
 
 import { appendOutput } from './output';
+import { runStream } from './run-stream';
 
 export interface ToolDefinition {
   name: string;
@@ -767,11 +768,20 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       // shell commands. normalizeApprove() unifie en ApproveResult.
       const approval = normalizeApprove(await opts.approve(call));
       if (!approval.ok) return `User rejected the command: ${command}`;
-      if (!window.suxai.terminal?.runOnce) {
+      if (!window.suxai.terminal?.runStream) {
         throw new ToolExecutionError('run_command', 'Terminal IPC unavailable');
       }
-      const result = await window.suxai.terminal.runOnce({ command, cwd, timeout_ms });
+      // v3.8 — runStream pour live-update du panneau Output (source
+      // 'Agent') pendant que le command tourne. Le model voit toujours
+      // le buffer complet en retour comme avant.
       const header = `$ ${command}${cwd ? `  (cwd: ${cwd})` : ''}`;
+      const result = await runStream({
+        command,
+        cwd,
+        timeout_ms,
+        source: 'Agent',
+        banner: header,
+      });
       if (result.error) {
         throw new ToolExecutionError('run_command', `${header}\n${result.error}`);
       }

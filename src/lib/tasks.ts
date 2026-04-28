@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { appendOutput } from './output';
+import { runStream } from './run-stream';
 
 /**
  * v0.16.12 — Workspace tasks.
@@ -71,37 +71,23 @@ export async function runTask(
   if (!window.suxai?.terminal?.runOnce) {
     return { ok: false, error: 'terminal IPC unavailable' };
   }
-  // v3.6 — also write to the named OutputPanel source so the user
-  // gets a persistent log (the toast still fires for quick feedback).
-  const source = `Task: ${task.label}`;
-  appendOutput(source, `$ ${task.command}`, 'info');
-  try {
-    const res = await window.suxai.terminal.runOnce({
-      command: task.command,
-      cwd,
-      timeout_ms: timeoutMs,
-    });
-    if (res.error) {
-      appendOutput(source, res.error, 'error');
-      return { ok: false, error: res.error };
-    }
-    if (res.stdout) appendOutput(source, res.stdout, 'stdout');
-    appendOutput(
-      source,
-      res.timed_out
-        ? `[timed out after ${timeoutMs}ms]`
-        : `[exit ${res.exit_code}]`,
-      res.exit_code === 0 && !res.timed_out ? 'info' : 'error',
-    );
-    return {
-      ok: true,
-      stdout: res.stdout,
-      exitCode: res.exit_code,
-      timedOut: res.timed_out,
-    };
-  } catch (err) {
-    const msg = (err as Error).message;
-    appendOutput(source, msg, 'error');
-    return { ok: false, error: msg };
+  // v3.6 → v3.8 — utilise `runStream` pour pousser chaque chunk
+  // dans la source `Task: <label>` du panneau Output au fur et à
+  // mesure. Le shape de retour reste identique pour la compat des
+  // appelants (CommandPalette, etc.).
+  const res = await runStream({
+    command: task.command,
+    cwd,
+    timeout_ms: timeoutMs,
+    source: `Task: ${task.label}`,
+  });
+  if (!res.ok) {
+    return { ok: false, error: res.error ?? 'task failed' };
   }
+  return {
+    ok: true,
+    stdout: res.stdout,
+    exitCode: res.exit_code,
+    timedOut: res.timed_out,
+  };
 }

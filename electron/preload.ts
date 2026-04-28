@@ -334,6 +334,34 @@ const api = {
       timed_out?: boolean;
       error?: string;
     }> => ipcRenderer.invoke('terminal:run-once', input),
+    /** v3.8 — Streaming variant. Resolves when the process exits ;
+     *  chunks arrive via `onRunStreamChunk`. Pass a `id` so multiple
+     *  concurrent streams can be discriminated. */
+    runStream: (input: {
+      id: string;
+      command: string;
+      cwd?: string;
+      timeout_ms?: number;
+    }): Promise<{
+      ok: true;
+      id: string;
+      exit_code: number;
+      timed_out?: boolean;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('terminal:run-stream', input),
+    onRunStreamChunk: (
+      cb: (payload: { id: string; level: 'stdout' | 'stderr'; text: string }) => void,
+    ) => {
+      const listener = (_: unknown, p: { id: string; level: 'stdout' | 'stderr'; text: string }) => cb(p);
+      ipcRenderer.on('terminal:run-stream:chunk', listener);
+      return () => ipcRenderer.removeListener('terminal:run-stream:chunk', listener);
+    },
+    onRunStreamEnd: (
+      cb: (payload: { id: string; exit_code: number; timed_out?: boolean; error?: string }) => void,
+    ) => {
+      const listener = (_: unknown, p: { id: string; exit_code: number; timed_out?: boolean; error?: string }) => cb(p);
+      ipcRenderer.on('terminal:run-stream:end', listener);
+      return () => ipcRenderer.removeListener('terminal:run-stream:end', listener);
+    },
     onData: (cb: (payload: { id: string; chunk: string }) => void) => {
       const listener = (_: unknown, p: { id: string; chunk: string }) => cb(p);
       ipcRenderer.on('terminal:data', listener);

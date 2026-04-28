@@ -7,6 +7,7 @@ import {
 } from '../../lib/git';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useToast } from '../ui/Toast';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './BranchPicker.css';
 
 /**
@@ -171,12 +172,7 @@ export function BranchPicker({ cwd, open, onClose }: Props) {
       <div className="bpk glass-strong" onClick={(e) => e.stopPropagation()}>
         <div className="bpk__head">
           <span className="bpk__head-icon" aria-hidden>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.6" />
-              <path d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-git-branch" size={14} />
           </span>
           <input
             ref={inputRef}

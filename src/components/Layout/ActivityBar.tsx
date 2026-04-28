@@ -1,3 +1,4 @@
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './ActivityBar.css';
 
 /**
@@ -70,15 +71,7 @@ export function ActivityBar({
         title="Explorer (Ctrl/Cmd+B)"
         aria-pressed={view === 'files' && sidebarOpen}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7z M13 2v7h7"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <AtelierIcon name="i-file" size={22} />
       </button>
       <button
         type="button"
@@ -87,17 +80,7 @@ export function ActivityBar({
         title="Source Control"
         aria-pressed={view === 'changes' && sidebarOpen}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.6" />
-          <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.6" />
-          <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.6" />
-          <path
-            d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-          />
-        </svg>
+        <AtelierIcon name="i-git-branch" size={22} />
         {dirtyCount > 0 && (
           <span className="actbar__badge" aria-label={`${dirtyCount} changes`}>
             {dirtyCount > 99 ? '99+' : dirtyCount}
@@ -110,10 +93,7 @@ export function ActivityBar({
         onClick={openSearchModal}
         title="Search in files (Ctrl/Cmd+Shift+F)"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M16 16l4 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
+        <AtelierIcon name="i-search" size={22} />
       </button>
       {/* v0.15.9 — push the gear to the bottom of the bar (parité
           VSCode). Synthetic Cmd+, fires SettingsDialog's existing
@@ -137,16 +117,7 @@ export function ActivityBar({
         }}
         title="Settings (Ctrl/Cmd+,)"
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
-          <path
-            d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <AtelierIcon name="i-gear" size={22} />
       </button>
     </nav>
   );

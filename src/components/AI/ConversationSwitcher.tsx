@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Conversation } from '../../lib/conversations';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './ConversationSwitcher.css';
 
 interface Props {
@@ -89,35 +90,18 @@ export function ConversationSwitcher({
         onClick={() => setOpen((o) => !o)}
         title={active?.title}
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-          <path
-            d="M21 12a9 9 0 1 1-3-6.7L21 3v6h-6"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <AtelierIcon name="i-comment" size={12} />
         <span className="cswitch__name">{active?.title ?? 'New conversation'}</span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
+        <span
           aria-hidden
           style={{
+            display: 'inline-flex',
             transform: open ? 'rotate(180deg)' : 'none',
             transition: 'transform var(--dur-quick) var(--ease-out-expo)',
           }}
         >
-          <path
-            d="M2 4 L5 7 L8 4"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+          <AtelierIcon name="i-chevron-down" size={10} />
+        </span>
       </button>
 
       {open && coords &&
@@ -195,15 +179,7 @@ export function ConversationSwitcher({
                     {pendingDeleteId === c.id ? (
                       <span style={{ fontSize: 10, fontWeight: 600 }}>Sure?</span>
                     ) : (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                        <path
-                          d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                      <AtelierIcon name="i-close" size={12} />
                     )}
                   </button>
                 </div>
@@ -218,14 +194,7 @@ export function ConversationSwitcher({
                 setOpen(false);
               }}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M12 5v14M5 12h14"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <AtelierIcon name="i-plus" size={14} />
               New conversation
             </button>
           </div>,

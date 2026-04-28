@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { getGitLog, relativeTime, type GitCommit } from '../../lib/git';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './GitLogModal.css';
 
 /**
@@ -119,12 +120,7 @@ export function GitLogModal({ cwd, open, onClose }: Props) {
       <div className="glog glass-strong" onClick={(e) => e.stopPropagation()}>
         <div className="glog__head">
           <span className="glog__head-icon" aria-hidden>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <circle cx="6" cy="6" r="2" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="6" cy="18" r="2" stroke="currentColor" strokeWidth="1.6" />
-              <circle cx="18" cy="6" r="2" stroke="currentColor" strokeWidth="1.6" />
-              <path d="M6 8v8 M8 6h6a4 4 0 0 1 4 4v0" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-log" size={14} />
           </span>
           <input
             ref={inputRef}

@@ -1,4 +1,5 @@
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './Breadcrumbs.css';
 
 export function Breadcrumbs() {
@@ -23,16 +24,7 @@ export function Breadcrumbs() {
           <span key={i} className={`breadcrumbs__seg ${last ? 'breadcrumbs__seg--last' : ''}`}>
             {seg}
             {!last && (
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden className="breadcrumbs__sep">
-                <path
-                  d="M3 2 L7 5 L3 8"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <AtelierIcon name="i-chevron-right" size={10} className="breadcrumbs__sep" />
             )}
           </span>
         );

@@ -11,6 +11,7 @@ import {
   openCompare,
 } from '../../lib/compare';
 import { iconKindForFile, FileIcon } from '../../lib/file-icon';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import { SourceControlPanel } from './SourceControlPanel';
 import './Sidebar.css';
 
@@ -267,30 +268,19 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
             title={view === 'files' ? 'Source Control' : 'File explorer'}
           >
             {view === 'files' ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.8" />
-                <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.8" />
-                <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
+              <AtelierIcon name="i-git-branch" size={14} />
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7z M13 2v7h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <AtelierIcon name="i-file" size={14} />
             )}
             {view === 'files' && dirtyCount > 0 && (
               <span className="sidebar__iconbtn-badge">{dirtyCount}</span>
             )}
           </button>
           <button className="sidebar__iconbtn" onClick={onOpenFile} title="Open file">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-7-7z M13 2v7h7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-file" size={14} />
           </button>
           <button className="sidebar__iconbtn" onClick={onOpenFolder} title="Open folder">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-folder" size={14} />
           </button>
         </div>
       </div>
@@ -382,12 +372,16 @@ function TreeList({
                 ev.dataTransfer.effectAllowed = 'copy';
               }}
             >
-              <span className="sidebar__chev" aria-hidden>
-                {e.isDirectory ? (
-                  <svg width="10" height="10" viewBox="0 0 10 10" style={{ transform: e.expanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform var(--dur-quick) var(--ease-out-expo)' }}>
-                    <path d="M3 2 L7 5 L3 8 Z" fill="currentColor" />
-                  </svg>
-                ) : null}
+              <span
+                className="sidebar__chev"
+                aria-hidden
+                style={e.isDirectory ? {
+                  display: 'inline-flex',
+                  transform: e.expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform var(--dur-quick) var(--ease-out-expo)',
+                } : undefined}
+              >
+                {e.isDirectory ? <AtelierIcon name="i-chevron-right" size={10} /> : null}
               </span>
               <span
                 className={`sidebar__entry-icon sidebar__entry-icon--${e.isDirectory ? (e.expanded ? 'folder-open' : 'folder') : iconKindForFile(e.name)}`}

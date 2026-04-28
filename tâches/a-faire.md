@@ -12,10 +12,13 @@
 
 ## En cours
 
-_V3.2.0 livrée — voir Revue ci-dessous. Reste à étendre le sprite
-Atelier au reste des composants (TitleBar, ActivityBar, Sidebar,
-EditorPanel, AIPanel) + Departure Mono ghost text + Output panel
-(A7) + EOL/Encoding (A8)._
+_V3.3.0 livrée — voir Revue ci-dessous. Sweep complet du sprite
+Atelier sur ActivityBar/Sidebar/EditorPanel tabs/Breadcrumbs/
+ProblemsPanel/AIPanel header/ConversationSwitcher/TerminalPanel/
+GitLogModal/BranchPicker. Restent : EditorPanel md/preview toggles,
+DiffView, HistoryDialog, UpdateDialog, UpgradeDialog, CompareDialog,
+TitleBar version dropdown — moins visibles. + Departure Mono ghost
+text + Output panel (A7) + EOL/Encoding (A8)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -100,6 +103,37 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.3.0 sweep AtelierIcon sur 10 composants
+- **Fait** : extension de `<AtelierIcon />` à toutes les surfaces UI
+  visibles. Une vingtaine d'inline SVGs remplacés. Liste :
+  - **ActivityBar** : i-file (explorer), i-git-branch (source
+    control), i-search, i-gear (settings).
+  - **Sidebar header** : i-git-branch / i-file (view toggle), i-file
+    (open file btn), i-folder (open folder btn). Tree disclosure
+    chevrons : `i-chevron-right` rotatif (90deg si expanded).
+  - **EditorPanel** : tab close (i-close).
+  - **Breadcrumbs** : separator (i-chevron-right).
+  - **ProblemsPanel** : close button (i-close), group disclosure
+    chevron (i-chevron-down avec class problems__chev rotatif).
+  - **AIPanel** : Plan toggle (i-suggestion), New conversation
+    button (i-plus), Jump-to-bottom (i-chevron-down), Plan-banner
+    icon (i-suggestion), Plan-banner close (i-close).
+  - **ConversationSwitcher** : trigger comment icon (i-comment),
+    chevron drop (i-chevron-down rotatif), per-row delete
+    (i-close), New conversation footer (i-plus).
+  - **TerminalPanel** : title (i-terminal), search button (i-search).
+  - **GitLogModal** : header icon (i-log).
+  - **BranchPicker** : header icon (i-git-branch).
+  - **SourceControlPanel + StatusBar** : déjà swappés en V3.2.0.
+- **Validation** : `npm run typecheck` + `npm run build` OK. Le
+  sprite est mounté UNE fois au root (App.tsx) et résolu via
+  `<use href="#i-..." />` partout — coût zéro par instance.
+- **Hors scope (suite)** : EditorPanel md/preview toggles, DiffView,
+  HistoryDialog, UpdateDialog, UpgradeDialog, CompareDialog,
+  TitleBar version dropdown — moins visibles, déférés. AIPanel
+  empty-state sparkle hero gardé en custom (gradient bronze→honey
+  signe l'identité).
 
 ### 2026-04-28 — V3.2.0 sprite Atelier 61 icônes
 - **Fait** :

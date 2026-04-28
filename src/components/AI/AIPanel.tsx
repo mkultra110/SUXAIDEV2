@@ -26,6 +26,7 @@ import { buildRepoMap, formatRepoMapBlock } from '../../lib/repo-map';
 import { TokenUsageBar } from './TokenUsageBar';
 import type { AgentMessage, AgentContentBlock } from '../../api/quatarly';
 import { useToast } from '../ui/Toast';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './AIPanel.css';
 
 const STORAGE_MODEL_KEY = 'suxai.model';
@@ -2830,15 +2831,7 @@ export function AIPanel() {
             }
             aria-pressed={activeConv?.mode === 'ask'}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path
-                d="M9 5H4v14h16V9h-5M9 5l5 5h6"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <AtelierIcon name="i-suggestion" size={11} />
             <span>Plan</span>
           </button>
           <button
@@ -2883,9 +2876,7 @@ export function AIPanel() {
             title="New conversation"
             aria-label="New conversation"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-plus" size={13} />
             <span>New</span>
           </button>
         </div>
@@ -3032,15 +3023,7 @@ export function AIPanel() {
           aria-label="Jump to latest"
           title="Jump to latest"
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path
-              d="M6 9l6 6 6-6"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <AtelierIcon name="i-chevron-down" size={14} />
         </button>
       )}
 
@@ -3054,15 +3037,7 @@ export function AIPanel() {
       {activeConv?.mode === 'ask' && (
         <div className="ai__plan-banner" role="note">
           <span className="ai__plan-banner-icon" aria-hidden>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M9 5H4v14h16V9h-5M9 5l5 5h6"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <AtelierIcon name="i-suggestion" size={14} />
           </span>
           <span className="ai__plan-banner-text">
             <strong>Plan mode</strong> · read-only (no file edits, no commands).
@@ -3083,9 +3058,7 @@ export function AIPanel() {
             title="Disable Plan mode"
             aria-label="Disable Plan mode"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-close" size={11} />
           </button>
         </div>
       )}

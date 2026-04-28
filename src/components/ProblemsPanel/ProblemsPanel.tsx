@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useAllDiagnostics, diagnosticsCounts, type Diagnostic } from '../../lib/all-diagnostics';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { setPendingReveal } from '../../lib/reveal';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './ProblemsPanel.css';
 
 /**
@@ -93,9 +94,7 @@ export function ProblemsPanel({ height, onClose }: ProblemsPanelProps) {
           {counts.total === 0 && <span className="problems__count problems__count--empty">No problems</span>}
         </span>
         <button className="problems__close" onClick={onClose} title="Close (Cmd+Shift+M)" aria-label="Close">
-          <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden>
-            <path d="M2 2 L10 10 M10 2 L2 10" stroke="currentColor" strokeWidth="1.5" />
-          </svg>
+          <AtelierIcon name="i-close" size={12} />
         </button>
       </header>
 
@@ -119,15 +118,11 @@ export function ProblemsPanel({ height, onClose }: ProblemsPanelProps) {
                     onClick={() => toggleGroup(path)}
                     aria-expanded={!isCollapsed}
                   >
-                    <svg
-                      width="10"
-                      height="10"
-                      viewBox="0 0 10 10"
-                      aria-hidden
+                    <AtelierIcon
+                      name="i-chevron-down"
+                      size={10}
                       className={`problems__chev${isCollapsed ? ' problems__chev--collapsed' : ''}`}
-                    >
-                      <path d="M2 3 L5 7 L8 3" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-                    </svg>
+                    />
                     <span className="problems__group-name">{name}</span>
                     {dir && <span className="problems__group-dir">{dir}</span>}
                     <span className="problems__group-count">{items.length}</span>

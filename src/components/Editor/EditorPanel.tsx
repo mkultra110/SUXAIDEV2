@@ -22,6 +22,7 @@ import { iconKindForFile, FileIcon } from '../../lib/file-icon';
 import { defineSuxaiThemes, suxaiThemeForMode } from '../../lib/monaco-suxai-theme';
 import { SuxaiLogo } from '../ui/SuxaiLogo';
 import { MosaMascot } from '../ui/MosaMascot';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './EditorPanel.css';
 
 interface ActionBarPos {
@@ -807,9 +808,7 @@ export function EditorPanel() {
               }}
               aria-label={`Close ${f.name}`}
             >
-              <svg width="10" height="10" viewBox="0 0 10 10">
-                <path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" />
-              </svg>
+              <AtelierIcon name="i-close" size={10} />
             </button>
           </div>
         ))}

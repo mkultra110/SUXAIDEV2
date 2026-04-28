@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import '@xterm/xterm/css/xterm.css';
 import './TerminalPanel.css';
@@ -317,15 +318,7 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
       />
       <div className="termpanel__head">
         <div className="termpanel__title">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path
-              d="M4 17l6-6-6-6M12 19h8"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
+          <AtelierIcon name="i-terminal" size={12} />
           Terminal
         </div>
         <div className="termpanel__actions">
@@ -342,10 +335,7 @@ export function TerminalPanel({ open, onToggle, onHeightChange }: Props) {
             }}
             title="Find in terminal (Ctrl+F)"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M16 16l4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-search" size={11} />
           </button>
           <button
             type="button"

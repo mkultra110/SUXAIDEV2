@@ -11,7 +11,7 @@ interface Command {
   id: string;
   label: string;
   hint?: string;
-  group: 'File' | 'AI' | 'Workspace' | 'Account' | 'Tasks';
+  group: 'File' | 'Editor' | 'AI' | 'Workspace' | 'Account' | 'Tasks';
   run: () => void | Promise<void>;
 }
 
@@ -21,7 +21,7 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const { openFile, setWorkspaceRoot, saveActiveFile, activeFile, workspaceRoot } = useWorkspace();
+  const { openFile, setWorkspaceRoot, saveActiveFile, saveAllDirty, activeFile, workspaceRoot } = useWorkspace();
   const { logout, user } = useAuth();
   const toast = useToast();
   const tasks = useTasks(workspaceRoot);
@@ -87,6 +87,44 @@ export function CommandPalette() {
           const outcome = await saveActiveFile();
           if (outcome === 'saved') toast.success('Saved', activeFile.name);
           else if (outcome === 'error') toast.error('Save failed', activeFile.name);
+        },
+      },
+      {
+        id: 'file.save-all',
+        label: 'File: Save All',
+        hint: 'Ctrl+Alt+S',
+        group: 'File',
+        run: async () => {
+          const { saved, skipped, failed } = await saveAllDirty(undefined, { skipUntitled: true });
+          if (failed > 0) toast.error('Save All', `${saved} saved · ${failed} failed`);
+          else if (saved > 0) toast.success('Save All', `${saved} fichier${saved > 1 ? 's' : ''}`);
+          else if (skipped > 0) toast.info('Save All', 'Rien à sauvegarder.');
+          else toast.info('Save All', 'No dirty files');
+        },
+      },
+      {
+        id: 'editor.format',
+        label: 'Editor: Format Document',
+        hint: 'Shift+Alt+F',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:format-document'));
+        },
+      },
+      {
+        id: 'editor.indent-spaces',
+        label: 'Editor: Convert Indentation to Spaces',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:indent-to-spaces'));
+        },
+      },
+      {
+        id: 'editor.indent-tabs',
+        label: 'Editor: Convert Indentation to Tabs',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:indent-to-tabs'));
         },
       },
       {
@@ -177,7 +215,7 @@ export function CommandPalette() {
     }
     return list;
   }, [
-    openFile, setWorkspaceRoot, saveActiveFile, activeFile, logout, user, toast,
+    openFile, setWorkspaceRoot, saveActiveFile, saveAllDirty, activeFile, logout, user, toast,
     workspaceRoot, tasks,
   ]);
 

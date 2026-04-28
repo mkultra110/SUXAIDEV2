@@ -93,6 +93,7 @@ export function EditorPanel() {
     newUntitled,
     reopenLastClosed,
     saveActiveFile,
+    saveAllDirty,
   } = useWorkspace();
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
@@ -159,6 +160,36 @@ export function EditorPanel() {
     [settings.fontSize, zoomOffset],
   );
 
+  /** v2.1 — build the pre-write transform from current settings.
+   *  Order : format first (it may re-introduce trailing whitespace
+   *  in some formatters), then trim. Format-on-Save only applies to
+   *  the ACTIVE file because it needs the live Monaco model — Save All
+   *  on non-active dirty tabs falls back to trim-only. */
+  const buildSaveTransform = useCallback(() => {
+    const wantFormat = settings.formatOnSave;
+    const wantTrim = settings.trimTrailingWhitespaceOnSave;
+    if (!wantFormat && !wantTrim) return undefined;
+    return async (content: string, path: string): Promise<string> => {
+      let next = content;
+      const ed = editorRef.current;
+      const model = ed?.getModel();
+      const activeUri = model?.uri.toString();
+      const isActive = !!model && (activeUri?.endsWith(path) || activeUri?.includes(path));
+      if (wantFormat && ed && isActive) {
+        try {
+          await ed.getAction('editor.action.formatDocument')?.run();
+          next = model!.getValue();
+        } catch {
+          /* no formatter for this language — silent fallback */
+        }
+      }
+      if (wantTrim) {
+        next = next.replace(/[ \t]+(?=\r?\n|$)/g, '');
+      }
+      return next;
+    };
+  }, [settings.formatOnSave, settings.trimTrailingWhitespaceOnSave]);
+
   // All editor-scoped shortcuts in a single listener. One attachment =
   // no risk of duplicate registrations when deps change. Ref-based
   // accessors read the freshest activeFile so the Ctrl+L dispatch can
@@ -197,9 +228,97 @@ export function EditorPanel() {
     ensureSnippetProvider();
   }, []);
 
+  // v2.1 — listeners for CommandPalette-triggered editor actions.
+  // Decouples the palette from the Monaco editorRef (which lives only
+  // inside this component) via window CustomEvents.
+  useEffect(() => {
+    const fmt = () => {
+      const ed = editorRef.current;
+      if (!ed) return;
+      ed.getAction('editor.action.formatDocument')?.run().catch(() => {
+        toast.info('No formatter', 'Aucun formatteur enregistré pour ce langage.');
+      });
+    };
+    const toSpaces = () => {
+      const ed = editorRef.current;
+      ed?.getAction('editor.action.indentationToSpaces')?.run().catch(() => {});
+    };
+    const toTabs = () => {
+      const ed = editorRef.current;
+      ed?.getAction('editor.action.indentationToTabs')?.run().catch(() => {});
+    };
+    window.addEventListener('suxai:format-document', fmt);
+    window.addEventListener('suxai:indent-to-spaces', toSpaces);
+    window.addEventListener('suxai:indent-to-tabs', toTabs);
+    return () => {
+      window.removeEventListener('suxai:format-document', fmt);
+      window.removeEventListener('suxai:indent-to-spaces', toSpaces);
+      window.removeEventListener('suxai:indent-to-tabs', toTabs);
+    };
+  }, [toast]);
+
+  // v2.1 — auto-save. When `settings.autosave` is on AND the active
+  // file is dirty, schedule a save `autosaveDelayMs` after the last
+  // edit. Cancelled if user types again or switches tabs (the
+  // dependency array re-runs and clears the timer in cleanup).
+  // Auto-save NEVER triggers Format on Save — formatters can shift
+  // the cursor, which would be surprising mid-typing. Trim still
+  // applies (cheap, predictable, doesn't move the cursor).
+  useEffect(() => {
+    if (!settings.autosave) return;
+    if (!activeFile || !activeFile.dirty || activeFile.untitled) return;
+    const delay = Math.max(200, settings.autosaveDelayMs ?? 1000);
+    const trim = settings.trimTrailingWhitespaceOnSave;
+    const transform = trim
+      ? async (content: string) => content.replace(/[ \t]+(?=\r?\n|$)/g, '')
+      : undefined;
+    const tid = window.setTimeout(() => {
+      saveActiveFile(transform).catch((err) => {
+        console.warn('[autosave] failed:', err);
+      });
+    }, delay);
+    return () => window.clearTimeout(tid);
+  }, [
+    settings.autosave,
+    settings.autosaveDelayMs,
+    settings.trimTrailingWhitespaceOnSave,
+    activeFile?.path,
+    activeFile?.content,
+    activeFile?.dirty,
+    activeFile?.untitled,
+    saveActiveFile,
+  ]);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
+
+      // v2.1 — Format Document (Shift+Alt+F). Handled BEFORE the
+      // mod/alt early return below since this shortcut needs Alt.
+      if (e.altKey && e.shiftKey && (e.key === 'F' || e.key === 'f')) {
+        const ed = editorRef.current;
+        if (!ed) return;
+        e.preventDefault();
+        ed.getAction('editor.action.formatDocument')?.run().catch(() => {
+          toast.info('No formatter', 'Aucun formatteur enregistré pour ce langage.');
+        });
+        return;
+      }
+
+      // v2.1 — Save All (Cmd+Alt+S, fallback to chord Cmd+K S below).
+      if (mod && e.altKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        const transform = buildSaveTransform();
+        saveAllDirty(transform)
+          .then(({ saved, skipped, failed }) => {
+            if (failed > 0) toast.error('Save All', `${saved} saved · ${failed} failed`);
+            else if (saved > 0) toast.success('Save All', `${saved} fichier${saved > 1 ? 's' : ''} sauvegardé${saved > 1 ? 's' : ''}`);
+            else if (skipped > 0) toast.info('Save All', 'Rien à sauvegarder.');
+          })
+          .catch((err) => toast.error('Save All failed', (err as Error).message));
+        return;
+      }
+
       if (!mod || e.altKey) return;
 
       // Zoom shortcuts (without Shift).
@@ -270,11 +389,11 @@ export function EditorPanel() {
         // dirty or not — so the user has a one-handed way to flush
         // changes to disk. Untitled files trigger Save As via
         // saveActiveFile's internal fallback.
-        // v0.13.16 (audit #1): single authority for Cmd/Ctrl+S — the
-        // duplicate handler in IDELayout's WorkspaceHotkeys was removed.
+        // v2.1 — pass the format/trim transform built from settings.
         if (!activeFileRef.current) return;
         e.preventDefault();
-        saveActiveFile()
+        const transform = buildSaveTransform();
+        saveActiveFile(transform)
           .then((res) => {
             const name = activeFileRef.current?.name;
             if (res === 'saved') toast.success('Saved', name);
@@ -355,7 +474,7 @@ export function EditorPanel() {
     // sometimes still be eaten by Monaco even though we preventDefault.
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [newUntitled, saveActiveFile, setActive, closeFile, reopenLastClosed, toast]);
+  }, [newUntitled, saveActiveFile, saveAllDirty, buildSaveTransform, setActive, closeFile, reopenLastClosed, toast]);
 
   const onMount: OnMount = useCallback(
     (editor, monaco) => {

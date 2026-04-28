@@ -25,6 +25,19 @@ export interface Settings {
    *                        still appears in the inline diff so the
    *                        user can still reject after-the-fact. */
   approvalMode: 'auto' | 'step' | 'yolo';
+  /** v2.1 — VSCode-parity. When enabled, the editor saves the active
+   *  file `autosaveDelayMs` after the last keystroke. Save All never
+   *  fires automatically — the user keeps control over commits. */
+  autosave: boolean;
+  autosaveDelayMs: number;
+  /** v2.1 — run Monaco's `editor.action.formatDocument` before
+   *  writing to disk. Honours each language's registered formatter
+   *  (TS/JS/JSON/HTML/CSS ship one out of the box). Skipped silently
+   *  if no formatter is registered for the active language. */
+  formatOnSave: boolean;
+  /** v2.1 — strip trailing spaces on every line before save.
+   *  Keeps trailing newline at EOF intact. */
+  trimTrailingWhitespaceOnSave: boolean;
 }
 
 const KEY = 'suxai.settings.v1';
@@ -37,6 +50,10 @@ const DEFAULTS: Settings = {
   defaultModelId: 'claude-sonnet-4-6-thinking',
   tabCompletion: true,
   approvalMode: 'auto',
+  autosave: false,
+  autosaveDelayMs: 1000,
+  formatOnSave: false,
+  trimTrailingWhitespaceOnSave: false,
 };
 
 function load(): Settings {

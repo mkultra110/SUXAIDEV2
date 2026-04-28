@@ -106,6 +106,41 @@ export function SettingsDialog() {
                 onChange={(v) => update({ tabCompletion: v })}
               />
             </Row>
+            <Row label="Auto-save (after delay)">
+              <Toggle
+                value={settings.autosave}
+                onChange={(v) => update({ autosave: v })}
+              />
+            </Row>
+            {settings.autosave && (
+              <Row label="Auto-save delay">
+                <input
+                  type="number"
+                  min={200}
+                  max={10_000}
+                  step={100}
+                  value={settings.autosaveDelayMs}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    if (Number.isFinite(n)) update({ autosaveDelayMs: Math.max(200, Math.min(10_000, n)) });
+                  }}
+                  className="settings__input"
+                />
+                <span className="settings__unit">ms</span>
+              </Row>
+            )}
+            <Row label="Format on save">
+              <Toggle
+                value={settings.formatOnSave}
+                onChange={(v) => update({ formatOnSave: v })}
+              />
+            </Row>
+            <Row label="Trim trailing whitespace on save">
+              <Toggle
+                value={settings.trimTrailingWhitespaceOnSave}
+                onChange={(v) => update({ trimTrailingWhitespaceOnSave: v })}
+              />
+            </Row>
           </Section>
 
           <Section title="AI">

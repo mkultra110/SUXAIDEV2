@@ -111,7 +111,23 @@ interface WorkspaceValue extends WorkspaceState {
   setActive: (path: string) => void;
   updateActiveContent: (content: string) => void;
   setSelection: (text: string) => void;
-  saveActiveFile: () => Promise<SaveOutcome>;
+  /** v2.1 — optional `transform` fn lets the caller (EditorPanel)
+   *  inject Format-on-Save and Trim-trailing-whitespace BEFORE the
+   *  bytes hit disk. The transform receives `(content, path)` and
+   *  returns the modified content (or unchanged). Errors propagate. */
+  saveActiveFile: (
+    transform?: (content: string, path: string) => Promise<string> | string,
+  ) => Promise<SaveOutcome>;
+  /** v2.1 — Save All Dirty (Cmd+K S). Iterates over every dirty
+   *  open file and saves it, applying the same `transform` callback
+   *  to each. Returns counts so the caller can toast a summary
+   *  («3 saved, 1 skipped, 0 failed»). Untitled files prompt
+   *  Save-As one by one — caller can short-circuit by passing
+   *  `skipUntitled: true`. */
+  saveAllDirty: (
+    transform?: (content: string, path: string) => Promise<string> | string,
+    opts?: { skipUntitled?: boolean },
+  ) => Promise<{ saved: number; skipped: number; failed: number }>;
   reloadActiveFromDisk: () => Promise<boolean>;
   newUntitled: () => void;
   /** v0.16.3 — reopen the most-recently-closed tab (Ctrl+Shift+T).
@@ -468,71 +484,114 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
-  const saveActiveFile = useCallback(async (): Promise<SaveOutcome> => {
+  /** v2.1 — internal helper used by saveActiveFile + saveAllDirty.
+   *  Applies the optional transform, writes to disk, refreshes git +
+   *  history, updates state. Single source of truth for the write
+   *  pipeline so format-on-save / trim-on-save behaves identically
+   *  whether the user hit Cmd+S or Cmd+K S. */
+  const persistOne = useCallback(
+    async (
+      file: { path: string; content: string; dirty?: boolean; untitled?: boolean; name?: string },
+      transform?: (content: string, path: string) => Promise<string> | string,
+    ): Promise<SaveOutcome> => {
+      let targetPath = file.path;
+      let alreadyWritten = false;
+      let bytes = file.content;
+
+      if (file.untitled) {
+        try {
+          const picked = await window.suxai.fs.saveAs?.(file.content, file.name ?? 'Untitled');
+          if (!picked) return 'cancelled';
+          targetPath = picked;
+          alreadyWritten = true;
+        } catch (err) {
+          console.error('[save-as] failed:', err);
+          return 'error';
+        }
+      } else if (!file.dirty) {
+        return 'unchanged';
+      }
+
+      // v2.1 — run the transform AFTER Save-As resolved (so the
+      // transform sees the right path for language detection) but
+      // BEFORE the actual write. If the transform mutated the bytes
+      // and Save-As already wrote the un-transformed version, we
+      // re-write with the transformed bytes. Cheap; matches what
+      // VSCode does with formatOnSave + a freshly-named file.
+      if (transform) {
+        try {
+          const out = await transform(bytes, targetPath);
+          if (typeof out === 'string') bytes = out;
+        } catch (err) {
+          console.warn('[save-transform] failed, writing un-transformed bytes:', err);
+        }
+      }
+
+      try {
+        if (!alreadyWritten || bytes !== file.content) {
+          await window.suxai.fs.writeFile(targetPath, bytes);
+        }
+        const ws = stateRef.current.workspaceRoot;
+        if (ws) invalidateGitStatus(ws);
+        void snapshotFile(targetPath, bytes);
+        setState((prev) => {
+          const stillOpen = prev.openFiles.some((f) => f.path === file.path);
+          if (!stillOpen) return prev;
+          return {
+            ...prev,
+            openFiles: prev.openFiles.map((f) =>
+              f.path === file.path
+                ? {
+                    ...f,
+                    path: targetPath,
+                    name: targetPath.split(/[\\/]/).pop() ?? f.name ?? '',
+                    content: bytes,
+                    dirty: false,
+                    untitled: false,
+                    language: langFromPath(targetPath),
+                  }
+                : f,
+            ),
+            activePath: prev.activePath === file.path ? targetPath : prev.activePath,
+          };
+        });
+        return 'saved';
+      } catch (err) {
+        console.error('Failed to save file:', err);
+        return 'error';
+      }
+    },
+    [],
+  );
+
+  const saveActiveFile = useCallback(async (
+    transform?: (content: string, path: string) => Promise<string> | string,
+  ): Promise<SaveOutcome> => {
     const s = stateRef.current;
     const toSave = s.openFiles.find((f) => f.path === s.activePath);
     if (!toSave) return 'unchanged';
+    return persistOne(toSave, transform);
+  }, [persistOne]);
 
-    let targetPath = toSave.path;
-    let alreadyWritten = false;
-
-    if (toSave.untitled) {
-      try {
-        const picked = await window.suxai.fs.saveAs?.(toSave.content, toSave.name);
-        if (!picked) return 'cancelled';
-        targetPath = picked;
-        alreadyWritten = true;
-      } catch (err) {
-        console.error('[save-as] failed:', err);
-        return 'error';
-      }
-    } else if (!toSave.dirty) {
-      return 'unchanged';
+  const saveAllDirty = useCallback(async (
+    transform?: (content: string, path: string) => Promise<string> | string,
+    opts?: { skipUntitled?: boolean },
+  ): Promise<{ saved: number; skipped: number; failed: number }> => {
+    const s = stateRef.current;
+    const targets = s.openFiles.filter((f) =>
+      f.dirty || (f.untitled && !opts?.skipUntitled),
+    );
+    let saved = 0;
+    let skipped = 0;
+    let failed = 0;
+    for (const f of targets) {
+      const res = await persistOne(f, transform);
+      if (res === 'saved') saved++;
+      else if (res === 'cancelled' || res === 'unchanged') skipped++;
+      else failed++;
     }
-
-    try {
-      if (!alreadyWritten) {
-        await window.suxai.fs.writeFile(targetPath, toSave.content);
-      }
-      // v0.15.4 — refresh git badges after every disk write. Cheap
-      // (re-spawns `git status` once per save) and keeps the sidebar
-      // in sync with the working tree without a polling loop.
-      const ws = stateRef.current.workspaceRoot;
-      if (ws) invalidateGitStatus(ws);
-      // v0.16.7 — fire-and-forget local history snapshot. Server caps
-      // (5s min gap, identity-skip, 50 max per file, 4 MB max) keep
-      // the disk usage bounded ; failures here must never break the
-      // save flow itself.
-      void snapshotFile(targetPath, toSave.content);
-      setState((prev) => {
-        // The user may have closed the tab between when we started
-        // the write and when it resolved. Don't resurrect a closed
-        // file or stamp activePath onto a tab that no longer exists.
-        const stillOpen = prev.openFiles.some((f) => f.path === toSave.path);
-        if (!stillOpen) return prev;
-        return {
-          ...prev,
-          openFiles: prev.openFiles.map((f) =>
-            f.path === toSave.path
-              ? {
-                  ...f,
-                  path: targetPath,
-                  name: targetPath.split(/[\\/]/).pop() ?? f.name,
-                  dirty: false,
-                  untitled: false,
-                  language: langFromPath(targetPath),
-                }
-              : f,
-          ),
-          activePath: prev.activePath === toSave.path ? targetPath : prev.activePath,
-        };
-      });
-      return 'saved';
-    } catch (err) {
-      console.error('Failed to save file:', err);
-      return 'error';
-    }
-  }, []);
+    return { saved, skipped, failed };
+  }, [persistOne]);
 
   // Re-read the active file from disk. Used on window-focus to catch
   // external changes made while SUXAI was unfocused. Bails if the file
@@ -816,6 +875,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateActiveContent,
       setSelection,
       saveActiveFile,
+      saveAllDirty,
       reloadActiveFromDisk,
       newUntitled,
       reopenLastClosed,
@@ -834,7 +894,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [
       state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
       closeOthers, closeToTheRight, closeAll, setActive, rejectPendingDiffs,
-      updateActiveContent, setSelection, saveActiveFile, reloadActiveFromDisk, newUntitled,
+      updateActiveContent, setSelection, saveActiveFile, saveAllDirty, reloadActiveFromDisk, newUntitled,
       reopenLastClosed, reorderTab,
       togglePin, renameFile, openDiff, closeDiff, acceptDiff,
       editorContext, updateEditorContext, recordEdit,

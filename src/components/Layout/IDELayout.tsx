@@ -10,6 +10,7 @@ import { Sidebar } from '../Sidebar/Sidebar';
 import { EditorPanel } from '../Editor/EditorPanel';
 import { AIPanel } from '../AI/AIPanel';
 import { TerminalPanel } from '../Terminal/TerminalPanel';
+import { ProblemsPanel } from '../ProblemsPanel/ProblemsPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
@@ -172,6 +173,20 @@ function persistLayout(layout: PersistedLayout): void {
 
 export function IDELayout() {
   const [terminalOpen, setTerminalOpen] = useState(false);
+  // v2.1 — Problems panel toggle (Cmd/Ctrl+Shift+M, parité VSCode).
+  // Lives next to the Terminal at the bottom of the layout.
+  const [problemsOpen, setProblemsOpen] = useState(false);
+  // Cmd/Ctrl+Shift+M global hotkey.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
+        e.preventDefault();
+        setProblemsOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
   const initialLayout = loadLayout();
   const [sidebarOpen, setSidebarOpen] = useState(initialLayout.sidebarOpen);
   const [aiOpen, setAiOpen] = useState(initialLayout.aiOpen);
@@ -213,7 +228,13 @@ export function IDELayout() {
         <AIPanel />
       </div>
       <TerminalPanel open={terminalOpen} onToggle={() => setTerminalOpen((o) => !o)} />
-      <StatusBar onToggleTerminal={() => setTerminalOpen((o) => !o)} terminalOpen={terminalOpen} />
+      {problemsOpen && <ProblemsPanel height={240} onClose={() => setProblemsOpen(false)} />}
+      <StatusBar
+        onToggleTerminal={() => setTerminalOpen((o) => !o)}
+        terminalOpen={terminalOpen}
+        onToggleProblems={() => setProblemsOpen((o) => !o)}
+        problemsOpen={problemsOpen}
+      />
     </div>
   );
 }

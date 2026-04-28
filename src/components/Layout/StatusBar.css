@@ -59,6 +59,24 @@
   background: color-mix(in oklch, var(--color-accent) 22%, transparent);
 }
 
+/* v2.1 — Problems panel toggle. Two coloured numerals (errors then
+   warnings), greyed out when count is 0 to reduce visual noise. */
+.statusbar__problems {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.statusbar__problems-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.statusbar__problems-count--err  { color: var(--color-danger); }
+.statusbar__problems-count--warn { color: var(--color-warning); }
+.statusbar__problems-count--zero { color: var(--color-text-disabled); font-weight: 400; }
+
 /* Branch indicator (left side) */
 .statusbar__branch {
   display: inline-flex;

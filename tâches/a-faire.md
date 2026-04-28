@@ -12,7 +12,11 @@
 
 ## En cours
 
-### V2.1 — parité VSCode (gros fix post-audit)
+_V2.1 livrée — voir Revue ci-dessous. Lot B (navigation) + Lot C
+(git avancé) + Output panel + EOL/Encoding sont listés ci-dessous
+dans le backlog V2.2._
+
+### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
 **Audit fait** par sous-agent : 5 working, 8 partial, 17 absent sur 30
 features VSCode. Plan en 3 lots (Tier 1 d'abord = max impact, le reste
@@ -95,6 +99,32 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V2.1.0 parité VSCode (Lot A)
+- **Fait** :
+  - **Settings** : 4 nouveaux paramètres (autosave, autosaveDelayMs,
+    formatOnSave, trimTrailingWhitespaceOnSave) + UI dans
+    SettingsDialog.
+  - **Save pipeline** : refactor WorkspaceContext (helper persistOne),
+    saveActiveFile accepte un transform, nouveau saveAllDirty.
+  - **Shortcuts** : Cmd+S avec transform, Cmd+Alt+S Save All,
+    Shift+Alt+F Format Document, Cmd+Shift+M Problems toggle.
+  - **CommandPalette** : 5 nouvelles entrées (Save All, Format,
+    Tabs↔Spaces, Problems toggle indirect via shortcut).
+  - **Problems panel** : nouveau composant + lib/all-diagnostics.ts
+    pour le stream global Monaco markers cross-file. StatusBar
+    affiche les compteurs error/warning toujours.
+  - **Auto-save** : useEffect debounced sur activeFile change,
+    delay configurable, skip Format on Save (cursor jump risk).
+- **Validation** : npm run typecheck + build OK.
+- **Hors scope V2.1** :
+  - Output panel (A7) — déféré V2.2, besoin infra IPC stdout streams.
+  - EOL/Encoding indicators (A8) — déféré V2.2, requiert exposer
+    eol/encoding depuis fs:read-file IPC.
+  - Find/Replace (A10) — déjà natif Monaco, aucun bug observé.
+- **Suivi** : Lot B (navigation : F12, Alt+F12, Shift+F12, F2,
+  Cmd+Shift+O, .vscode/settings.json) et Lot C (git blame/log/stash)
+  reportés en V2.2 (scope V2.1 déjà conséquent).
 
 ### 2026-04-27 — V2.0.1 fix bug « tourne en boucle » list_dir QUEUED
 - **Fait** : root cause identifiée → quand `streamAi` rejette

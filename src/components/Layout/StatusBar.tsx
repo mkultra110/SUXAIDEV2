@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useSettings } from '../../lib/settings';
 import { useGitBranchState } from '../../lib/git';
+import { useAllDiagnostics, diagnosticsCounts } from '../../lib/all-diagnostics';
 import { openBranchPicker } from '../Sidebar/BranchPicker';
 import './StatusBar.css';
 
@@ -14,13 +15,23 @@ interface Pos {
 interface StatusBarProps {
   onToggleTerminal?: () => void;
   terminalOpen?: boolean;
+  /** v2.1 — Problems panel toggle (Cmd/Ctrl+Shift+M). */
+  onToggleProblems?: () => void;
+  problemsOpen?: boolean;
 }
 
-export function StatusBar({ onToggleTerminal, terminalOpen }: StatusBarProps = {}) {
+export function StatusBar({
+  onToggleTerminal,
+  terminalOpen,
+  onToggleProblems,
+  problemsOpen,
+}: StatusBarProps = {}) {
   const { activeFile, workspaceRoot } = useWorkspace();
   const [settings, update] = useSettings();
   const [pos, setPos] = useState<Pos>({ line: 1, column: 1, selection: 0 });
   const branchState = useGitBranchState(workspaceRoot);
+  const diagnostics = useAllDiagnostics();
+  const diagCounts = useMemo(() => diagnosticsCounts(diagnostics), [diagnostics]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -72,6 +83,28 @@ export function StatusBar({ onToggleTerminal, terminalOpen }: StatusBarProps = {
           </button>
         )}
         {activeFile && <span className="statusbar__item">{activeFile.language ?? 'plaintext'}</span>}
+        {/* v2.1 — Problems panel toggle. Toujours visible (cohérent
+            avec VSCode) ; le badge à 0 reste muet en gris. */}
+        {onToggleProblems && (
+          <button
+            type="button"
+            className={`statusbar__item statusbar__btn statusbar__problems ${problemsOpen ? 'statusbar__btn--active' : ''}`}
+            onClick={onToggleProblems}
+            title={`Problems (Ctrl+Shift+M) — ${diagCounts.error} errors · ${diagCounts.warning} warnings`}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden style={{ marginRight: 4 }}>
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+              <line x1="12" y1="8" x2="12" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <line x1="12" y1="16" x2="12" y2="16.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <span className={`statusbar__problems-count statusbar__problems-count--err ${diagCounts.error === 0 ? 'statusbar__problems-count--zero' : ''}`}>
+              {diagCounts.error}
+            </span>
+            <span className={`statusbar__problems-count statusbar__problems-count--warn ${diagCounts.warning === 0 ? 'statusbar__problems-count--zero' : ''}`}>
+              {diagCounts.warning}
+            </span>
+          </button>
+        )}
       </div>
       <div className="statusbar__spacer" />
       <div className="statusbar__group">

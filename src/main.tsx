@@ -10,9 +10,14 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/geist-mono';
 
 import { App } from './App';
+import { startAllDiagnosticsStream } from './lib/all-diagnostics';
 import './styles/theme.css';
 import './styles/globals.css';
 import './styles/grain.css';
+
+// v2.1 — boot the cross-file Monaco markers stream once. The Problems
+// panel + status-bar counters subscribe via `useAllDiagnostics()`. Idempotent.
+startAllDiagnosticsStream();
 
 // Bundle Monaco locally instead of loading from jsDelivr CDN — Electron
 // packaged apps load index.html via file:// and CDN requests were hanging,

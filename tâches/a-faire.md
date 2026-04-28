@@ -12,7 +12,65 @@
 
 ## En cours
 
-_Aucun chantier actif._
+### V2.1 — parité VSCode (gros fix post-audit)
+
+**Audit fait** par sous-agent : 5 working, 8 partial, 17 absent sur 30
+features VSCode. Plan en 3 lots (Tier 1 d'abord = max impact, le reste
+selon scope dispo).
+
+**Plan**
+
+- [ ] **Lot A — Tier 1 UX core (10 fixes)**
+  - [ ] A1 — `Save All` (Cmd+K S) : ajouter `saveAllDirty()` dans
+        WorkspaceContext + handler clavier window + entrée
+        CommandPalette
+  - [ ] A2 — `Auto-save` setting + impl (debounce 1s after edit)
+  - [ ] A3 — `Format Document` (Shift+Alt+F) : Monaco
+        `editor.action.formatDocument` exposé + handler
+  - [ ] A4 — `Format on Save` setting + hook avant writeFile
+  - [ ] A5 — `Trim trailing whitespace on save` setting + impl
+  - [ ] A6 — `Problems panel` UI : nouveau composant ProblemsPanel
+        consommant `editorContext.diagnostics`, toggle Cmd+Shift+M
+  - [ ] A7 — `Output panel` UI : nouveau composant OutputPanel
+        groupé par source (LSP, build, agent), toggle dans status bar
+  - [ ] A8 — `EOL` indicator + `Encoding` indicator dans status bar
+  - [ ] A9 — `Tab to spaces / spaces to tabs` commands dans
+        CommandPalette + reformat actuel
+  - [ ] A10 — Find/Replace : vérifier que Cmd+F (find) et Cmd+H
+        (replace) fonctionnent vraiment, sinon ré-activer
+
+- [ ] **Lot B — Tier 2 IDE navigation (6 fixes)**
+  - [ ] B1 — `Go to Definition` (F12) — TS via Monaco gotoDefinition
+  - [ ] B2 — `Peek Definition` (Alt+F12) — Monaco peekDefinition
+  - [ ] B3 — `Find All References` (Shift+F12) — Monaco
+        findReferences
+  - [ ] B4 — `Rename Symbol` (F2) — Monaco rename action
+  - [ ] B5 — `Symbol outline panel` (Cmd+Shift+O) — quick picker
+        listant les symboles du fichier actif
+  - [ ] B6 — `.vscode/settings.json` per-project : charger au workspace
+        open, override le suxai.settings.v1 localStorage
+
+- [ ] **Lot C — Tier 3 Git avancé (3 fixes prioritaires)**
+  - [ ] C1 — Inline git blame : annotation par ligne sur cursor
+        (Monaco contentWidget), data via `git blame -L N,N`
+  - [ ] C2 — Git log viewer : modal listant les N derniers commits
+        avec author/date/message
+  - [ ] C3 — Stash list + apply/pop : add/list/apply/drop via
+        SourceControlPanel
+
+**Hors scope V2.1** (à voir après) :
+- Multi-root workspaces (architectural, gros refactor WorkspaceContext)
+- Workspace trust prompt (UX, pas critique)
+- Continuous file watcher (le focus-reload couvre 95% des cas)
+- Merge conflict UI (rare en flow agent-edit)
+- Theme picker UI (data-theme switch via /command palette suffit)
+- Zen mode, Walkthroughs (nice-to-have)
+
+**Acceptance**
+- `npm run typecheck` + `npm run build` OK
+- Class names + JSX inchangés sauf nouveaux panels (Problems/Output)
+- Bump à v2.1.0
+- Pushé sur `claude/french-greeting-lGwbV`
 
 ## Backlog (priorisé)
 

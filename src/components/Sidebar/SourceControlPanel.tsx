@@ -420,10 +420,15 @@ export function SourceControlPanel() {
               onClick={() => setCollapsed((c) => ({ ...c, stashes: !c.stashes }))}
               aria-expanded={!collapsed.stashes}
             >
-              <span className={`scp__chev ${collapsed.stashes ? 'scp__chev--collapsed' : ''}`}>
-                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-                  <path d="M3 2 L7 5 L3 8 Z" fill="currentColor" />
-                </svg>
+              <span
+                className="scp__chev"
+                style={{
+                  display: 'inline-flex',
+                  transform: collapsed.stashes ? 'rotate(0deg)' : 'rotate(90deg)',
+                  transition: 'transform var(--dur-quick) var(--ease-out-expo)',
+                }}
+              >
+                <AtelierIcon name="i-chevron-right" size={10} />
               </span>
               <span className="scp__section-label">Stashes</span>
               <span className="scp__section-count">{stashes.length}</span>
@@ -445,9 +450,7 @@ export function SourceControlPanel() {
                         title="Pop (apply + drop)"
                         aria-label="Pop stash"
                       >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-                          <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                        <AtelierIcon name="i-arrow-up-right" size={11} />
                       </button>
                       <button
                         type="button"
@@ -457,9 +460,7 @@ export function SourceControlPanel() {
                         title="Apply (keep stash)"
                         aria-label="Apply stash"
                       >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-                          <path d="M5 12l4 4 10-10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
+                        <AtelierIcon name="i-check" size={11} />
                       </button>
                       <button
                         type="button"
@@ -469,9 +470,7 @@ export function SourceControlPanel() {
                         title="Drop (discard)"
                         aria-label="Drop stash"
                       >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-                          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
+                        <AtelierIcon name="i-close" size={11} />
                       </button>
                     </span>
                     <span className="scp__row-badge scp__row-badge--stash">
@@ -502,10 +501,15 @@ export function SourceControlPanel() {
                   onClick={() => setCollapsed((c) => ({ ...c, [section.id]: !isCollapsed }))}
                   aria-expanded={!isCollapsed}
                 >
-                  <span className={`scp__chev ${isCollapsed ? 'scp__chev--collapsed' : ''}`}>
-                    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-                      <path d="M3 2 L7 5 L3 8 Z" fill="currentColor" />
-                    </svg>
+                  <span
+                    className="scp__chev"
+                    style={{
+                      display: 'inline-flex',
+                      transform: isCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+                      transition: 'transform var(--dur-quick) var(--ease-out-expo)',
+                    }}
+                  >
+                    <AtelierIcon name="i-chevron-right" size={10} />
                   </span>
                   <span className="scp__section-label">{section.label}</span>
                   <span className="scp__section-count">{section.paths.length}</span>
@@ -519,9 +523,7 @@ export function SourceControlPanel() {
                       title={`Stage all ${section.paths.length} ${section.label.toLowerCase()}`}
                       aria-label={`Stage all in ${section.label}`}
                     >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-                        <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
+                      <AtelierIcon name="i-plus" size={11} />
                     </button>
                   )}
                   {section.canUnstage && (
@@ -565,9 +567,7 @@ export function SourceControlPanel() {
                                 title="Stage this file"
                                 aria-label={`Stage ${fileName}`}
                               >
-                                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-                                  <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
+                                <AtelierIcon name="i-plus" size={11} />
                               </button>
                             )}
                             {section.canUnstage && (

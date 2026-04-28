@@ -7,6 +7,7 @@ import {
   type HistorySnapshot,
 } from '../../lib/history';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './HistoryDialog.css';
 
 /**
@@ -114,10 +115,7 @@ export function HistoryDialog({ path, onClose }: Props) {
         <div className="hist__head">
           <div className="hist__title">
             <span className="hist__title-icon" aria-hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-                <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-              </svg>
+              <AtelierIcon name="i-log" size={14} />
             </span>
             Local history
           </div>
@@ -128,9 +126,7 @@ export function HistoryDialog({ path, onClose }: Props) {
             onClick={onClose}
             aria-label="Close"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-close" size={13} />
           </button>
         </div>
         <div className="hist__list">

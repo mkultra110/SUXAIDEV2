@@ -12,13 +12,11 @@
 
 ## En cours
 
-_V3.3.0 livrée — voir Revue ci-dessous. Sweep complet du sprite
-Atelier sur ActivityBar/Sidebar/EditorPanel tabs/Breadcrumbs/
-ProblemsPanel/AIPanel header/ConversationSwitcher/TerminalPanel/
-GitLogModal/BranchPicker. Restent : EditorPanel md/preview toggles,
-DiffView, HistoryDialog, UpdateDialog, UpgradeDialog, CompareDialog,
-TitleBar version dropdown — moins visibles. + Departure Mono ghost
-text + Output panel (A7) + EOL/Encoding (A8)._
+_V3.4.0 livrée — sweep AtelierIcon désormais quasi-complet
+(SourceControl rows/sections, DiffView accept/reject, ModelSelector,
+ToolCall, UpdateDialog, UpgradeDialog, HistoryDialog, CompareDialog,
+TitleBar). Reste : Departure Mono ghost text + Output panel (A7) +
+EOL/Encoding (A8) + multi-root workspaces._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -103,6 +101,39 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.4.0 sweep AtelierIcon round 2 (SourceControl + modals + TitleBar)
+- **Fait** : second tour de sweep sur les composants de plus de
+  surface remaining. ~25 inline SVGs supplémentaires remplacés.
+  - **SourceControlPanel** : section chevrons (working tree +
+    stashes) en `i-chevron-right` rotatif via inline style ;
+    stash actions en `i-arrow-up-right` (pop) / `i-check` (apply) /
+    `i-close` (drop) ; stage section + per-row plus en `i-plus`.
+    Restent les 2 unstage minus glyphes inline (le sprite n'a pas
+    de minus icon, tiny single-line glyphs OK à laisser).
+  - **DiffView** : Accept/Reject buttons en `i-accept` / `i-reject`
+    (icônes spécifiquement dessinées pour ça par le bundle).
+  - **Message + ToolCall** : ToolCall dropdown chevron en
+    `i-chevron-down`. Message avatar + diverted summary gardés en
+    inline (gradient + green check overlay = identité visuelle).
+  - **ModelSelector** : trigger chevron + check sur l'item actif
+    (`i-chevron-down` + `i-check`).
+  - **TitleBar** : logout button en `i-arrow-up-right`.
+  - **UpdateDialog** : update header (`i-update`) + WhatsNew
+    sparkle (`i-sparkle`).
+  - **UpgradeDialog** : sparkle hero (`i-sparkle`).
+  - **HistoryDialog** : title (`i-log`) + close (`i-close`).
+  - **CompareDialog** : title (`i-diff`) + swap (`i-replace`) +
+    close (`i-close`).
+- **Validation** : `npm run typecheck` + `npm run build` OK. Bilan :
+  passage de 16 fichiers avec SVG inline en V3.0 à 8 fichiers en
+  V3.4 — les restants (AtelierIcon sprite host, EditorPanel md
+  toggles, AIPanel hero sparkle, Message avatar, SuxaiLogo,
+  MosaMascot, SourceControl unstage minus, Sidebar tab pin) sont
+  tous **intentionnels** (gradient brand, mascotte, glyphe
+  semantic-specific).
+- **Hors scope (suite)** : Output panel (A7), EOL/Encoding (A8),
+  multi-root workspaces, Departure Mono ghost text.
 
 ### 2026-04-28 — V3.3.0 sweep AtelierIcon sur 10 composants
 - **Fait** : extension de `<AtelierIcon />` à toutes les surfaces UI

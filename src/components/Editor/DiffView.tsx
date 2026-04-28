@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from 'react';
 import { diffLines, type Change } from 'diff';
 import { useWorkspace, type PendingDiff } from '../../contexts/WorkspaceContext';
 import { Button } from '../ui/Button';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './DiffView.css';
 
 /**
@@ -239,9 +240,7 @@ function HunkBlock({
           onClick={() => onDecide(hunk.decision === 'reject' ? null : 'reject')}
           title="Keep the original lines for this hunk"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
-          </svg>
+          <AtelierIcon name="i-reject" size={12} />
           Reject
         </button>
         <button
@@ -250,9 +249,7 @@ function HunkBlock({
           onClick={() => onDecide(hunk.decision === 'accept' ? null : 'accept')}
           title="Apply the new lines for this hunk"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-            <path d="M4 12l5 5 11-12" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <AtelierIcon name="i-accept" size={12} />
           Accept
         </button>
       </div>

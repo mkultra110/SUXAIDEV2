@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import { renderMarkdown } from '../../lib/markdown';
 import './UpdateDialog.css';
 
@@ -85,9 +86,7 @@ export function UpdateDialog() {
       <div className="upd__card glass-strong">
         <div className="upd__head">
           <div className="upd__icon" aria-hidden>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-update" size={18} />
           </div>
           <div>
             <div className="upd__title">Update available</div>
@@ -209,12 +208,7 @@ export function WhatsNewDialog() {
       <div className="upd__card glass-strong" onClick={(e) => e.stopPropagation()}>
         <div className="upd__head">
           <div className="upd__icon" aria-hidden>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2 L14 9 L21 11 L14 13 L12 21 L10 13 L3 11 L10 9 Z"
-                fill="currentColor"
-              />
-            </svg>
+            <AtelierIcon name="i-sparkle" size={18} />
           </div>
           <div>
             <div className="upd__title" id="whatsnew-title">

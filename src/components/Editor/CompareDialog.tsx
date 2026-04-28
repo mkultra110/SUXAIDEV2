@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { DiffEditor } from '@monaco-editor/react';
 import { onCompareOpen } from '../../lib/compare';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './CompareDialog.css';
 
 /**
@@ -107,9 +108,7 @@ export function CompareDialog() {
         <div className="cmp__head">
           <div className="cmp__title">
             <span className="cmp__title-icon" aria-hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 19h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4M9 21V3M15 3v18" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-              </svg>
+              <AtelierIcon name="i-diff" size={14} />
             </span>
             Compare
           </div>
@@ -133,9 +132,7 @@ export function CompareDialog() {
               title="Swap A ↔ B"
               aria-label="Swap A and B"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                <path d="M7 4l-4 4 4 4M3 8h13M17 12l4 4-4 4M21 16H8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+              <AtelierIcon name="i-replace" size={14} />
             </button>
             <span className="cmp__path cmp__path--b" title={state.pathB}>
               <span className="cmp__path-label">B</span>
@@ -149,9 +146,7 @@ export function CompareDialog() {
             title="Close (Esc)"
             aria-label="Close"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-close" size={13} />
           </button>
         </div>
         <div className="cmp__body">

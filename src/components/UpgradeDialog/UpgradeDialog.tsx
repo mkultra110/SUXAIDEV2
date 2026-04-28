@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { ApiError, authApi } from '../../api/client';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './UpgradeDialog.css';
 
 interface Props {
@@ -63,16 +64,7 @@ export function UpgradeDialog({ token, open, onClose, onUpgraded }: Props) {
       <div className="upg__card glass-strong" onClick={(e) => e.stopPropagation()}>
         <div className="upg__head">
           <div className="upg__icon" aria-hidden>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-              <path
-                d="M12 2 L15 9 L22 10 L17 15 L18 22 L12 19 L6 22 L7 15 L2 10 L9 9 Z"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-                fill="currentColor"
-                fillOpacity="0.18"
-              />
-            </svg>
+            <AtelierIcon name="i-sparkle" size={20} />
           </div>
           <div>
             <div className="upg__title">Upgrade to Pro</div>

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AI_MODELS } from '../../config';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './ModelSelector.css';
 
 interface Props {
@@ -78,24 +79,16 @@ export function ModelSelector({ value, onChange }: Props) {
       >
         <span className={`model-sel__dot model-sel__dot--${selected.provider}`} />
         <span className="model-sel__name">{selected.label}</span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
+        <span
+          aria-hidden
           style={{
+            display: 'inline-flex',
             transform: open ? 'rotate(180deg)' : 'none',
             transition: 'transform var(--dur-quick) var(--ease-out-expo)',
           }}
         >
-          <path
-            d="M2 4 L5 7 L8 4"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+          <AtelierIcon name="i-chevron-down" size={10} />
+        </span>
       </button>
 
       {open && coords &&
@@ -126,21 +119,7 @@ export function ModelSelector({ value, onChange }: Props) {
                     <span className="model-sel__option-name">{m.label}</span>
                     {m.tag && <span className="model-sel__tag">{m.tag}</span>}
                     {m.id === value && (
-                      <svg
-                        width="12"
-                        height="12"
-                        viewBox="0 0 12 12"
-                        className="model-sel__check"
-                      >
-                        <path
-                          d="M2 6.5 L5 9 L10 3.5"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                      <AtelierIcon name="i-check" size={12} className="model-sel__check" />
                     )}
                   </button>
                 ))}

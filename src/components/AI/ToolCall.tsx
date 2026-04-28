@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ToolCallSnapshot } from './Message';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './ToolCall.css';
 
 const TOOL_GLYPH: Record<string, string> = {
@@ -43,26 +44,17 @@ export function ToolCall({ call }: { call: ToolCallSnapshot }) {
         <span className={`toolcall__status toolcall__status--${call.status}`}>
           {STATUS_LABEL[call.status]}
         </span>
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
+        <span
           aria-hidden
           style={{
+            display: 'inline-flex',
             transform: open ? 'rotate(180deg)' : 'none',
             transition: 'transform var(--dur-quick) var(--ease-out-expo)',
             opacity: 0.6,
           }}
         >
-          <path
-            d="M2 4 L5 7 L8 4"
-            stroke="currentColor"
-            strokeWidth="1.4"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+          <AtelierIcon name="i-chevron-down" size={10} />
+        </span>
       </button>
 
       {open && (

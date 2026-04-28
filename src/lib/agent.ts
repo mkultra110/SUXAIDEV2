@@ -381,6 +381,52 @@ const MAX_FILE_BYTES = 4_000_000; // 4 MB
 const MAX_DIR_ENTRIES = 800;
 
 /**
+ * v2.1.1 — resolve a tool-supplied path against the workspace root.
+ *
+ * Why this exists : the agent receives `<additional_data>` blocks
+ * where `<recent_edits>` and `<recently_viewed_files>` use paths
+ * shortened relative to the workspace (token saving). The model
+ * naturally re-emits those relative paths when it calls `read_file`,
+ * `edit_file` etc. The IPC handler (electron/main.ts:fs:read-file)
+ * does `path.resolve(p)` which resolves against the Electron CWD —
+ * NOT the workspace. So a relative path from the model resolves to
+ * `<electron-cwd>/src/foo.ts` which doesn't exist → the tool errors
+ * → the model retries with grep → loop. (User report : « il arrive
+ * pas a lire dans les fichiers… il fait des recherche en boucle »).
+ *
+ * Fix : on the renderer side, BEFORE we hit the IPC, prepend the
+ * workspaceRoot when the supplied path isn't already absolute. We
+ * accept three styles of "absolute" :
+ *   - POSIX absolute  : starts with `/`
+ *   - Windows drive   : matches /^[A-Za-z]:[\\/]/
+ *   - Windows UNC     : starts with `\\` or `//`
+ *
+ * Anything else gets joined with the workspace root using whichever
+ * separator the root already uses (so a Windows root with `\` keeps
+ * `\` joins, a POSIX root keeps `/`).
+ */
+function isAbsolutePath(p: string): boolean {
+  if (p.startsWith('/')) return true;          // POSIX
+  if (/^[A-Za-z]:[\\/]/.test(p)) return true;  // Windows drive
+  if (p.startsWith('\\\\') || p.startsWith('//')) return true; // UNC
+  return false;
+}
+
+function resolveAgainstWorkspace(
+  p: string,
+  workspaceRoot: string | null | undefined,
+): string {
+  if (isAbsolutePath(p)) return p;
+  if (!workspaceRoot) return p;
+  // Pick the separator the root uses, default '/'.
+  const sep = workspaceRoot.includes('\\') && !workspaceRoot.includes('/') ? '\\' : '/';
+  // Strip leading './' so 'src/foo.ts' and './src/foo.ts' both work.
+  const rel = p.replace(/^\.[\\/]+/, '');
+  const trimmedRoot = workspaceRoot.replace(/[\\/]+$/, '');
+  return `${trimmedRoot}${sep}${rel}`;
+}
+
+/**
  * Directories the agent should never list — they're huge, almost
  * never relevant to the model's task, and burn through the context
  * window. Mirror what `git status` would already gitignore by default.
@@ -533,7 +579,8 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
   const args = asObject(call.input);
   switch (call.name) {
     case 'read_file': {
-      const path = expectString(args, 'path');
+      const rawPath = expectString(args, 'path');
+      const path = resolveAgainstWorkspace(rawPath, opts.workspaceRoot);
       const f = await window.suxai.fs.readFile(path);
       if (looksBinary(f.content)) {
         return (
@@ -550,7 +597,8 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       return `<<<file path=${f.path}>>>\n${body}\n<<<end>>>`;
     }
     case 'list_dir': {
-      const path = expectString(args, 'path');
+      const rawPath = expectString(args, 'path');
+      const path = resolveAgainstWorkspace(rawPath, opts.workspaceRoot);
       const all = await window.suxai.fs.readDir(path);
       // Sort: directories first, then alphabetical, with noisy/hidden
       // entries pushed to the bottom so the model sees the meaningful
@@ -578,7 +626,8 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       return `<<<dir path=${path}>>>\n${lines.join('\n')}\n<<<end>>>`;
     }
     case 'edit_file': {
-      const path = expectString(args, 'path');
+      const rawPath = expectString(args, 'path');
+      const path = resolveAgainstWorkspace(rawPath, opts.workspaceRoot);
       const search = expectString(args, 'search');
       const replace = typeof args.replace === 'string' ? (args.replace as string) : '';
       // v0.12.12 — chain after the previous write on this path. The
@@ -642,7 +691,8 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       });
     }
     case 'write_file': {
-      const path = expectString(args, 'path');
+      const rawPath = expectString(args, 'path');
+      const path = resolveAgainstWorkspace(rawPath, opts.workspaceRoot);
       // v0.15.10 (audit-3 #1) — was : `typeof === 'string' ? args.content : ''`,
       // which silently turned an undefined / null / wrong-typed `content`
       // into an empty file. The model's own bug got committed to disk.
@@ -741,7 +791,8 @@ async function runOne(call: ToolCall, opts: ExecuteOptions): Promise<string> {
       );
     }
     case 'apply_lazy_edit': {
-      const path = expectString(args, 'path');
+      const rawPath = expectString(args, 'path');
+      const path = resolveAgainstWorkspace(rawPath, opts.workspaceRoot);
       const lazy_edit = expectString(args, 'lazy_edit');
       const instruction = typeof args.instruction === 'string' ? (args.instruction as string) : '';
       // Read the original file. Bail loudly if it doesn't exist —

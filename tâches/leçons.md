@@ -108,6 +108,30 @@ _(à remplir au fur et à mesure)_
   absolute` qu'on fade conditionnellement (avec une classe ajoutée
   par JS sur scroll). Le mask est trop blunt.
 
+### V4 — Agent boucle sur read_file avec paths relatifs
+- **Symptôme** : « il arrive pas a lire dans les fichiers pour les
+  modifier… il fait des recherche en boucle ». L'agent essaie
+  `read_file('src/foo.ts')`, échoue, lance grep, échoue, retry,
+  loop.
+- **Cause** : `additional-data.ts` envoie les paths shortenisés
+  workspace-relative dans `<recent_edits>` et `<recently_viewed_files>`
+  (token saving). Le modèle réutilise ces paths relatifs dans ses
+  tool calls. L'IPC `fs:read-file` fait `path.resolve(p)` qui résout
+  contre la CWD du process Electron, PAS le workspace. Le path
+  relatif devient `<electron-cwd>/src/foo.ts` qui n'existe pas →
+  tool error → loop.
+- **Règle** : tout tool qui prend un argument `path` doit, côté
+  renderer (agent.ts:runOne), résoudre le path relatif contre
+  `opts.workspaceRoot` AVANT de hit l'IPC. Helper
+  `resolveAgainstWorkspace(p, root)` qui :
+  - Détecte les 3 styles d'absolu (POSIX `/`, Windows drive `C:\`,
+    UNC `\\server`)
+  - Sinon prepend le workspaceRoot avec le séparateur correct
+    (`\` si root windows, `/` sinon)
+  - Strip `./` au début pour `'./src/foo.ts'`
+  Appliqué à read_file, list_dir, edit_file, write_file,
+  apply_lazy_edit. Cf v2.0.3 commit.
+
 ### V2 — Tool calls « QUEUED » à l'infini après une erreur réseau
 - **Symptôme** : agent boucle sur `list_dir` (status QUEUED) sans
   jamais l'exécuter ; chaque turn empile un nouveau call list_dir

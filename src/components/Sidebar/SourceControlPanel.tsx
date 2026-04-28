@@ -18,6 +18,7 @@ import {
   type GitStatusCode,
 } from '../../lib/git';
 import { useToast } from '../ui/Toast';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import { openBranchPicker } from './BranchPicker';
 import { openGitLog } from './GitLogModal';
 import './SourceControlPanel.css';
@@ -299,12 +300,7 @@ export function SourceControlPanel() {
             ? `Switch branch (current: ${branchState.branch})`
             : 'Not a git repo'}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.7" />
-            <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.7" />
-            <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.7" />
-            <path d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
+          <AtelierIcon name="i-git-branch" size={11} />
           <span className="scp__branch-name">{branchState.branch ?? '—'}</span>
         </button>
         <div className="scp__sync-actions">
@@ -316,10 +312,7 @@ export function SourceControlPanel() {
             title="Show commit history"
             aria-label="Show history"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-              <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-log" size={13} />
           </button>
           <button
             type="button"
@@ -331,9 +324,7 @@ export function SourceControlPanel() {
               : `Stash all ${totalDirty} change${totalDirty > 1 ? 's' : ''}`}
             aria-label="Stash all changes"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M3 8h18v3H3z M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9 M9 14h6" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-stash" size={13} />
           </button>
           <button
             type="button"
@@ -343,9 +334,7 @@ export function SourceControlPanel() {
             title="git fetch --prune"
             aria-label="Fetch"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-sync" size={13} />
           </button>
           <button
             type="button"
@@ -357,9 +346,7 @@ export function SourceControlPanel() {
               : 'No upstream configured'}
             aria-label="Pull"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 4v14M5 13l7 7 7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-arrow-right" size={13} className="scp__sync-icon-down" />
             {branchState.behind > 0 && (
               <span className="scp__sync-count">{branchState.behind}</span>
             )}
@@ -374,9 +361,7 @@ export function SourceControlPanel() {
               : 'git push (nothing to push)'}
             aria-label="Push"
           >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
-              <path d="M12 20V6M5 11l7-7 7 7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-arrow-right" size={13} className="scp__sync-icon-up" />
             {branchState.ahead > 0 && (
               <span className="scp__sync-count">{branchState.ahead}</span>
             )}

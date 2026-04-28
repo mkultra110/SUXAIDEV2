@@ -13,6 +13,7 @@ import { CompareDialog } from './components/Editor/CompareDialog';
 import { BranchPickerHost } from './components/Sidebar/BranchPicker';
 import { GitLogHost } from './components/Sidebar/GitLogModal';
 import { Spinner } from './components/ui/Spinner';
+import { AtelierIconSprite } from './components/ui/AtelierIcon';
 
 /** v0.11.13: bridge between AuthContext (which dispatches a window
  *  CustomEvent because it lives outside the Toast tree) and the
@@ -46,6 +47,7 @@ function Root() {
 
   return (
     <>
+      <AtelierIconSprite />
       {status === 'authenticated' ? <IDELayout /> : <LoginScreen />}
       <UpdateDialog />
       <WhatsNewDialog />

@@ -91,3 +91,11 @@
   color: var(--color-accent);
   font-variant-numeric: tabular-nums;
 }
+
+/* v3.2 — Atelier icon spacer. Les icônes du sprite sont en
+   currentColor / 1.5 stroke-width donc héritent automatiquement
+   de la couleur du bouton parent. */
+.statusbar__icon {
+  margin-right: 4px;
+  flex-shrink: 0;
+}

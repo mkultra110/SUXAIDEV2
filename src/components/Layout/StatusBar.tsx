@@ -4,6 +4,7 @@ import { useSettings } from '../../lib/settings';
 import { useGitBranchState } from '../../lib/git';
 import { useAllDiagnostics, diagnosticsCounts } from '../../lib/all-diagnostics';
 import { openBranchPicker } from '../Sidebar/BranchPicker';
+import { AtelierIcon } from '../ui/AtelierIcon';
 import './StatusBar.css';
 
 interface Pos {
@@ -52,9 +53,7 @@ export function StatusBar({
             onClick={onToggleTerminal}
             title="Toggle terminal (Ctrl+`)"
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden style={{ marginRight: 4 }}>
-              <path d="M4 17l6-6-6-6M12 19h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <AtelierIcon name="i-terminal" size={11} className="statusbar__icon" />
             Terminal
           </button>
         )}
@@ -67,12 +66,7 @@ export function StatusBar({
             onClick={() => openBranchPicker()}
             title={`Switch branch (current: ${branchState.branch})`}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden style={{ marginRight: 4 }}>
-              <circle cx="6" cy="5" r="2" stroke="currentColor" strokeWidth="1.7" />
-              <circle cx="6" cy="19" r="2" stroke="currentColor" strokeWidth="1.7" />
-              <circle cx="18" cy="12" r="2" stroke="currentColor" strokeWidth="1.7" />
-              <path d="M6 7v10 M8 19h2a4 4 0 0 0 4-4v-3 M8 5h2a4 4 0 0 1 4 4v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-git-branch" size={11} className="statusbar__icon" />
             {branchState.branch}
             {branchState.behind > 0 && (
               <span className="statusbar__branch-count">↓{branchState.behind}</span>
@@ -92,11 +86,7 @@ export function StatusBar({
             onClick={onToggleProblems}
             title={`Problems (Ctrl+Shift+M) — ${diagCounts.error} errors · ${diagCounts.warning} warnings`}
           >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden style={{ marginRight: 4 }}>
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
-              <line x1="12" y1="8" x2="12" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              <line x1="12" y1="16" x2="12" y2="16.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
+            <AtelierIcon name="i-warning" size={11} className="statusbar__icon" />
             <span className={`statusbar__problems-count statusbar__problems-count--err ${diagCounts.error === 0 ? 'statusbar__problems-count--zero' : ''}`}>
               {diagCounts.error}
             </span>

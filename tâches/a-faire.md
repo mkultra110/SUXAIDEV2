@@ -12,9 +12,10 @@
 
 ## En cours
 
-_V3.1.0 livrée — voir Revue ci-dessous. Intégration des ~90 icônes
-custom (`icons.svg`) + Departure Mono pour le ghost text + Output
-panel (A7) + EOL/Encoding (A8) restent dans le backlog._
+_V3.2.0 livrée — voir Revue ci-dessous. Reste à étendre le sprite
+Atelier au reste des composants (TitleBar, ActivityBar, Sidebar,
+EditorPanel, AIPanel) + Departure Mono ghost text + Output panel
+(A7) + EOL/Encoding (A8)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +100,43 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.2.0 sprite Atelier 61 icônes
+- **Fait** :
+  - **Sprite import** : `icons.svg` du bundle Claude Design copié
+    dans `src/assets/atelier-icons.svg` (61 symbols, viewBox 24×24,
+    stroke `currentColor`, stroke-width 1.5).
+  - **`<AtelierIcon />` composant** : `src/components/ui/AtelierIcon.tsx`
+    avec un type `AtelierIconName` enum-string couvrant les 61 noms.
+    Render `<svg width=size><use href="#i-name" /></svg>` qui résout
+    contre le sprite mounté en App.
+  - **`<AtelierIconSprite />`** : wrapper React qui inline le SVG du
+    sprite via Vite `?raw` import + `dangerouslySetInnerHTML` dans
+    un div hidden. Mounté une fois au root de App.tsx — toutes les
+    `<AtelierIcon />` filles peuvent ensuite reférencer les
+    `<symbol>` par ID.
+  - **Proof-of-concept** : remplacement des inline SVGs dans
+    `StatusBar` (terminal, git-branch, warning) et
+    `SourceControlPanel` (branch, log/history, stash, sync, pull,
+    push). Pull/push utilisent `i-arrow-right` avec rotation CSS
+    pour garder une seule source d'icône.
+- **Validation** : `npm run typecheck` + `npm run build` OK. Sprite
+  shippé en bundle (16 KB), pas de fetch externe — offline-first
+  Electron préservé.
+- **Hors scope V3.2 (suite à faire)** :
+  - Étendre le swap aux autres composants : TitleBar (window
+    controls, brand), ActivityBar (sidebar nav icons), Sidebar
+    (file tree expand/collapse, file kind icons), EditorPanel
+    (tab close, breadcrumbs), AIPanel (sparkle/brain/suggestion),
+    ProblemsPanel (severity dots → icons), GitLogModal (clock).
+  - Pour `lib/file-icon.tsx` : décider si on remplace TOUS les
+    icons par `i-file` / `i-file-code` / `i-file-md` génériques
+    (cohérent Atelier mais perte d'identité par langue) ou on
+    GARDE les chromatiques existants (le bundle ne livre pas de
+    set par-langue, juste 3 icônes file génériques).
+  - Departure Mono pour ghost text — pas dispo sur fontsource,
+    fallback Monaspace Argon actif.
+  - Output panel (A7), EOL/Encoding (A8), multi-root workspaces.
 
 ### 2026-04-28 — V3.1.0 polish visuel Atelier Dark
 - **Fait** :

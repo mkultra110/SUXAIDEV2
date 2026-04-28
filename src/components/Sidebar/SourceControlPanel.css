@@ -445,3 +445,9 @@
   color: var(--color-accent);
   min-width: 22px;
 }
+
+/* v3.2 — i-arrow-right repurposé en pull/push (rotation CSS).
+   Pull = downward (rotate 90deg), push = upward (rotate -90deg).
+   Garde l'icône Atelier cohérente avec le reste du sprite. */
+.scp__sync-icon-down { transform: rotate(90deg); }
+.scp__sync-icon-up   { transform: rotate(-90deg); }

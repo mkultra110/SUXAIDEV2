@@ -10,6 +10,8 @@
  * stream; the AIPanel agent loop dispatches them here.
  */
 
+import { appendOutput } from './output';
+
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -562,15 +564,41 @@ export interface ExecuteOptions {
   notifyEdit?: (msg: { path: string; added: number; removed: number; partial?: boolean }) => void;
 }
 
+// v3.7 — Output panel wiring. Every executeTool call emits to source
+// `Agent` : an opening line with tool name + brief input, then the
+// result (success or error). Body is capped at 800 chars per call so
+// the panel stays scannable — full content lives in the chat thread.
+const AGENT_OUTPUT_SOURCE = 'Agent';
+const AGENT_RESULT_CHARS = 800;
+
+function briefInput(input: unknown): string {
+  try {
+    const s = JSON.stringify(input);
+    return s.length > 120 ? s.slice(0, 117) + '…' : s;
+  } catch {
+    return '<unserialisable>';
+  }
+}
+
+function clipResult(text: string): string {
+  if (text.length <= AGENT_RESULT_CHARS) return text;
+  const head = text.slice(0, AGENT_RESULT_CHARS);
+  const omitted = text.length - AGENT_RESULT_CHARS;
+  return `${head}\n…${omitted} more chars (truncated for Output panel)`;
+}
+
 export async function executeTool(
   call: ToolCall,
   opts: ExecuteOptions,
 ): Promise<ToolResult> {
+  appendOutput(AGENT_OUTPUT_SOURCE, `→ ${call.name}(${briefInput(call.input)})`, 'info');
   try {
     const out = await runOne(call, opts);
+    if (out) appendOutput(AGENT_OUTPUT_SOURCE, clipResult(out), 'stdout');
     return { tool_use_id: call.id, content: out };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    appendOutput(AGENT_OUTPUT_SOURCE, `✗ ${call.name}: ${msg}`, 'error');
     return { tool_use_id: call.id, content: msg, is_error: true };
   }
 }

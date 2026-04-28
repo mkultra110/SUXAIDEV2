@@ -12,8 +12,9 @@
 
 ## En cours
 
-_V3.6.0 livrée (A7 Output panel) — voir Revue ci-dessous. Restent :
-multi-root workspaces + Departure Mono ghost text._
+_V3.7.0 livrée (agent wiré sur Output panel) — voir Revue ci-dessous.
+Restent : live-stream IPC pour builds longs, multi-root workspaces,
+Departure Mono ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +99,24 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.7.0 agent wiré sur Output panel
+- **Fait** : `executeTool` (lib/agent.ts) wrappé pour émettre dans
+  la source `Agent` du panneau Output.
+  - Pré-call : `→ tool_name(brief input)` au level `info` (input
+    JSON-stringifié + clip 120 chars).
+  - Post success : résultat clip 800 chars au level `stdout` —
+    full content reste dans la thread chat, le panneau Output garde
+    une vue scannable.
+  - Post error : `✗ tool_name: message` au level `error`.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Effet visible** : pendant qu'un agent tourne, le panneau Output
+  source `Agent` affiche en temps réel `→ read_file(...) → list_dir(...)`
+  etc. avec le résultat synthétique. Un debug live des tool calls
+  sans avoir à dérouler la thread.
+- **Hors scope** : un seul source `Agent` partagé (pas une par
+  conversation). À séparer plus tard si plusieurs threads tournent
+  en parallèle.
 
 ### 2026-04-28 — V3.6.0 Output panel (A7, parité VSCode)
 - **Fait** :

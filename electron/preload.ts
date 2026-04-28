@@ -179,6 +179,40 @@ const api = {
     checkout: (input: { cwd: string; branch: string; create?: boolean }): Promise<{
       ok: true
     } | { ok: false; error: string }> => ipcRenderer.invoke('git:checkout', input),
+    /** v2.3 — `git blame --line-porcelain HEAD <file>` parsed.
+     *  Returns one BlameLine per source line, or `lines: []` for
+     *  files git doesn't know about (untracked / new). */
+    blame: (input: { cwd: string; file: string }): Promise<{
+      ok: true;
+      lines: { sha: string; author: string; dateIso: string; summary: string }[];
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:blame', input),
+    /** v2.3 — `git log -n<limit>` with field-separator parsing.
+     *  Default limit 100, capped at 1000. */
+    log: (input: { cwd: string; limit?: number }): Promise<{
+      ok: true;
+      commits: { sha: string; shortSha: string; author: string; dateIso: string; subject: string; body: string }[];
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:log', input),
+    /** v2.3 — list stashes (oldest index = highest in `git stash list`). */
+    stashList: (input: { cwd: string }): Promise<{
+      ok: true;
+      stashes: { ref: string; index: number; sha: string; subject: string; dateIso: string }[];
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:stash-list', input),
+    /** v2.3 — `git stash push [-m <msg>] [--include-untracked]`. */
+    stashPush: (input: { cwd: string; message?: string; includeUntracked?: boolean }): Promise<{
+      ok: true; output: string;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:stash-push', input),
+    /** v2.3 — `git stash pop stash@{N}` (apply + drop in one shot). */
+    stashPop: (input: { cwd: string; index: number }): Promise<{
+      ok: true;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:stash-pop', input),
+    /** v2.3 — `git stash apply stash@{N}` (apply, keep stash). */
+    stashApply: (input: { cwd: string; index: number }): Promise<{
+      ok: true;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:stash-apply', input),
+    /** v2.3 — `git stash drop stash@{N}` (delete without applying). */
+    stashDrop: (input: { cwd: string; index: number }): Promise<{
+      ok: true;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('git:stash-drop', input),
   },
   mcp: {
     /** v0.16.10 — list configured MCP servers + their connection status. */

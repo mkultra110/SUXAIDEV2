@@ -1796,6 +1796,193 @@ function registerIpc() {
     return { ok: true };
   });
 
+  // v2.3 (Lot C) — Git advanced. Blame + log + stash. All read paths
+  // are revalidated server-side via resolveRepoRoot + path.relative,
+  // mirroring the stage/unstage hardening (renderer compromise can't
+  // path-traverse out of the repo).
+
+  // Helper : convert an absolute file path to a repo-relative one,
+  // refusing traversal segments. Returns null on any rejection.
+  const toRepoRelative = (root: string, p: string): string | null => {
+    if (typeof p !== 'string' || p.length === 0) return null;
+    if (p.includes('\0')) return null;
+    const norm = p.replace(/\\/g, '/').normalize('NFC');
+    const rel = norm.startsWith(root + '/') || norm === root
+      ? path.relative(root, norm)
+      : norm;
+    if (rel.length === 0 || rel.startsWith('/') || rel.includes('..')) return null;
+    return rel;
+  };
+
+  ipcMain.handle('git:blame', async (_e, input: { cwd: string; file: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const rel = toRepoRelative(root, input?.file ?? '');
+    if (!rel) return { ok: false, error: 'invalid file path' };
+    // --line-porcelain repeats author/summary for every line — slightly
+    // more output than --porcelain but trivial to parse line-by-line.
+    const r = await runGitNoTimeout(root, ['blame', '--line-porcelain', 'HEAD', '--', rel]);
+    if (r.code !== 0) {
+      const err = r.stderr.trim();
+      // File untracked / new — return ok with empty lines so the renderer
+      // skips the widget without flagging an error.
+      if (/no such path|does not exist|not in 'HEAD'/i.test(err)) {
+        return { ok: true, lines: [] };
+      }
+      return { ok: false, error: err || 'blame failed' };
+    }
+    interface BlameLine { sha: string; author: string; dateIso: string; summary: string }
+    const lines: BlameLine[] = [];
+    let cur: Partial<BlameLine> = {};
+    for (const ln of r.stdout.split('\n')) {
+      // Header line : `<sha> <orig> <final> <count?>`
+      const headerMatch = /^([0-9a-f]{40}) \d+ \d+/.exec(ln);
+      if (headerMatch) {
+        cur = { sha: headerMatch[1] };
+        continue;
+      }
+      if (ln.startsWith('author ')) cur.author = ln.slice('author '.length);
+      else if (ln.startsWith('author-time ')) {
+        const ts = Number(ln.slice('author-time '.length));
+        if (Number.isFinite(ts)) cur.dateIso = new Date(ts * 1000).toISOString();
+      } else if (ln.startsWith('summary ')) cur.summary = ln.slice('summary '.length);
+      else if (ln.startsWith('\t')) {
+        // The `\t<content>` line marks end of metadata block — flush.
+        lines.push({
+          sha: cur.sha ?? '',
+          author: cur.author ?? '',
+          dateIso: cur.dateIso ?? '',
+          summary: cur.summary ?? '',
+        });
+        cur = {};
+      }
+    }
+    return { ok: true, lines };
+  });
+
+  ipcMain.handle('git:log', async (_e, input: { cwd: string; limit?: number }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const rawLimit = typeof input?.limit === 'number' ? input.limit : 100;
+    const limit = Math.max(1, Math.min(1000, Math.floor(rawLimit)));
+    // Use \x1f (US) as field sep + \x1e (RS) as record sep — neither
+    // can appear in a commit message after git's escaping.
+    const r = await runGitNoTimeout(root, [
+      'log',
+      `-n${limit}`,
+      '--pretty=format:%H%x1f%h%x1f%an%x1f%aI%x1f%s%x1f%b%x1e',
+    ]);
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'log failed' };
+    interface GitCommit { sha: string; shortSha: string; author: string; dateIso: string; subject: string; body: string }
+    const commits: GitCommit[] = [];
+    for (const rec of r.stdout.split('\x1e')) {
+      if (!rec.trim()) continue;
+      const fields = rec.split('\x1f');
+      if (fields.length < 6) continue;
+      commits.push({
+        sha: fields[0],
+        shortSha: fields[1],
+        author: fields[2],
+        dateIso: fields[3],
+        subject: fields[4],
+        body: fields[5].replace(/^\n+/, '').replace(/\n+$/, ''),
+      });
+    }
+    return { ok: true, commits };
+  });
+
+  ipcMain.handle('git:stash-list', async (_e, input: { cwd: string }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const r = await runGitNoTimeout(root, [
+      'stash', 'list',
+      '--pretty=format:%gd%x1f%H%x1f%gs%x1f%aI%x1e',
+    ]);
+    if (r.code !== 0) return { ok: false, error: r.stderr.trim() || 'stash list failed' };
+    interface Stash { ref: string; index: number; sha: string; subject: string; dateIso: string }
+    const stashes: Stash[] = [];
+    for (const rec of r.stdout.split('\x1e')) {
+      if (!rec.trim()) continue;
+      const fields = rec.split('\x1f');
+      if (fields.length < 4) continue;
+      const ref = fields[0];                      // e.g. "stash@{0}"
+      const m = /^stash@\{(\d+)\}$/.exec(ref);
+      if (!m) continue;
+      stashes.push({
+        ref,
+        index: Number(m[1]),
+        sha: fields[1],
+        subject: fields[2],
+        dateIso: fields[3],
+      });
+    }
+    return { ok: true, stashes };
+  });
+
+  ipcMain.handle('git:stash-push', async (_e, input: { cwd: string; message?: string; includeUntracked?: boolean }) => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(input?.cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    const args = ['stash', 'push'];
+    if (input?.includeUntracked) args.push('--include-untracked');
+    if (typeof input?.message === 'string' && input.message.length > 0) {
+      if (input.message.length > 4_000) return { ok: false, error: 'message too long' };
+      args.push('-m', input.message);
+    }
+    const r = await runGitNoTimeout(root, args);
+    if (r.code !== 0) {
+      const err = (r.stderr || r.stdout).trim();
+      if (/No local changes to save/i.test(err)) {
+        return { ok: false, error: 'No local changes to save.' };
+      }
+      return { ok: false, error: err || 'stash push failed' };
+    }
+    return { ok: true, output: r.stdout.trim() || r.stderr.trim() };
+  });
+
+  // Shared helper for pop/apply/drop — all take `{ cwd, index }` and
+  // run `git stash <op> stash@{index}` with strict index validation.
+  const stashByIndex = async (
+    cwd: string | undefined,
+    index: number | undefined,
+    subcmd: 'pop' | 'apply' | 'drop',
+  ): Promise<{ ok: true } | { ok: false; error: string }> => {
+    let safeCwd: string;
+    try { safeCwd = sanitizeFsPath(cwd, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    const root = await resolveRepoRoot(safeCwd);
+    if (!root) return { ok: false, error: 'not_a_git_repo' };
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index > 1000) {
+      return { ok: false, error: 'invalid stash index' };
+    }
+    const r = await runGitNoTimeout(root, ['stash', subcmd, `stash@{${index}}`]);
+    if (r.code !== 0) {
+      return { ok: false, error: (r.stderr || r.stdout).trim() || `stash ${subcmd} failed` };
+    }
+    return { ok: true };
+  };
+
+  ipcMain.handle('git:stash-pop', async (_e, input: { cwd: string; index: number }) =>
+    stashByIndex(input?.cwd, input?.index, 'pop'),
+  );
+  ipcMain.handle('git:stash-apply', async (_e, input: { cwd: string; index: number }) =>
+    stashByIndex(input?.cwd, input?.index, 'apply'),
+  );
+  ipcMain.handle('git:stash-drop', async (_e, input: { cwd: string; index: number }) =>
+    stashByIndex(input?.cwd, input?.index, 'drop'),
+  );
+
   // v0.16.7 — File local history. Auto-snapshot on save, browse via
   // a UI modal, restore by opening the snapshot as a read-only tab.
   //

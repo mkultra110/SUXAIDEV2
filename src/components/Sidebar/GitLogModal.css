@@ -1,0 +1,184 @@
+/* ============================================================
+   GitLogModal — read-only commit history viewer.
+   v2.3 (Lot C2). Mirrors BranchPicker's portal + glass-strong shell.
+   ============================================================ */
+
+.glog__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 10vh;
+  background: var(--color-bg-overlay);
+  background: color-mix(in oklch, black 60%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: suxai-fade-in-soft var(--dur-base) var(--ease-out-expo);
+}
+
+.glog {
+  width: min(820px, 94vw);
+  max-height: 78vh;
+  padding: 0;
+  border-radius: var(--radius-2xl);
+  display: flex;
+  flex-direction: column;
+  animation: glog-in var(--dur-base) var(--ease-out-expo);
+  overflow: hidden;
+}
+
+@keyframes glog-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.glog__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.glog__head-icon {
+  color: var(--color-accent);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.glog__input {
+  flex: 1;
+  height: 36px;
+  padding: 0 4px;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--color-text-primary);
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-snug);
+}
+.glog__input::placeholder { color: var(--color-text-tertiary); }
+.glog__count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
+  padding: 2px 8px;
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-full);
+}
+
+.glog__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 6px;
+}
+.glog__empty {
+  padding: 28px 22px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+.glog__empty code {
+  font-family: var(--font-mono);
+  background: var(--color-bg-elevated);
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-primary);
+}
+
+.glog__item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 64px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-left: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
+}
+.glog__item:hover {
+  background: var(--color-bg-hover);
+  border-left-color: color-mix(in oklch, var(--color-accent) 60%, transparent);
+}
+.glog__item--expanded {
+  background: color-mix(in oklch, var(--color-accent) 08%, transparent);
+  border-left-color: var(--color-accent);
+  grid-template-columns: 64px 1fr auto auto;
+  grid-template-areas:
+    "sha subject author age"
+    "body body body body";
+}
+.glog__item--expanded .glog__sha { grid-area: sha; }
+.glog__item--expanded .glog__subject { grid-area: subject; }
+.glog__item--expanded .glog__author { grid-area: author; }
+.glog__item--expanded .glog__age { grid-area: age; }
+
+.glog__sha {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-accent);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.glog__subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.glog__author {
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.glog__age {
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.glog__body {
+  grid-area: body;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--color-text-secondary);
+  background: var(--color-bg-base);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-subtle);
+  white-space: pre-wrap;
+  line-height: 1.55;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.glog__foot {
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--text-2xs);
+  color: var(--color-text-tertiary);
+}
+.glog__foot kbd {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-primary);
+}

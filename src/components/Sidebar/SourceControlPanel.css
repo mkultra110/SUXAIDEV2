@@ -428,3 +428,20 @@
   background: color-mix(in oklch, var(--red-9) 18%, transparent);
   border: 1px solid color-mix(in oklch, var(--red-9) 40%, transparent);
 }
+
+/* v2.3 (C3) — stash section. Same shell as the working-tree
+   sections ; the row uses a pill-style badge with the stash index
+   (stash@{N}) instead of an X/Y status letter. */
+.scp__section--stash {
+  /* nothing custom — inherits .scp__section spacing */
+}
+.scp__row--stash {
+  /* row reuses .scp__row but isn't a button (no openFile click). */
+  cursor: default;
+}
+.scp__row-badge--stash {
+  background: color-mix(in oklch, var(--color-accent) 16%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 32%, transparent);
+  color: var(--color-accent);
+  min-width: 22px;
+}

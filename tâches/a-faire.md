@@ -12,8 +12,8 @@
 
 ## En cours
 
-_V2.2 livrée — voir Revue ci-dessous. Lot C (git avancé) + Output
-panel + EOL/Encoding restent dans le backlog V2.3._
+_V2.3 livrée — voir Revue ci-dessous. Output panel (A7) + EOL/Encoding
+(A8) + multi-root workspaces restent dans le backlog V2.4._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +98,54 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V2.3.0 parité VSCode (Lot C git avancé)
+- **Fait** :
+  - **IPC** : 7 nouveaux handlers dans `electron/main.ts` (blame,
+    log, stash-list/push/pop/apply/drop). Réutilise `runGitNoTimeout`,
+    `resolveRepoRoot`, et un nouveau helper `toRepoRelative`. Les
+    indices de stash sont validés (`Number.isInteger`, 0–1000) et
+    passés sous forme `stash@{N}` directement à git (spawn ne passe
+    pas par le shell, donc les `{}` sont preservés).
+  - **Préload** : 7 nouvelles entrées dans `git.*` avec types stricts
+    pour le payload + retour.
+  - **lib/git.ts** : interfaces `BlameLine`/`GitCommit`/`GitStash`,
+    helpers `getFileBlame` (avec cache invalidé sur `git-refresh`),
+    `getGitLog` (one-shot, refetch à chaque ouverture du modal),
+    `listStashes`/`stashPush`/`stashPop`/`stashApply`/`stashDrop`,
+    `useGitStashes` hook réactif, et utilitaire `relativeTime`.
+  - **C1 inline blame** (`EditorPanel.tsx`) : useEffect qui s'attache
+    à `editor.onDidChangeCursorPosition` (debounce 200 ms),
+    fetch blame de la ligne courante, et insère un Monaco injected-
+    text decoration `after` avec `Author · 3d ago · summary` en
+    italique muted. Skip silencieux pour le sha all-zeros (« Not
+    Committed Yet »). Setting `gitBlame` (default true) avec toggle
+    SettingsDialog ; mapping `git.blame.enabled` ajouté dans
+    `workspace-settings.ts`. CSS `.suxai-blame-annotation` dans
+    EditorPanel.css.
+  - **C2 git log viewer** : nouveau `components/Sidebar/GitLogModal.tsx`
+    + `.css`. Portal pattern identique à BranchPicker, fuzzy filter
+    sur subject+author+sha, click sur un commit pour développer le
+    body. `GitLogHost` monté dans App.tsx. Trigger via
+    `openGitLog()` (CommandPalette « Git: Show History… » + bouton
+    horloge dans le SourceControlPanel sync row).
+  - **C3 stashes** : section « Stashes » dans `SourceControlPanel`
+    (cachée si vide) avec 3 actions par stash (Pop / Apply / Drop) +
+    bouton « Stash All » dans le sync row (icône archive). Entrées
+    CommandPalette « Git: Stash All Changes » et « Git: Pop Latest
+    Stash ». Tous les stash actions invalident `git-refresh` →
+    propagation automatique aux badges sidebar + Source Control.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V2.3 (déféré V2.4)** :
+  - A7 Output panel (besoin infra IPC stdout streams)
+  - A8 EOL/Encoding indicators (besoin extension IPC `fs:read-file`)
+  - Multi-root workspaces (refactor architectural WorkspaceContext)
+  - Blame gutter side-bar (juste contentWidget pour l'instant)
+  - Diff entre 2 commits depuis le log viewer (read-only seulement)
+- **Suivi** : tester en runtime sur un vrai repo (ouvrir un .ts
+  versionné, vérifier que l'annotation blame s'affiche ; ouvrir
+  Git: Show History ; faire stash all + pop) — non vérifié dans
+  cette session car build only.
 
 ### 2026-04-28 — V2.2.0 parité VSCode (Lot B navigation)
 - **Fait** :

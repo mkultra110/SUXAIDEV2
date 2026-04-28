@@ -3,16 +3,23 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import {
   useGitFullStatus,
   useGitBranchState,
+  useGitStashes,
   stagePaths,
   unstagePaths,
   commitStaged,
   gitFetch,
   gitPull,
   gitPush,
+  stashPush,
+  stashPop,
+  stashApply,
+  stashDrop,
+  relativeTime,
   type GitStatusCode,
 } from '../../lib/git';
 import { useToast } from '../ui/Toast';
 import { openBranchPicker } from './BranchPicker';
+import { openGitLog } from './GitLogModal';
 import './SourceControlPanel.css';
 
 /**
@@ -70,10 +77,12 @@ export function SourceControlPanel() {
   const toast = useToast();
 
   const branchState = useGitBranchState(workspaceRoot);
+  const stashes = useGitStashes(workspaceRoot);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [commitMessage, setCommitMessage] = useState('');
   const [committing, setCommitting] = useState(false);
   const [syncBusy, setSyncBusy] = useState<'fetch' | 'pull' | 'push' | null>(null);
+  const [stashBusy, setStashBusy] = useState(false);
   const commitInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Bucket every path by its XY codes :
@@ -223,6 +232,39 @@ export function SourceControlPanel() {
     );
   }
 
+  const onStashAll = async () => {
+    if (!opCwd || stashBusy) return;
+    if (totalDirty === 0) {
+      toast.info('Nothing to stash', 'Working tree is clean.');
+      return;
+    }
+    setStashBusy(true);
+    try {
+      const err = await stashPush(opCwd, undefined, true);
+      if (err) toast.error('Stash failed', err);
+      else toast.success('Stashed', `${totalDirty} file${totalDirty > 1 ? 's' : ''} saved.`);
+    } finally {
+      setStashBusy(false);
+    }
+  };
+
+  const onStashAction = async (
+    index: number,
+    op: 'pop' | 'apply' | 'drop',
+    label: string,
+  ) => {
+    if (!opCwd || stashBusy) return;
+    setStashBusy(true);
+    try {
+      const fn = op === 'pop' ? stashPop : op === 'apply' ? stashApply : stashDrop;
+      const err = await fn(opCwd, index);
+      if (err) toast.error(`${op} failed`, err);
+      else toast.success(`${op[0].toUpperCase()}${op.slice(1)}ped`, label);
+    } finally {
+      setStashBusy(false);
+    }
+  };
+
   const onSync = async (op: 'fetch' | 'pull' | 'push') => {
     if (!opCwd || syncBusy) return;
     setSyncBusy(op);
@@ -266,6 +308,33 @@ export function SourceControlPanel() {
           <span className="scp__branch-name">{branchState.branch ?? '—'}</span>
         </button>
         <div className="scp__sync-actions">
+          <button
+            type="button"
+            className="scp__sync-btn"
+            onClick={() => openGitLog()}
+            disabled={!opCwd}
+            title="Show commit history"
+            aria-label="Show history"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.7" />
+              <path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className={`scp__sync-btn ${stashBusy ? 'scp__sync-btn--busy' : ''}`}
+            onClick={() => void onStashAll()}
+            disabled={!opCwd || stashBusy || totalDirty === 0}
+            title={totalDirty === 0
+              ? 'Nothing to stash'
+              : `Stash all ${totalDirty} change${totalDirty > 1 ? 's' : ''}`}
+            aria-label="Stash all changes"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M3 8h18v3H3z M5 11v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9 M9 14h6" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+            </svg>
+          </button>
           <button
             type="button"
             className={`scp__sync-btn ${syncBusy === 'fetch' ? 'scp__sync-btn--busy' : ''}`}
@@ -353,6 +422,83 @@ export function SourceControlPanel() {
           {committing ? 'Committing…' : `Commit${stagedCount > 0 ? ` (${stagedCount})` : ''}`}
         </button>
       </div>
+
+      {/* v2.3 (C3) — Stashes section. Hidden when empty so we don't
+          clutter the panel for users who never stash. Apply / Pop /
+          Drop actions per row. */}
+      {stashes.length > 0 && (
+        <div className="scp__section scp__section--stash">
+          <div className="scp__section-head scp__section-head--stash">
+            <button
+              type="button"
+              className="scp__section-toggle"
+              onClick={() => setCollapsed((c) => ({ ...c, stashes: !c.stashes }))}
+              aria-expanded={!collapsed.stashes}
+            >
+              <span className={`scp__chev ${collapsed.stashes ? 'scp__chev--collapsed' : ''}`}>
+                <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                  <path d="M3 2 L7 5 L3 8 Z" fill="currentColor" />
+                </svg>
+              </span>
+              <span className="scp__section-label">Stashes</span>
+              <span className="scp__section-count">{stashes.length}</span>
+            </button>
+          </div>
+          {!collapsed.stashes && (
+            <ul className="scp__list">
+              {stashes.map((s) => (
+                <li key={s.ref}>
+                  <div className="scp__row scp__row--stash" title={s.subject}>
+                    <span className="scp__row-name">{s.subject}</span>
+                    <span className="scp__row-dir">{relativeTime(s.dateIso)}</span>
+                    <span className="scp__row-actions">
+                      <button
+                        type="button"
+                        className="scp__row-act"
+                        onClick={() => void onStashAction(s.index, 'pop', s.subject)}
+                        disabled={stashBusy}
+                        title="Pop (apply + drop)"
+                        aria-label="Pop stash"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path d="M12 19V5M5 12l7-7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="scp__row-act"
+                        onClick={() => void onStashAction(s.index, 'apply', s.subject)}
+                        disabled={stashBusy}
+                        title="Apply (keep stash)"
+                        aria-label="Apply stash"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path d="M5 12l4 4 10-10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="scp__row-act scp__row-act--unstage"
+                        onClick={() => void onStashAction(s.index, 'drop', s.subject)}
+                        disabled={stashBusy}
+                        title="Drop (discard)"
+                        aria-label="Drop stash"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden>
+                          <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      </button>
+                    </span>
+                    <span className="scp__row-badge scp__row-badge--stash">
+                      {s.index}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {totalDirty === 0 ? (
         <div className="scp__empty">

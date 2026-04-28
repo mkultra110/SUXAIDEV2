@@ -5,13 +5,15 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import { emitAiCommand } from '../../lib/commands';
 import { useTasks, runTask } from '../../lib/tasks';
+import { openGitLog } from '../Sidebar/GitLogModal';
+import { stashPush, stashPop, listStashes } from '../../lib/git';
 import './CommandPalette.css';
 
 interface Command {
   id: string;
   label: string;
   hint?: string;
-  group: 'File' | 'Editor' | 'AI' | 'Workspace' | 'Account' | 'Tasks';
+  group: 'File' | 'Editor' | 'Git' | 'AI' | 'Workspace' | 'Account' | 'Tasks';
   run: () => void | Promise<void>;
 }
 
@@ -179,6 +181,42 @@ export function CommandPalette() {
         run: () => {
           setWorkspaceRoot(null);
           toast.info('Workspace closed');
+        },
+      },
+      {
+        id: 'git.show-history',
+        label: 'Git: Show History…',
+        group: 'Git',
+        run: () => {
+          if (!workspaceRoot) return toast.info('No workspace open');
+          openGitLog();
+        },
+      },
+      {
+        id: 'git.stash-push',
+        label: 'Git: Stash All Changes',
+        group: 'Git',
+        run: async () => {
+          if (!workspaceRoot) return toast.info('No workspace open');
+          const err = await stashPush(workspaceRoot, undefined, true);
+          if (err) toast.error('Stash failed', err);
+          else toast.success('Stashed', 'All changes saved to a new stash.');
+        },
+      },
+      {
+        id: 'git.stash-pop',
+        label: 'Git: Pop Latest Stash',
+        group: 'Git',
+        run: async () => {
+          if (!workspaceRoot) return toast.info('No workspace open');
+          const stashes = await listStashes(workspaceRoot);
+          if (stashes.length === 0) {
+            toast.info('No stashes', 'Nothing to pop.');
+            return;
+          }
+          const err = await stashPop(workspaceRoot, 0);
+          if (err) toast.error('Pop failed', err);
+          else toast.success('Stash applied', stashes[0].subject);
         },
       },
       {

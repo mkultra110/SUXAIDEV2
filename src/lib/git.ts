@@ -377,3 +377,187 @@ export async function checkoutBranch(
     return (err as Error).message;
   }
 }
+
+/* ====================================================================
+ * v2.3 (Lot C) — Blame + log + stash.
+ * ==================================================================== */
+
+export interface BlameLine {
+  sha: string;
+  author: string;
+  dateIso: string;
+  summary: string;
+}
+
+export interface GitCommit {
+  sha: string;
+  shortSha: string;
+  author: string;
+  dateIso: string;
+  subject: string;
+  body: string;
+}
+
+export interface GitStash {
+  ref: string;
+  index: number;
+  sha: string;
+  subject: string;
+  dateIso: string;
+}
+
+// Blame cache. Keyed by `${cwd}::${file}`. Cleared on every
+// 'suxai:git-refresh' broadcast — that fires after save/commit/
+// checkout/pull/etc., so blame stays in sync without manual eviction.
+const blameCache = new Map<string, BlameLine[]>();
+const blameInflight = new Map<string, Promise<BlameLine[]>>();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('suxai:git-refresh', () => {
+    blameCache.clear();
+  });
+}
+
+/** Read `git blame --line-porcelain HEAD <file>` cached per-file.
+ *  Returns `[]` for untracked / new files (not an error). */
+export async function getFileBlame(cwd: string, file: string): Promise<BlameLine[]> {
+  if (!window.suxai?.git?.blame) return [];
+  const key = `${cwd}::${file}`;
+  const cached = blameCache.get(key);
+  if (cached) return cached;
+  const inflight = blameInflight.get(key);
+  if (inflight) return inflight;
+  const promise = (async () => {
+    try {
+      const res = await window.suxai.git.blame({ cwd, file });
+      if (!res.ok) return [];
+      return res.lines;
+    } catch {
+      return [];
+    }
+  })();
+  blameInflight.set(key, promise);
+  try {
+    const lines = await promise;
+    blameCache.set(key, lines);
+    return lines;
+  } finally {
+    blameInflight.delete(key);
+  }
+}
+
+/** One-shot `git log -n<limit>`. No cache — the log viewer modal
+ *  refetches on open so it always reflects current HEAD. */
+export async function getGitLog(cwd: string, limit = 100): Promise<GitCommit[]> {
+  if (!window.suxai?.git?.log) return [];
+  try {
+    const res = await window.suxai.git.log({ cwd, limit });
+    return res.ok ? res.commits : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function listStashes(cwd: string): Promise<GitStash[]> {
+  if (!window.suxai?.git?.stashList) return [];
+  try {
+    const res = await window.suxai.git.stashList({ cwd });
+    return res.ok ? res.stashes : [];
+  } catch {
+    return [];
+  }
+}
+
+/** React hook : reactive stash list. Refreshes on every
+ *  `suxai:git-refresh` broadcast (which fires after stash push/pop/
+ *  drop/apply/commit). */
+export function useGitStashes(workspaceRoot: string | null): GitStash[] {
+  const [stashes, setStashes] = useState<GitStash[]>([]);
+  useEffect(() => {
+    if (!workspaceRoot) {
+      setStashes([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const list = await listStashes(workspaceRoot);
+      if (!cancelled) setStashes(list);
+    };
+    void load();
+    const handler = () => { void load(); };
+    window.addEventListener('suxai:git-refresh', handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('suxai:git-refresh', handler);
+    };
+  }, [workspaceRoot]);
+  return stashes;
+}
+
+export async function stashPush(
+  cwd: string,
+  message?: string,
+  includeUntracked = false,
+): Promise<string | null> {
+  if (!window.suxai?.git?.stashPush) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.stashPush({ cwd, message, includeUntracked });
+    invalidateGitStatus(cwd);
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+export async function stashPop(cwd: string, index: number): Promise<string | null> {
+  if (!window.suxai?.git?.stashPop) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.stashPop({ cwd, index });
+    invalidateGitStatus(cwd);
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+export async function stashApply(cwd: string, index: number): Promise<string | null> {
+  if (!window.suxai?.git?.stashApply) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.stashApply({ cwd, index });
+    invalidateGitStatus(cwd);
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+export async function stashDrop(cwd: string, index: number): Promise<string | null> {
+  if (!window.suxai?.git?.stashDrop) return 'git IPC unavailable';
+  try {
+    const res = await window.suxai.git.stashDrop({ cwd, index });
+    invalidateGitStatus(cwd);
+    return res.ok ? null : res.error;
+  } catch (err) {
+    return (err as Error).message;
+  }
+}
+
+/** Format `dateIso` as a short relative string ("3 days ago",
+ *  "2 hours ago", etc.). Used by blame widget + log viewer. */
+export function relativeTime(dateIso: string): string {
+  if (!dateIso) return '';
+  const t = Date.parse(dateIso);
+  if (!Number.isFinite(t)) return '';
+  const seconds = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.floor(days / 365);
+  return `${years}y ago`;
+}

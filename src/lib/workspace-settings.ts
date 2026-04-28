@@ -140,6 +140,11 @@ function mapVscodeKeys(raw: Record<string, unknown>): Partial<Settings> {
     out.autosaveDelayMs = Math.max(200, Math.min(60_000, Math.round(autoSaveDelay)));
   }
 
+  // VSCode's setting is `gitlens.currentLine.enabled` (an extension);
+  // for SUXAI we honour `git.blame.enabled` as our own convention.
+  const blame = get('git.blame.enabled');
+  if (typeof blame === 'boolean') out.gitBlame = blame;
+
   return out;
 }
 

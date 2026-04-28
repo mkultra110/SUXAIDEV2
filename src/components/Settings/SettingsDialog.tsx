@@ -141,6 +141,12 @@ export function SettingsDialog() {
                 onChange={(v) => update({ trimTrailingWhitespaceOnSave: v })}
               />
             </Row>
+            <Row label="Inline git blame">
+              <Toggle
+                value={settings.gitBlame}
+                onChange={(v) => update({ gitBlame: v })}
+              />
+            </Row>
           </Section>
 
           <Section title="AI">

@@ -38,6 +38,11 @@ export interface Settings {
   /** v2.1 — strip trailing spaces on every line before save.
    *  Keeps trailing newline at EOF intact. */
   trimTrailingWhitespaceOnSave: boolean;
+  /** v2.3 — show an inline `git blame` annotation after the current
+   *  line (author · relative date · commit summary). Tracks the
+   *  cursor with a 200 ms debounce. Skipped when the workspace
+   *  isn't a git repo or the file is untracked. */
+  gitBlame: boolean;
 }
 
 const KEY = 'suxai.settings.v1';
@@ -54,6 +59,7 @@ const DEFAULTS: Settings = {
   autosaveDelayMs: 1000,
   formatOnSave: false,
   trimTrailingWhitespaceOnSave: false,
+  gitBlame: true,
 };
 
 function loadUser(): Settings {

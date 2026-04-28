@@ -15,6 +15,7 @@ import { consumePendingReveal } from '../../lib/reveal';
 import { useRecent, removeRecentIfMissing } from '../../lib/recent';
 import { syncTypeScriptExtraLibs, syncNodeModulesTypes } from '../../lib/lsp-ts';
 import { ensureSnippetProvider } from '../../lib/snippets';
+import { getFileBlame, relativeTime } from '../../lib/git';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import { iconKindForFile, FileIcon } from '../../lib/file-icon';
@@ -295,6 +296,90 @@ export function EditorPanel() {
       window.removeEventListener('suxai:quick-outline', quickOutline);
     };
   }, [toast]);
+
+  // v2.3 (C1) — inline git blame. Shows `Author · 3d ago · summary`
+  // after the current line as an injected-text decoration. Tracks
+  // cursor moves with a 200 ms debounce and only re-fetches blame
+  // when the active file or workspace changes (cache lives in
+  // lib/git.ts and self-invalidates on suxai:git-refresh broadcasts).
+  useEffect(() => {
+    const editor = trackedEditor;
+    if (!editor) return;
+    if (!settings.gitBlame) return;
+    const file = activeFile?.path;
+    const root = workspaceRoot;
+    if (!file || !root) return;
+    if (activeFile?.untitled) return;
+
+    let cancelled = false;
+    let decorationIds: string[] = [];
+    let timer: number | null = null;
+
+    const clearDecorations = () => {
+      if (decorationIds.length === 0) return;
+      try { decorationIds = editor.deltaDecorations(decorationIds, []); }
+      catch { /* model already disposed */ }
+    };
+
+    const update = async () => {
+      if (cancelled) return;
+      const model = editor.getModel();
+      const pos = editor.getPosition();
+      if (!model || !pos) {
+        clearDecorations();
+        return;
+      }
+      const lineNum = pos.lineNumber;
+      const blame = await getFileBlame(root, file);
+      if (cancelled) return;
+      const entry = blame[lineNum - 1];
+      // No blame entry, or "Not Committed Yet" sentinel sha (all-zeros)
+      // → wipe the annotation rather than leave a stale one behind.
+      if (!entry || /^0+$/.test(entry.sha)) {
+        clearDecorations();
+        return;
+      }
+      const annotation = `   ${entry.author} · ${relativeTime(entry.dateIso)} · ${entry.summary}`;
+      const lineMaxCol = model.getLineMaxColumn(lineNum);
+      decorationIds = editor.deltaDecorations(decorationIds, [{
+        range: {
+          startLineNumber: lineNum,
+          startColumn: lineMaxCol,
+          endLineNumber: lineNum,
+          endColumn: lineMaxCol,
+        },
+        options: {
+          after: {
+            content: annotation,
+            inlineClassName: 'suxai-blame-annotation',
+          },
+        },
+      }]);
+    };
+
+    const schedule = () => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = window.setTimeout(() => { void update(); }, 200);
+    };
+
+    const dispCursor = editor.onDidChangeCursorPosition(schedule);
+    // Fire once immediately so the line under the cursor at mount
+    // already shows blame without waiting for a movement.
+    void update();
+
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+      dispCursor.dispose();
+      clearDecorations();
+    };
+  }, [
+    trackedEditor,
+    settings.gitBlame,
+    activeFile?.path,
+    activeFile?.untitled,
+    workspaceRoot,
+  ]);
 
   // v2.1 — auto-save. When `settings.autosave` is on AND the active
   // file is dirty, schedule a save `autosaveDelayMs` after the last

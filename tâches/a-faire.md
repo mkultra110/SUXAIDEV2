@@ -12,9 +12,8 @@
 
 ## En cours
 
-_V3.5.0 livrée (A8 EOL/Encoding indicators) — voir Revue ci-dessous.
-Restent : Output panel (A7) + multi-root workspaces + Departure Mono
-ghost text._
+_V3.6.0 livrée (A7 Output panel) — voir Revue ci-dessous. Restent :
+multi-root workspaces + Departure Mono ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +98,44 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.6.0 Output panel (A7, parité VSCode)
+- **Fait** :
+  - **`lib/output.ts`** : module event-emitter avec sources nommées,
+    buffers en mémoire (cap 5000 lignes/source, 50 KB/ligne),
+    notifications via `useSyncExternalStore` pour la liste des
+    sources et `useState`+listeners pour le buffer d'une source.
+    API : `appendOutput(source, text, level?)`, `clearOutput`,
+    `dropOutputSource`, `useOutputSources`, `useOutput`.
+  - **`<OutputPanel />`** : bottom panel parité VSCode avec source
+    picker `<select>`, auto-scroll sticky-bottom (le user peut
+    scroller up pour pinner), counts warn/error dans le head, bouton
+    Clear + Close. Lignes timestamped + tinted par level (stdout
+    neutre, warn miel, error/stderr terracotta, info honey-text).
+  - **Wiring `runTask`** : la lib des tasks workspace écrit
+    désormais ses lignes dans la source `Task: <label>` — banner
+    `$ command`, stdout brut, footer `[exit N]` ou `[timed out]`.
+    Le toast existant continue de fournir le feedback rapide.
+  - **IDELayout** : state `outputOpen`, hotkey global `Cmd+Shift+U`
+    (en plus du `Cmd+Shift+M` Problems existant), listener
+    `suxai:open-output` event, render conditionnel
+    `<OutputPanel height={240} />` avant la `<StatusBar />`.
+  - **StatusBar** : nouveau bouton Output (icône `i-log`) entre
+    Terminal et Problems quand le hôte passe `onToggleOutput`.
+  - **CommandPalette** : entrée `View: Toggle Output Panel` (group
+    Workspace, hint Ctrl+Shift+U).
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope (suite)** :
+  - Stream IPC stdout/stderr en temps réel (live tail) : pour
+    l'instant `runTask` capture l'output complet en fin de
+    process. Une vraie spawn → stream → progressive append serait
+    utile pour les builds longs ; nécessite un nouvel IPC
+    `terminal:run-stream` qui pousse des chunks via `webContents`.
+  - Wire de l'agent (lib/agent.ts) : tool calls `terminal:run-once`
+    écrivent déjà via leur task path mais les autres outils
+    (read_file, edit_file…) pourraient logger leur métadonnée dans
+    une source `Agent`. Déféré.
+  - Multi-root workspaces, Departure Mono ghost text.
 
 ### 2026-04-28 — V3.5.0 EOL + Encoding indicators (A8, parité VSCode)
 - **Fait** :

@@ -19,6 +19,9 @@ interface StatusBarProps {
   /** v2.1 — Problems panel toggle (Cmd/Ctrl+Shift+M). */
   onToggleProblems?: () => void;
   problemsOpen?: boolean;
+  /** v3.6 — Output panel toggle (Cmd/Ctrl+Shift+U). */
+  onToggleOutput?: () => void;
+  outputOpen?: boolean;
 }
 
 export function StatusBar({
@@ -26,6 +29,8 @@ export function StatusBar({
   terminalOpen,
   onToggleProblems,
   problemsOpen,
+  onToggleOutput,
+  outputOpen,
 }: StatusBarProps = {}) {
   const { activeFile, workspaceRoot } = useWorkspace();
   const [settings, update] = useSettings();
@@ -77,6 +82,20 @@ export function StatusBar({
           </button>
         )}
         {activeFile && <span className="statusbar__item">{activeFile.language ?? 'plaintext'}</span>}
+        {/* v3.6 (A7) — Output panel toggle. Affiché à côté du Problems
+            quand le hôte le passe. Hotkey Ctrl+Shift+U géré par
+            IDELayout, ce bouton est la voie click. */}
+        {onToggleOutput && (
+          <button
+            type="button"
+            className={`statusbar__item statusbar__btn ${outputOpen ? 'statusbar__btn--active' : ''}`}
+            onClick={onToggleOutput}
+            title="Output (Ctrl+Shift+U)"
+          >
+            <AtelierIcon name="i-log" size={11} className="statusbar__icon" />
+            Output
+          </button>
+        )}
         {/* v2.1 — Problems panel toggle. Toujours visible (cohérent
             avec VSCode) ; le badge à 0 reste muet en gris. */}
         {onToggleProblems && (

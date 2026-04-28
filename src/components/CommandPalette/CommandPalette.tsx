@@ -184,6 +184,15 @@ export function CommandPalette() {
         },
       },
       {
+        id: 'view.toggle-output',
+        label: 'View: Toggle Output Panel',
+        hint: 'Ctrl+Shift+U',
+        group: 'Workspace',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:open-output'));
+        },
+      },
+      {
         id: 'git.show-history',
         label: 'Git: Show History…',
         group: 'Git',

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { appendOutput } from './output';
 
 /**
  * v0.16.12 — Workspace tasks.
@@ -70,13 +71,28 @@ export async function runTask(
   if (!window.suxai?.terminal?.runOnce) {
     return { ok: false, error: 'terminal IPC unavailable' };
   }
+  // v3.6 — also write to the named OutputPanel source so the user
+  // gets a persistent log (the toast still fires for quick feedback).
+  const source = `Task: ${task.label}`;
+  appendOutput(source, `$ ${task.command}`, 'info');
   try {
     const res = await window.suxai.terminal.runOnce({
       command: task.command,
       cwd,
       timeout_ms: timeoutMs,
     });
-    if (res.error) return { ok: false, error: res.error };
+    if (res.error) {
+      appendOutput(source, res.error, 'error');
+      return { ok: false, error: res.error };
+    }
+    if (res.stdout) appendOutput(source, res.stdout, 'stdout');
+    appendOutput(
+      source,
+      res.timed_out
+        ? `[timed out after ${timeoutMs}ms]`
+        : `[exit ${res.exit_code}]`,
+      res.exit_code === 0 && !res.timed_out ? 'info' : 'error',
+    );
     return {
       ok: true,
       stdout: res.stdout,
@@ -84,6 +100,8 @@ export async function runTask(
       timedOut: res.timed_out,
     };
   } catch (err) {
-    return { ok: false, error: (err as Error).message };
+    const msg = (err as Error).message;
+    appendOutput(source, msg, 'error');
+    return { ok: false, error: msg };
   }
 }

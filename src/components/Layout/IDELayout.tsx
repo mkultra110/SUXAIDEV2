@@ -12,6 +12,7 @@ import { EditorPanel } from '../Editor/EditorPanel';
 import { AIPanel } from '../AI/AIPanel';
 import { TerminalPanel } from '../Terminal/TerminalPanel';
 import { ProblemsPanel } from '../ProblemsPanel/ProblemsPanel';
+import { OutputPanel } from '../OutputPanel/OutputPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
@@ -177,16 +178,29 @@ export function IDELayout() {
   // v2.1 — Problems panel toggle (Cmd/Ctrl+Shift+M, parité VSCode).
   // Lives next to the Terminal at the bottom of the layout.
   const [problemsOpen, setProblemsOpen] = useState(false);
-  // Cmd/Ctrl+Shift+M global hotkey.
+  // v3.6 — Output panel toggle (Cmd/Ctrl+Shift+U, parité VSCode A7).
+  const [outputOpen, setOutputOpen] = useState(false);
+  // Cmd/Ctrl+Shift+M (Problems) + Cmd/Ctrl+Shift+U (Output) global hotkeys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'M' || e.key === 'm')) {
         e.preventDefault();
         setProblemsOpen((o) => !o);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'U' || e.key === 'u')) {
+        e.preventDefault();
+        setOutputOpen((o) => !o);
       }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
+  // v3.6 — listen for `suxai:open-output` (CommandPalette + status bar).
+  useEffect(() => {
+    const handler = () => setOutputOpen(true);
+    window.addEventListener('suxai:open-output', handler);
+    return () => window.removeEventListener('suxai:open-output', handler);
   }, []);
   const initialLayout = loadLayout();
   const [sidebarOpen, setSidebarOpen] = useState(initialLayout.sidebarOpen);
@@ -238,11 +252,14 @@ export function IDELayout() {
       </div>
       <TerminalPanel open={terminalOpen} onToggle={() => setTerminalOpen((o) => !o)} />
       {problemsOpen && <ProblemsPanel height={240} onClose={() => setProblemsOpen(false)} />}
+      {outputOpen && <OutputPanel height={240} onClose={() => setOutputOpen(false)} />}
       <StatusBar
         onToggleTerminal={() => setTerminalOpen((o) => !o)}
         terminalOpen={terminalOpen}
         onToggleProblems={() => setProblemsOpen((o) => !o)}
         problemsOpen={problemsOpen}
+        onToggleOutput={() => setOutputOpen((o) => !o)}
+        outputOpen={outputOpen}
       />
     </div>
   );

@@ -20,6 +20,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../ui/Toast';
 import { iconKindForFile, FileIcon } from '../../lib/file-icon';
 import { defineSuxaiThemes, suxaiThemeForMode } from '../../lib/monaco-suxai-theme';
+import { SuxaiLogo } from '../ui/SuxaiLogo';
+import { MosaMascot } from '../ui/MosaMascot';
 import './EditorPanel.css';
 
 interface ActionBarPos {
@@ -1126,7 +1128,17 @@ function EditorWelcome() {
   return (
     <div className="editor__welcome">
       <div className="editor__welcome-card">
-        <div className="editor__welcome-brand">SUXAI</div>
+        {/* v3.1 — Mosa hero. La mascotte assise au-dessus du brand
+            block ancre l'identité Atelier Dark dès l'empty-state. Le
+            wordmark passe en row avec le logo gradient pour cohésion
+            avec la TitleBar. */}
+        <div className="editor__welcome-mascot" aria-hidden>
+          <MosaMascot size={92} />
+        </div>
+        <div className="editor__welcome-brand">
+          <SuxaiLogo size={22} />
+          <span className="editor__welcome-brand-name">SUXAI</span>
+        </div>
         <h2>Start coding with an AI pair</h2>
         <p>
           {workspaceRoot

@@ -1,21 +1,19 @@
-import type { JSX } from 'react';
+import { useId, type JSX } from 'react';
 import './SuxaiLogo.css';
 
 /**
- * SUXAI brand logotype — v2.0 « Obsidian Warm ».
+ * SUXAI brand logotype — v3.0 « Atelier Dark ».
  *
- * Geometric "S" inscribed in a rounded square. Fill is the amber
- * accent gradient (theme tokens via CSS variables — see SuxaiLogo.css)
- * with a top-edge glint for the « machined glass » feel.
+ * Geometric "S" inscribed in a rounded square. v3 ajoute un vrai
+ * `<linearGradient>` SVG qui glisse de bronze cuivre vers honey miel
+ * sur la plate (au lieu d'un fill solide), pour donner au mark la
+ * profondeur d'un objet en métal patiné — le glint top-edge complète
+ * le rendu « machined glass ». Les IDs sont suffixés via `useId()`
+ * pour autoriser plusieurs instances dans le même DOM sans collision.
  *
- * Render with `size={n}` to scale uniformly. The `glow` prop adds a
- * soft outer halo — used on the login screen, off in the dense
- * titlebar to avoid bleeding into adjacent chrome.
- *
- * IMPORTANT : we deliberately keep the SVG shape in JSX but push all
- * colour values into CSS custom properties consumed inside the SVG
- * via `currentColor`/inline `style` referring to vars. This lets the
- * mark swap palette automatically when [data-theme] flips.
+ * Render avec `size={n}` pour scaler. La prop `glow` ajoute un halo
+ * outer — utile sur le LoginScreen, off dans la TitleBar dense pour
+ * éviter le bleeding sur le chrome adjacent.
  */
 export function SuxaiLogo({
   size = 24,
@@ -24,6 +22,11 @@ export function SuxaiLogo({
   size?: number;
   glow?: boolean;
 }): JSX.Element {
+  // Suffix gradient + glint IDs so multiple SuxaiLogo instances on the
+  // same page (titlebar + welcome + login) don't collide.
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const gradPlate = `suxai-logo-plate-${uid}`;
+  const gradGlint = `suxai-logo-glint-${uid}`;
   return (
     <svg
       className={`suxai-logo${glow ? ' suxai-logo--glow' : ''}`}
@@ -34,7 +37,30 @@ export function SuxaiLogo({
       aria-label="SUXAI"
       role="img"
     >
-      {/* Rounded-square plate, filled by the amber accent token. */}
+      <defs>
+        {/*
+          Plate gradient — diagonal top-left → bottom-right, bronze to
+          honey. The two stops read CSS variables so the mark reskins
+          when [data-theme] flips. fall-back to currentColor on engines
+          that don't honour `var()` inside <stop> (rare but seen on
+          older WebKit).
+        */}
+        <linearGradient id={gradPlate} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%"   stopColor="var(--suxai-logo-grad-top, var(--bronze-400, currentColor))" />
+          <stop offset="55%"  stopColor="var(--suxai-logo-grad-mid, var(--bronze-500, currentColor))" />
+          <stop offset="100%" stopColor="var(--suxai-logo-grad-bot, var(--bronze-700, currentColor))" />
+        </linearGradient>
+        {/*
+          Glint gradient — ivory highlight along the top edge,
+          fading downward. Approximates an Apple-style hard light
+          source on a brushed-metal plate.
+        */}
+        <linearGradient id={gradGlint} x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%"   stopColor="var(--suxai-logo-glint-top, rgba(255,255,255,0.32))" />
+          <stop offset="100%" stopColor="var(--suxai-logo-glint-bot, rgba(255,255,255,0))" />
+        </linearGradient>
+      </defs>
+      {/* Rounded-square plate, filled by the gradient. */}
       <rect
         className="suxai-logo__plate"
         x="1"
@@ -42,8 +68,9 @@ export function SuxaiLogo({
         width="30"
         height="30"
         rx="9"
+        fill={`url(#${gradPlate})`}
       />
-      {/* Top-edge glint for « machined glass » feel. */}
+      {/* Top-edge glint — fades from ivory to transparent. */}
       <rect
         className="suxai-logo__glint"
         x="1"
@@ -51,6 +78,7 @@ export function SuxaiLogo({
         width="30"
         height="14"
         rx="9"
+        fill={`url(#${gradGlint})`}
       />
       {/* Geometric S — single stroke. */}
       <path

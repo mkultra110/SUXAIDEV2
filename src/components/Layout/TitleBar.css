@@ -52,8 +52,28 @@
   transform: scale(1.06);
   filter: drop-shadow(0 0 12px color-mix(in oklch, var(--color-accent) 55%, transparent));
 }
+/* v3.1 — wordmark Atelier Dark : weight semibold, tracking
+   subtle-tight, gradient text mask qui glisse de l'ivoire vers
+   l'accent miel pour relier visuellement à la plate du logo et
+   donner le sentiment d'une seule pièce monochrome. */
 .titlebar__brand-name {
   color: var(--color-text-primary);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: linear-gradient(
+    180deg,
+    var(--color-text-primary),
+    color-mix(in oklch, var(--color-text-primary) 75%, var(--color-accent-text)));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+/* Fallback : si background-clip:text n'est pas honoré, on retombe
+   sur la couleur de texte primaire pour rester lisible. */
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  .titlebar__brand-name {
+    -webkit-text-fill-color: var(--color-text-primary);
+  }
 }
 
 /* Legacy alias — guard older code that may still render .titlebar__dot. */

@@ -12,9 +12,9 @@
 
 ## En cours
 
-_V3.0.0 livrée — voir Revue ci-dessous. Repaint per-composant
-(hero typography, brand-mark, etc.) + intégration des ~90 icônes
-custom du bundle restent dans le backlog V3.1._
+_V3.1.0 livrée — voir Revue ci-dessous. Intégration des ~90 icônes
+custom (`icons.svg`) + Departure Mono pour le ghost text + Output
+panel (A7) + EOL/Encoding (A8) restent dans le backlog._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +99,42 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.1.0 polish visuel Atelier Dark
+- **Fait** :
+  - **L1 SuxaiLogo gradient** : la plate solide est devenue un vrai
+    `<linearGradient>` SVG bronze-400 → bronze-500 → bronze-700
+    (diagonal top-left → bottom-right), avec un glint top-edge en
+    second `<linearGradient>` ivoire transparent → 0. IDs suffixés
+    via `useId()` pour cohabitation multi-instance. Tokens CSS
+    overridables : `--suxai-logo-grad-{top,mid,bot}` +
+    `--suxai-logo-glint-{top,bot}`. Variant light qui inverse
+    discrètement les stops.
+  - **L2 Welcome hero** : ajout de `<MosaMascot size={92} />`
+    au-dessus du brand block avec drop-shadow honey + animation
+    `suxai-mascot-float` (translateY -4px, 6 s, ease-in-out-circ).
+    Le brand pill text-only est devenu une row `<SuxaiLogo /> + SUXAI`
+    avec drop-shadow accent sur le logo. Le `::before` dot animé
+    a été retiré (le logo plate joue désormais ce rôle).
+  - **L3 TitleBar wordmark** : gradient text-mask sur
+    `.titlebar__brand-name` qui glisse de `--color-text-primary`
+    (ivoire warm) vers `color-mix(--color-text-primary 75%,
+    --color-accent-text)` (vers le miel). Donne au mot « SUXAI »
+    le sentiment d'une seule pièce monochrome avec le logo plate
+    cuivre. Fallback `@supports not (background-clip: text)` pour
+    les vieux moteurs.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V3.1 (déféré V3.2)** :
+  - Set ~90 icônes custom du bundle (`icons.svg`) — swap de
+    `lib/file-icon.tsx`, mérite son propre lot
+  - Departure Mono pour le ghost text IA — pas dispo sur fontsource
+  - LoginScreen Mosa decoration (déjà bien chargé visuellement)
+  - AIPanel header brand cue (risque d'encombrer)
+  - Output panel (A7), EOL/Encoding (A8), multi-root workspaces
+- **Suivi** : tester en runtime que (1) le gradient logo rend bien
+  sur les écrans HiDPI, (2) Mosa flotte sans scintillement sur les
+  GPUs modestes, (3) le gradient text-mask wordmark reste lisible
+  même quand l'éditeur est focused.
 
 ### 2026-04-28 — V3.0.0 refonte visuelle « Atelier Dark »
 - **Fait** :

@@ -1,40 +1,54 @@
 /* ============================================================
    SuxaiLogo — brand mark
-   v2.0 — Obsidian Warm. Colour values flow from theme.css tokens
-   so the mark adapts automatically to data-theme.
+   v3.0 « Atelier Dark ». Plate gradient bronze→honey défini en
+   SVG, mark stroke en `--color-text-on-accent`, halo outer
+   bronze pour les surfaces où `glow` est activé. Toutes les
+   couleurs flow depuis les tokens — la mark adapte sa direction
+   automatiquement à `[data-theme]`.
    ============================================================ */
 
 .suxai-logo {
   display: inline-block;
   flex-shrink: 0;
-  /* Plate + glint + mark all read these vars. */
+  /* mark stroke fallback — ne s'applique que si --color-text-on-accent
+     est absent (jamais en production, mais sûr pour les tests). */
   color: var(--color-accent);
+  /* Tokens pour les stops du gradient. Override-able localement
+     (ex. sur la titlebar pour pousser plus de honey, ou sur le
+     login pour un effet plus saturé). */
+  --suxai-logo-grad-top: var(--bronze-400);
+  --suxai-logo-grad-mid: var(--bronze-500);
+  --suxai-logo-grad-bot: var(--bronze-700);
+  --suxai-logo-glint-top: oklch(0.96 0.012 85 / 0.32);
+  --suxai-logo-glint-bot: oklch(0.96 0.012 85 / 0);
+}
+
+[data-theme='light'] .suxai-logo {
+  /* Light mode : on inverse l'orientation du gradient pour garder
+     la lecture « lumière du haut » sur fond clair, et on remonte
+     le glint pour qu'il reste perceptible. */
+  --suxai-logo-grad-top: var(--bronze-300);
+  --suxai-logo-grad-mid: var(--bronze-500);
+  --suxai-logo-grad-bot: var(--bronze-700);
+  --suxai-logo-glint-top: oklch(1 0 0 / 0.55);
+  --suxai-logo-glint-bot: oklch(1 0 0 / 0);
 }
 
 .suxai-logo__plate {
-  fill: var(--color-accent);
+  /* fill is set inline via url(#gradient), but we keep this rule so
+     a runtime stylesheet can override it for special-case branding
+     (e.g. `.titlebar__brand--special .suxai-logo__plate { fill: ... }`). */
   stroke: color-mix(in oklch, white 14%, transparent);
   stroke-width: 1;
 }
 
-.suxai-logo__glint {
-  fill: url(#__suxai_logo_glint_grad);
-  /* The gradient is generated below via mask + linear-gradient on a
-     real DOM rect — but SVG <linearGradient> with currentColor stops
-     would force inline IDs. Simpler : fake the glint with a CSS
-     mask-image gradient applied to the SVG rect, since we can't put
-     CSS gradients directly on an SVG <rect> fill in all engines. We
-     instead overlay via a pseudo-element on the parent `.titlebar__brand`
-     in dense surfaces. As a compromise, we set a static high-contrast
-     fill at low opacity here ; the perceived sheen comes from the
-     plate gradient when it's animated by the parent (titlebar hover).
-     */
-  fill: rgba(255, 255, 255, 0.18);
-  /* Light theme reduces the glint so it doesn't fight the dark mark. */
+[data-theme='light'] .suxai-logo__plate {
+  stroke: color-mix(in oklch, var(--bronze-900) 18%, transparent);
 }
 
-[data-theme='light'] .suxai-logo__glint {
-  fill: rgba(255, 255, 255, 0.42);
+.suxai-logo__glint {
+  /* fill is the glint gradient via url(#…) — this rule kept for
+     future overrides or light-theme tweaks. */
 }
 
 .suxai-logo__mark {
@@ -42,5 +56,7 @@
 }
 
 .suxai-logo--glow {
-  filter: drop-shadow(0 0 12px color-mix(in oklch, var(--color-accent) 55%, transparent));
+  filter:
+    drop-shadow(0 0 12px color-mix(in oklch, var(--color-accent) 55%, transparent))
+    drop-shadow(0 1px 0 color-mix(in oklch, var(--color-accent-text, var(--honey-500)) 30%, transparent));
 }

@@ -128,6 +128,51 @@ export function CommandPalette() {
         },
       },
       {
+        id: 'editor.go-to-definition',
+        label: 'Go to Definition',
+        hint: 'F12',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:reveal-definition'));
+        },
+      },
+      {
+        id: 'editor.peek-definition',
+        label: 'Peek Definition',
+        hint: 'Alt+F12',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:peek-definition'));
+        },
+      },
+      {
+        id: 'editor.find-references',
+        label: 'Find All References',
+        hint: 'Shift+F12',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:go-to-references'));
+        },
+      },
+      {
+        id: 'editor.rename',
+        label: 'Rename Symbol',
+        hint: 'F2',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:rename-symbol'));
+        },
+      },
+      {
+        id: 'editor.quick-outline',
+        label: 'Go to Symbol in File…',
+        hint: 'Ctrl+Shift+O',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:quick-outline'));
+        },
+      },
+      {
         id: 'workspace.close',
         label: 'Workspace: Close current folder',
         group: 'Workspace',

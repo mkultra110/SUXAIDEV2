@@ -12,9 +12,8 @@
 
 ## En cours
 
-_V2.1 livrée — voir Revue ci-dessous. Lot B (navigation) + Lot C
-(git avancé) + Output panel + EOL/Encoding sont listés ci-dessous
-dans le backlog V2.2._
+_V2.2 livrée — voir Revue ci-dessous. Lot C (git avancé) + Output
+panel + EOL/Encoding restent dans le backlog V2.3._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +98,49 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V2.2.0 parité VSCode (Lot B navigation)
+- **Fait** :
+  - **B0 (déblocage majeur)** : workers Monaco vraiment activés.
+    `src/main.tsx` importe les 5 workers via `?worker` suffix Vite
+    (editor / ts / json / css / html) et les retourne dans
+    `MonacoEnvironment.getWorker(_, label)`. Le worker stub (no-op)
+    cassait silencieusement Go to Definition / Rename / Find Refs
+    pour TS depuis V1. Build vérifié : 5 chunks `*.worker-*.js`
+    générés dans `dist/assets/`.
+  - **B1-B5 navigation** : 5 listeners ajoutés dans
+    `EditorPanel.tsx` pour `suxai:reveal-definition`,
+    `suxai:peek-definition`, `suxai:go-to-references`,
+    `suxai:rename-symbol`, `suxai:quick-outline`. Chacun fait
+    `editor.focus()` puis `getAction(...)?.run()` avec un toast info
+    si l'action n'existe pas pour le langage. Monaco gère les
+    raccourcis F12 / Alt+F12 / Shift+F12 / F2 / Cmd+Shift+O
+    nativement quand l'éditeur a le focus — les listeners sont la
+    voie palette/menu.
+  - **CommandPalette** : 5 nouvelles entrées Editor (Go to Definition,
+    Peek Definition, Find All References, Rename Symbol, Go to Symbol
+    in File...) avec les hints clavier corrects.
+  - **B6 `.vscode/settings.json`** : nouveau `lib/workspace-settings.ts`
+    avec parser JSONC (strip line/block comments + trailing commas)
+    et mapping VSCode → Settings SUXAI (fontSize, tabSize, wordWrap,
+    minimap.enabled, formatOnSave, trimTrailingWhitespace, autoSave,
+    autoSaveDelay). `lib/settings.ts` refactoré pour supporter une
+    couche `workspaceOverrides` séparée — l'état effectif =
+    user localStorage + overrides workspace, et le SettingsDialog
+    écrit toujours seulement au niveau user (les prefs workspace ne
+    fuient jamais en localStorage). `IDELayout` réapplique
+    automatiquement à chaque changement de `workspaceRoot`.
+- **Validation** : `npm run typecheck` + `npm run build` OK ;
+  `dist/assets/{editor,ts,json,css,html}.worker-*.js` confirmés.
+- **Hors scope V2.2 (déféré V2.3)** :
+  - A7 Output panel (besoin infra IPC stdout streams)
+  - A8 EOL/Encoding indicators (besoin extension IPC `fs:read-file`)
+  - Lot C git avancé (blame/log/stash)
+  - Multi-root workspaces (refactor architectural WorkspaceContext)
+  - Workspace trust prompt
+- **Suivi** : tester en runtime sur un vrai .ts du workspace (F12 sur
+  un import doit naviguer ; F2 doit lancer le rename inline) — non
+  vérifié dans cette session car build only.
 
 ### 2026-04-28 — V2.1.0 parité VSCode (Lot A)
 - **Fait** :

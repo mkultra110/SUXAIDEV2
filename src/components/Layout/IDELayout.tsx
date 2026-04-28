@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useGitStatus } from '../../lib/git';
+import { applyWorkspaceSettings } from '../../lib/workspace-settings';
 import { useToast } from '../ui/Toast';
 import { TitleBar } from './TitleBar';
 import { StatusBar } from './StatusBar';
@@ -201,6 +202,14 @@ export function IDELayout() {
   const { workspaceRoot } = useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
   const dirtyCount = Object.keys(gitStatus).length;
+
+  // v2.2 (B6) — Re-read `<root>/.vscode/settings.json` whenever the
+  // workspace root changes. Effective Settings = user localStorage +
+  // these overrides ; the dialog still writes only to user-level so
+  // workspace prefs cannot leak when the folder closes.
+  useEffect(() => {
+    void applyWorkspaceSettings(workspaceRoot);
+  }, [workspaceRoot]);
   const bodyClass =
     'ide__body' +
     (sidebarOpen ? '' : ' ide__body--no-sidebar') +

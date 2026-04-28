@@ -9,6 +9,17 @@ import * as monaco from 'monaco-editor';
 import '@fontsource-variable/inter';
 import '@fontsource-variable/geist-mono';
 
+// v2.2 — real Monaco language workers. Vite's `?worker` suffix bundles
+// each worker as a separate chunk and gives us a constructor we can
+// instantiate. Without these, Go to Definition / Rename / Find
+// References cannot return TS results (the actions exist but the
+// language service runs on the main thread with no resolver).
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+
 import { App } from './App';
 import { startAllDiagnosticsStream } from './lib/all-diagnostics';
 import './styles/theme.css';
@@ -25,16 +36,13 @@ startAllDiagnosticsStream();
 // "Loading…" forever.
 loader.config({ monaco });
 
-// We don't ship Monaco's web workers in production (they require a
-// special build step). Feed getWorker an inline empty worker so Monaco
-// runs tokenization on the main thread — syntax highlighting still
-// works for every registered language.
 self.MonacoEnvironment = {
-  getWorker() {
-    const blob = new Blob(['self.onmessage=()=>{};'], {
-      type: 'text/javascript',
-    });
-    return new Worker(URL.createObjectURL(blob));
+  getWorker(_workerId, label) {
+    if (label === 'json') return new jsonWorker();
+    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker();
+    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker();
+    if (label === 'typescript' || label === 'javascript') return new tsWorker();
+    return new editorWorker();
   },
 };
 

@@ -160,3 +160,35 @@ _(à remplir au fur et à mesure)_
   notes critiques (bugs ouverts, adaptations chemins, audit cibles).
   Mettre à jour à chaque commit. Permet `cat refactor-progress.md
   → continue` après reset propre.
+
+### V5 — Monaco workers stubés = features TS silencieusement cassées
+- **Symptôme** : Go to Definition / Rename / Find References / Quick
+  Outline ne retournent rien sur du TypeScript. Aucune erreur, aucun
+  toast, aucune log — l'action « tourne » et abandonne.
+- **Cause** : `MonacoEnvironment.getWorker()` retournait un worker
+  inline vide (`self.onmessage=()=>{};`) parce qu'on pensait que
+  bundler les workers Monaco demandait un build step custom. Sans
+  workers réels, le TS language service tourne en main thread sans
+  resolver — la coloration syntaxique marche (regex tokenizer), mais
+  TOUTE feature qui interroge le langage (definition, refs, rename,
+  symbols, hovers) échoue silencieusement.
+- **Règle** : quand on intègre Monaco via Vite, **toujours** importer
+  les 5 workers via `?worker` suffix et les router selon `label` :
+  ```ts
+  import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
+  import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+  // + json / css / html
+  self.MonacoEnvironment = {
+    getWorker(_, label) {
+      if (label === 'typescript' || label === 'javascript') return new tsWorker();
+      // ...
+      return new editorWorker();
+    },
+  };
+  ```
+  Vite gère le bundling (chunks séparés `*.worker-*.js`). Vérifier
+  après build : `ls dist/assets/ | grep worker` doit montrer 5
+  fichiers. Si on tente de raccourcir avec un stub, documenter
+  EXPLICITEMENT que les features langage seront cassées — sinon
+  l'utilisateur tape F12 et ne comprend pas pourquoi rien ne se
+  passe.

@@ -56,7 +56,7 @@ const DEFAULTS: Settings = {
   trimTrailingWhitespaceOnSave: false,
 };
 
-function load(): Settings {
+function loadUser(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
@@ -76,24 +76,53 @@ function save(s: Settings): void {
   }
 }
 
+// v2.2 — workspace-settings layer. Loaded from `<root>/.vscode/settings.json`
+// when a folder opens, cleared on folder close. Effective settings =
+// user-level (localStorage) + workspace overrides on top. The dialog
+// only writes to user-level — workspace overrides are read-only here
+// and are owned by the file in the user's repo.
+let workspaceOverrides: Partial<Settings> = {};
+
+export function setWorkspaceOverrides(overrides: Partial<Settings>): void {
+  workspaceOverrides = { ...overrides };
+  window.dispatchEvent(new CustomEvent('suxai:workspace-settings'));
+}
+
+export function clearWorkspaceOverrides(): void {
+  if (Object.keys(workspaceOverrides).length === 0) return;
+  workspaceOverrides = {};
+  window.dispatchEvent(new CustomEvent('suxai:workspace-settings'));
+}
+
+export function getWorkspaceOverrides(): Partial<Settings> {
+  return { ...workspaceOverrides };
+}
+
+function effective(): Settings {
+  return { ...loadUser(), ...workspaceOverrides };
+}
+
 export function useSettings(): [Settings, (patch: Partial<Settings>) => void] {
-  const [state, setState] = useState<Settings>(load);
+  const [state, setState] = useState<Settings>(effective);
 
   useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<Settings>).detail;
-      setState((s) => ({ ...s, ...detail }));
+    const refresh = () => setState(effective());
+    window.addEventListener('suxai:settings', refresh);
+    window.addEventListener('suxai:workspace-settings', refresh);
+    return () => {
+      window.removeEventListener('suxai:settings', refresh);
+      window.removeEventListener('suxai:workspace-settings', refresh);
     };
-    window.addEventListener('suxai:settings', handler);
-    return () => window.removeEventListener('suxai:settings', handler);
   }, []);
 
   const update = (patch: Partial<Settings>) => {
-    setState((prev) => {
-      const next = { ...prev, ...patch };
-      save(next);
-      return next;
-    });
+    // Patch goes to user-level only. Workspace overrides remain
+    // separate so they cannot accidentally leak into the user's
+    // localStorage when the workspace is closed.
+    const userBase = loadUser();
+    const next = { ...userBase, ...patch };
+    save(next);
+    setState({ ...next, ...workspaceOverrides });
   };
 
   return [state, update];

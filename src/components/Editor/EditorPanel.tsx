@@ -231,29 +231,68 @@ export function EditorPanel() {
   // v2.1 — listeners for CommandPalette-triggered editor actions.
   // Decouples the palette from the Monaco editorRef (which lives only
   // inside this component) via window CustomEvents.
+  //
+  // v2.2 — extended with the Lot B navigation actions (Go to Def,
+  // Peek, Find Refs, Rename, Quick Outline). Monaco's native key
+  // bindings already trigger these on F12/Alt+F12/Shift+F12/F2/
+  // Cmd+Shift+O when the editor has focus — these listeners are the
+  // menu/palette path so the same actions are reachable without focus
+  // in the editor.
   useEffect(() => {
-    const fmt = () => {
+    const runAction = (id: string, onMissing?: () => void) => {
       const ed = editorRef.current;
       if (!ed) return;
-      ed.getAction('editor.action.formatDocument')?.run().catch(() => {
-        toast.info('No formatter', 'Aucun formatteur enregistré pour ce langage.');
-      });
+      ed.focus();
+      const action = ed.getAction(id);
+      if (!action) {
+        onMissing?.();
+        return;
+      }
+      action.run().catch(() => onMissing?.());
     };
-    const toSpaces = () => {
-      const ed = editorRef.current;
-      ed?.getAction('editor.action.indentationToSpaces')?.run().catch(() => {});
-    };
-    const toTabs = () => {
-      const ed = editorRef.current;
-      ed?.getAction('editor.action.indentationToTabs')?.run().catch(() => {});
-    };
+    const fmt = () =>
+      runAction('editor.action.formatDocument', () =>
+        toast.info('No formatter', 'Aucun formatteur enregistré pour ce langage.'),
+      );
+    const toSpaces = () => runAction('editor.action.indentationToSpaces');
+    const toTabs = () => runAction('editor.action.indentationToTabs');
+    const revealDef = () =>
+      runAction('editor.action.revealDefinition', () =>
+        toast.info('Go to Definition', 'Aucune définition trouvée à la position du curseur.'),
+      );
+    const peekDef = () =>
+      runAction('editor.action.peekDefinition', () =>
+        toast.info('Peek Definition', 'Aucune définition trouvée à la position du curseur.'),
+      );
+    const goToRefs = () =>
+      runAction('editor.action.goToReferences', () =>
+        toast.info('Find All References', 'Aucune référence trouvée.'),
+      );
+    const rename = () =>
+      runAction('editor.action.rename', () =>
+        toast.info('Rename Symbol', 'Le langage actuel ne supporte pas le rename.'),
+      );
+    const quickOutline = () =>
+      runAction('editor.action.quickOutline', () =>
+        toast.info('Go to Symbol', 'Aucun symbole détecté dans ce fichier.'),
+      );
     window.addEventListener('suxai:format-document', fmt);
     window.addEventListener('suxai:indent-to-spaces', toSpaces);
     window.addEventListener('suxai:indent-to-tabs', toTabs);
+    window.addEventListener('suxai:reveal-definition', revealDef);
+    window.addEventListener('suxai:peek-definition', peekDef);
+    window.addEventListener('suxai:go-to-references', goToRefs);
+    window.addEventListener('suxai:rename-symbol', rename);
+    window.addEventListener('suxai:quick-outline', quickOutline);
     return () => {
       window.removeEventListener('suxai:format-document', fmt);
       window.removeEventListener('suxai:indent-to-spaces', toSpaces);
       window.removeEventListener('suxai:indent-to-tabs', toTabs);
+      window.removeEventListener('suxai:reveal-definition', revealDef);
+      window.removeEventListener('suxai:peek-definition', peekDef);
+      window.removeEventListener('suxai:go-to-references', goToRefs);
+      window.removeEventListener('suxai:rename-symbol', rename);
+      window.removeEventListener('suxai:quick-outline', quickOutline);
     };
   }, [toast]);
 

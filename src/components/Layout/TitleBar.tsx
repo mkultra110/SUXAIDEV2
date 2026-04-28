@@ -93,37 +93,15 @@ export function TitleBar() {
         )}
       </div>
 
-      <div className="titlebar__zone titlebar__zone--right">
-        <div className="titlebar__controls">
-          <button
-            onClick={() => window.suxai.window.minimize()}
-            aria-label="Minimize"
-            className="titlebar__btn"
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <rect y="4.5" width="10" height="1" fill="currentColor" />
-            </svg>
-          </button>
-          <button
-            onClick={() => window.suxai.window.maximizeToggle()}
-            aria-label="Maximize"
-            className="titlebar__btn"
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <rect x="0.5" y="0.5" width="9" height="9" stroke="currentColor" fill="none" />
-            </svg>
-          </button>
-          <button
-            onClick={() => window.suxai.window.close()}
-            aria-label="Close"
-            className="titlebar__btn titlebar__btn--close"
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10">
-              <path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" />
-            </svg>
-          </button>
-        </div>
-      </div>
+      {/* v2.0.4 — window controls (─ □ ✕) are drawn by the OS via
+          Electron's titleBarOverlay (Win/Linux) or trafficLightPosition
+          (Mac). The custom .titlebar__controls block was rendering
+          BEHIND the native overlay → user saw double buttons stacked
+          on the same pixels (the native ones are always on top).
+          Right zone is now an empty spacer; the OS reserves ~138 px
+          here on Win/Linux for its own buttons, and Mac uses the
+          left side anyway. */}
+      <div className="titlebar__zone titlebar__zone--right" />
 
       <UpgradeDialog
         token={token}

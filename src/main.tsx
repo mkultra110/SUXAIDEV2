@@ -3,11 +3,13 @@ import ReactDOM from 'react-dom/client';
 import { loader } from '@monaco-editor/react';
 import * as monaco from 'monaco-editor';
 
-// v2.0 — local font bundles. Inter Variable for UI, Geist Mono for
-// code. Importing here lets Vite copy the woff2 to dist/ → no network
-// fetch at runtime, Electron offline-first stays intact.
-import '@fontsource-variable/inter';
-import '@fontsource-variable/geist-mono';
+// v3.0 — local font bundles for « Atelier Dark » design system.
+// Geist Variable for UI (replacing Inter), Monaspace Argon for code
+// (replacing Geist Mono). Importing here lets Vite copy the woff2
+// to dist/ → no network fetch at runtime, Electron offline-first
+// stays intact.
+import '@fontsource-variable/geist';
+import '@fontsource/monaspace-argon';
 
 // v2.2 — real Monaco language workers. Vite's `?worker` suffix bundles
 // each worker as a separate chunk and gives us a constructor we can

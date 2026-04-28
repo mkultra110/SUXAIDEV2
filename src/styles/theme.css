@@ -1,67 +1,164 @@
 /* ============================================================
-   SUXAI design tokens — v2.0 « Obsidian Warm »
+   SUXAI design tokens — v3.0 « Atelier Dark »
    ------------------------------------------------------------
+   Direction artistique : « atelier de maître artisan en lumière
+   dorée du soir ». Cuivre patiné (bronze) en signature, miel
+   (honey) en accent, sauge (sage) en succès, terracotta brûlée
+   (terra) en danger, ardoise (slate) en info, parchemin warm
+   (parch) en neutres.
+
    Architecture en 3 tiers (NON NÉGOCIABLE) :
-     Tier 1 : primitives (--amber-9, --neutral-12) — pas consommé direct
-     Tier 2 : sémantiques (--color-bg-surface) — ce que dark/light swap
-     Tier 3 : composants (cas exceptionnel via REFACTOR-NOTE)
+     Tier 1 : primitives (--bronze-500, --parch-1000) — pas
+              consommé direct par les composants.
+     Tier 2 : sémantiques (--color-bg-surface, --color-accent) —
+              c'est ce que dark/light swap.
+     Tier 3 : composants (cas exceptionnel via REFACTOR-NOTE).
 
-   Identité : warm espresso (cuir, bois sombre, café serré, biblio
-   tard le soir), accent ambre signature #F5C97A. PAS d'indigo/violet
-   AI-slop. PAS de pur noir/blanc. Ombres en 5–6 couches avec inset
-   highlight 1px blanc à 6% (« Apple touch »).
+   v3 garde TOUS les noms de variables v2 (--color-*, --amber-*,
+   --neutral-*, --green-9 etc.) en alias pointant sur les
+   nouvelles primitives, pour que la cascade CSS applique la
+   nouvelle direction sans toucher un seul composant. Le mapping
+   amber → bronze, neutral → parch, etc. est documenté inline.
 
-   Couleurs en OKLCH (perceptual uniformity) avec hex fallback en
-   commentaire pour la lisibilité.
+   Couleurs en OKLCH (perceptual uniformity), fallback hex via
+   `@supports not (color: oklch(0 0 0))` pour les vieilles WebViews.
    ============================================================ */
 
 /* === TIER 1 — PRIMITIVES === */
 
 :root {
   /* ────────────────────────────────────────────────────────
-     Échelle ambre OKLCH (12 steps Radix) — accent signature
+     Bronze — primary "cuivre patiné" (hue ~50, signature SUXAI)
      ──────────────────────────────────────────────────────── */
-  --amber-1:  oklch(0.16 0.012 67);   /* #131110 */
-  --amber-2:  oklch(0.19 0.018 67);   /* #19160F */
-  --amber-3:  oklch(0.24 0.030 67);   /* #221C12 */
-  --amber-4:  oklch(0.28 0.045 67);   /* #2B2114 */
-  --amber-5:  oklch(0.33 0.060 67);   /* #352716 */
-  --amber-6:  oklch(0.40 0.075 67);   /* #432F1A */
-  --amber-7:  oklch(0.48 0.090 67);   /* #553A1F */
-  --amber-8:  oklch(0.60 0.110 67);   /* #6F4E27 — focus ring */
-  --amber-9:  oklch(0.86 0.090 67);   /* #F5C97A — SOLID ACCENT SUXAI */
-  --amber-10: oklch(0.90 0.080 67);   /* #FFCFA8 — hover */
-  --amber-11: oklch(0.82 0.100 67);   /* #F5B884 — accent text */
-  --amber-12: oklch(0.95 0.050 67);   /* #FCE2C9 — high contrast on amber */
+  --bronze-50:   oklch(0.97 0.014 55);
+  --bronze-100:  oklch(0.94 0.022 55);
+  --bronze-200:  oklch(0.88 0.038 52);
+  --bronze-300:  oklch(0.80 0.062 50);
+  --bronze-400:  oklch(0.72 0.098 48);
+  --bronze-500:  oklch(0.64 0.128 46);   /* hero copper */
+  --bronze-600:  oklch(0.55 0.140 44);
+  --bronze-700:  oklch(0.45 0.122 42);
+  --bronze-800:  oklch(0.36 0.092 42);
+  --bronze-900:  oklch(0.28 0.060 44);
+  --bronze-950:  oklch(0.20 0.034 48);
+  --bronze-1000: oklch(0.14 0.020 50);
 
   /* ────────────────────────────────────────────────────────
-     Échelle neutre warm-espresso (12 steps)
+     Honey — accent "ambre / miel" (hue ~80) — moments forts
      ──────────────────────────────────────────────────────── */
-  --neutral-1:  #0A0908;
-  --neutral-2:  #0F0E0D;   /* éditeur bg */
-  --neutral-3:  #13110F;   /* sidebar bg */
-  --neutral-4:  #1A1714;   /* card / widget bg */
-  --neutral-5:  #221E1A;   /* hover */
-  --neutral-6:  #2B2620;   /* pressed */
-  --neutral-7:  #3A332C;   /* border subtle */
-  --neutral-8:  #4D4439;   /* border default */
-  --neutral-9:  #6B5F50;
-  --neutral-10: #8C8579;
-  --neutral-11: #B5AC9D;   /* secondary text */
-  --neutral-12: #E6E1D7;   /* primary text — JAMAIS #FFF */
+  --honey-50:  oklch(0.98 0.018 85);
+  --honey-100: oklch(0.95 0.034 85);
+  --honey-200: oklch(0.90 0.062 82);
+  --honey-300: oklch(0.85 0.098 80);
+  --honey-400: oklch(0.80 0.130 78);
+  --honey-500: oklch(0.74 0.142 76);
+  --honey-600: oklch(0.64 0.130 72);
+  --honey-700: oklch(0.52 0.108 68);
+  --honey-800: oklch(0.40 0.080 64);
+  --honey-900: oklch(0.30 0.054 64);
 
   /* ────────────────────────────────────────────────────────
-     Sémantiques syntaxiques (6 teintes max — restraint total)
+     Sage — success "sauge dorée" (hue ~145)
      ──────────────────────────────────────────────────────── */
-  --green-9:  #9DBE8E;     /* sage — strings, success */
-  --coral-9:  #E8A87C;     /* numbers */
-  --terra-9:  #C97B7B;     /* keywords, danger soft */
-  --teal-9:   #7FA8B5;     /* types */
-  --rose-9:   #D9A3C0;     /* regex / special */
-  --red-9:    #E06C6C;     /* errors */
+  --sage-50:  oklch(0.97 0.014 145);
+  --sage-100: oklch(0.93 0.026 145);
+  --sage-200: oklch(0.86 0.048 145);
+  --sage-300: oklch(0.78 0.078 145);
+  --sage-400: oklch(0.72 0.102 145);
+  --sage-500: oklch(0.66 0.118 145);
+  --sage-600: oklch(0.56 0.108 145);
+  --sage-700: oklch(0.45 0.088 145);
+  --sage-800: oklch(0.34 0.064 145);
+  --sage-900: oklch(0.25 0.042 145);
 
   /* ────────────────────────────────────────────────────────
-     Espacements (4px base, 16 steps)
+     Terracotta — danger "terre brûlée" (hue ~30)
+     ──────────────────────────────────────────────────────── */
+  --terra-50:  oklch(0.97 0.018 30);
+  --terra-100: oklch(0.93 0.034 30);
+  --terra-200: oklch(0.86 0.062 30);
+  --terra-300: oklch(0.78 0.110 30);
+  --terra-400: oklch(0.70 0.150 30);
+  --terra-500: oklch(0.62 0.176 30);
+  --terra-600: oklch(0.54 0.176 28);
+  --terra-700: oklch(0.44 0.148 28);
+  --terra-800: oklch(0.34 0.110 30);
+  --terra-900: oklch(0.26 0.072 30);
+
+  /* ────────────────────────────────────────────────────────
+     Slate — info "ardoise désaturée" (hue ~230)
+     ──────────────────────────────────────────────────────── */
+  --slate-50:  oklch(0.96 0.010 230);
+  --slate-100: oklch(0.92 0.018 230);
+  --slate-200: oklch(0.84 0.032 230);
+  --slate-300: oklch(0.74 0.052 230);
+  --slate-400: oklch(0.66 0.068 230);
+  --slate-500: oklch(0.58 0.082 230);
+  --slate-600: oklch(0.48 0.078 230);
+  --slate-700: oklch(0.38 0.062 230);
+  --slate-800: oklch(0.28 0.044 230);
+  --slate-900: oklch(0.20 0.028 230);
+
+  /* ────────────────────────────────────────────────────────
+     Parchment — neutres warm-tinted (hue ~70-80)
+     ──────────────────────────────────────────────────────── */
+  --parch-50:   oklch(0.985 0.008 78);
+  --parch-100:  oklch(0.965 0.012 78);
+  --parch-200:  oklch(0.935 0.016 75);
+  --parch-300:  oklch(0.890 0.018 72);
+  --parch-400:  oklch(0.820 0.018 70);
+  --parch-500:  oklch(0.700 0.020 65);
+  --parch-600:  oklch(0.560 0.018 62);
+  --parch-700:  oklch(0.430 0.018 60);
+  --parch-800:  oklch(0.330 0.016 58);
+  --parch-900:  oklch(0.250 0.014 58);
+  --parch-950:  oklch(0.190 0.012 58);
+  --parch-1000: oklch(0.140 0.010 58);
+
+  /* ────────────────────────────────────────────────────────
+     LEGACY ALIASES — preserved API (v2 names mapped to v3 palette)
+     `--amber-*` was the v2 hot accent ramp ; v3 keeps it as an alias
+     for the bronze ramp so any component still calling --amber-9
+     gets the new copper. `--neutral-*` aliases parch.
+     ──────────────────────────────────────────────────────── */
+  --amber-1:   var(--bronze-1000);
+  --amber-2:   var(--bronze-950);
+  --amber-3:   var(--bronze-900);
+  --amber-4:   var(--bronze-800);
+  --amber-5:   var(--bronze-700);
+  --amber-6:   var(--bronze-600);
+  --amber-7:   oklch(0.50 0.130 44);    /* between 600 and 500 */
+  --amber-8:   oklch(0.60 0.132 46);    /* focus ring band */
+  --amber-9:   var(--bronze-500);       /* SOLID ACCENT (v2 hero) */
+  --amber-10:  oklch(0.68 0.135 48);    /* hover */
+  --amber-11:  var(--honey-500);        /* accent text — honey for warmth */
+  --amber-12:  oklch(0.92 0.060 70);    /* high contrast on amber */
+
+  --neutral-1:  var(--parch-1000);
+  --neutral-2:  oklch(0.165 0.012 58);  /* editor canvas */
+  --neutral-3:  oklch(0.155 0.011 58);  /* sidebar */
+  --neutral-4:  oklch(0.205 0.014 60);  /* card / widget */
+  --neutral-5:  oklch(0.225 0.015 62);  /* hover */
+  --neutral-6:  oklch(0.275 0.018 62);  /* pressed */
+  --neutral-7:  oklch(0.250 0.018 60);  /* border subtle */
+  --neutral-8:  oklch(0.310 0.022 58);  /* border default */
+  --neutral-9:  var(--parch-700);
+  --neutral-10: var(--parch-600);
+  --neutral-11: var(--parch-500);
+  --neutral-12: oklch(0.860 0.014 80);  /* primary text — ivoire warm */
+
+  /* ────────────────────────────────────────────────────────
+     Sémantiques syntaxiques (legacy v2 names → v3 palette)
+     ──────────────────────────────────────────────────────── */
+  --green-9: var(--sage-500);                /* strings, success */
+  --coral-9: oklch(0.75 0.130 60);           /* numbers — warm orange */
+  --terra-9: var(--terra-500);               /* keywords / danger soft */
+  --teal-9:  oklch(0.70 0.075 200);          /* types — desat cyan */
+  --rose-9:  oklch(0.74 0.090 350);          /* regex / special */
+  --red-9:   var(--terra-600);               /* errors */
+
+  /* ────────────────────────────────────────────────────────
+     Espacements (4px base, 16 steps) — inchangés v2→v3
      ──────────────────────────────────────────────────────── */
   --space-0:   0;
   --space-px:  1px;
@@ -81,18 +178,18 @@
   --space-24:  96px;
 
   /* ────────────────────────────────────────────────────────
-     Rayons (3/5/8/12/16/24 — lecture « considéré » vs défaut 4/8)
+     Rayons — inchangés v2→v3
      ──────────────────────────────────────────────────────── */
-  --radius-xs:   4px;     /* badges, chips */
-  --radius-sm:   6px;     /* boutons, inputs (Linear default) */
-  --radius-md:   8px;     /* cartes, items de menu */
-  --radius-lg:   10px;    /* cartes proéminentes */
-  --radius-xl:   12px;    /* modales, popovers */
-  --radius-2xl:  16px;    /* command palette, hero */
+  --radius-xs:   4px;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   10px;
+  --radius-xl:   12px;
+  --radius-2xl:  16px;
   --radius-full: 9999px;
 
   /* ────────────────────────────────────────────────────────
-     Z-index sémantique (par centaines)
+     Z-index sémantique — inchangé v2→v3
      ──────────────────────────────────────────────────────── */
   --z-base:     0;
   --z-raised:   10;
@@ -105,12 +202,15 @@
   --z-toast:    1600;
 
   /* ────────────────────────────────────────────────────────
-     Typographie (Inter Variable + Geist Mono, échelle 1.125)
+     Typographie (Geist Variable + Monaspace Argon)
      ──────────────────────────────────────────────────────── */
-  --font-sans: "Inter Variable", "Inter", -apple-system, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, "SF Mono",
-               Menlo, monospace;
-  --font-display: "Inter Display", var(--font-sans);
+  --font-sans: "Geist Variable", "Geist", "ABC Diatype", -apple-system,
+               BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Monaspace Argon", "Geist Mono", "JetBrains Mono",
+               ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-sans);
+  --font-ghost: "Departure Mono", "Monaspace Radon", "Monaspace Argon",
+                monospace;
 
   --text-2xs:  11px;
   --text-xs:   12px;
@@ -134,7 +234,7 @@
   --tracking-wide:   0.01em;
 
   /* ────────────────────────────────────────────────────────
-     Motion : durées + easings
+     Motion — inchangé v2→v3
      ──────────────────────────────────────────────────────── */
   --dur-instant: 75ms;
   --dur-fast:    100ms;
@@ -149,186 +249,258 @@
   --ease-in-quart:    cubic-bezier(0.5, 0, 0.75, 0);
   --ease-in-out-circ: cubic-bezier(0.85, 0, 0.15, 1);
   --ease-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* v3 — nouvelle ease « emphasized » (decelerate prononcé) */
+  --ease-emphasized:  cubic-bezier(0.16, 1, 0.3, 1);
 
   /* ────────────────────────────────────────────────────────
-     Shadow stack (DARK : border + drop fin + inset highlight)
+     Shadow stack — warm-tinted (no flat black) pour Atelier Dark
      ──────────────────────────────────────────────────────── */
   --shadow-xs:
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+    0 1px 2px 0 oklch(0.10 0.020 50 / 0.30),
+    inset 0 1px 0 0 oklch(0.96 0.012 85 / 0.04);
   --shadow-sm:
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.40),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+    0 0 0 1px oklch(0.310 0.022 58 / 0.5),
+    0 2px 4px -1px oklch(0.10 0.020 50 / 0.32),
+    0 1px 2px -1px oklch(0.10 0.020 50 / 0.22),
+    inset 0 1px 0 0 oklch(0.96 0.012 85 / 0.04);
   --shadow-md:
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 2px 4px rgba(0, 0, 0, 0.40),
-    0 8px 16px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+    0 0 0 1px oklch(0.310 0.022 58 / 0.55),
+    0 6px 14px -4px oklch(0.08 0.020 50 / 0.42),
+    0 2px 6px -2px oklch(0.08 0.020 50 / 0.28),
+    inset 0 1px 0 0 oklch(0.96 0.012 85 / 0.05);
   --shadow-lg:
-    0 0 0 1px rgba(255, 255, 255, 0.07),
-    0 4px 8px rgba(0, 0, 0, 0.50),
-    0 16px 32px rgba(0, 0, 0, 0.55),
-    0 32px 64px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.07);
+    0 0 0 1px oklch(0.310 0.022 58 / 0.6),
+    0 14px 32px -8px oklch(0.06 0.020 50 / 0.52),
+    0 4px 12px -4px oklch(0.06 0.020 50 / 0.32),
+    inset 0 1px 0 0 oklch(0.96 0.012 85 / 0.06);
   --shadow-xl:
-    0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 8px 16px rgba(0, 0, 0, 0.55),
-    0 24px 48px rgba(0, 0, 0, 0.60),
-    0 48px 96px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.08);
+    0 0 0 1px oklch(0.310 0.022 58 / 0.65),
+    0 28px 64px -12px oklch(0.05 0.020 50 / 0.58),
+    0 8px 24px -8px oklch(0.05 0.020 50 / 0.36),
+    inset 0 1px 0 0 oklch(0.96 0.012 85 / 0.07);
   --shadow-accent-glow:
-    0 0 0 1px rgba(245, 201, 122, 0.35),
-    0 0 24px -4px rgba(245, 201, 122, 0.40),
-    0 0 64px -16px rgba(245, 201, 122, 0.30);
+    0 0 0 1px oklch(0.64 0.128 46 / 0.4),
+    0 0 24px -2px oklch(0.64 0.128 46 / 0.35),
+    0 0 64px -16px oklch(0.74 0.142 76 / 0.30);
 
   /* === TIER 2 — SÉMANTIQUES (DARK par défaut) === */
-  --color-bg-canvas:    var(--neutral-1);   /* derrière la fenêtre */
-  --color-bg-base:      var(--neutral-2);   /* éditeur */
-  --color-bg-surface:   var(--neutral-3);   /* sidebar, panneaux */
-  --color-bg-elevated:  var(--neutral-4);   /* cartes, widgets, onglet actif */
-  --color-bg-overlay:   var(--neutral-5);   /* modales, popovers */
-  --color-bg-hover:     var(--neutral-5);
-  --color-bg-pressed:   var(--neutral-6);
+  --color-bg-canvas:    var(--parch-1000);            /* derrière la fenêtre */
+  --color-bg-base:      oklch(0.165 0.012 58);        /* éditeur canvas */
+  --color-bg-surface:   oklch(0.155 0.011 58);        /* sidebar / panneaux */
+  --color-bg-elevated:  oklch(0.205 0.014 60);        /* cartes, onglet actif */
+  --color-bg-overlay:   oklch(0.245 0.016 62);        /* modales, popovers */
+  --color-bg-hover:     oklch(0.225 0.015 62);
+  --color-bg-pressed:   oklch(0.275 0.018 62);
 
-  --color-border-subtle:  rgba(255, 255, 255, 0.06);
-  --color-border-default: var(--neutral-7);
-  --color-border-strong:  var(--neutral-8);
+  --color-border-subtle:  oklch(0.250 0.018 60 / 0.7);
+  --color-border-default: oklch(0.310 0.022 58);
+  --color-border-strong:  oklch(0.420 0.030 56);
 
-  --color-text-primary:   var(--neutral-12);
-  --color-text-secondary: var(--neutral-11);
-  --color-text-tertiary:  var(--neutral-10);
-  --color-text-disabled:  var(--neutral-9);
-  --color-text-on-accent: var(--amber-1);
+  --color-text-primary:   oklch(0.860 0.014 80);      /* ivoire warm */
+  --color-text-secondary: oklch(0.640 0.018 70);
+  --color-text-tertiary:  oklch(0.480 0.016 65);
+  --color-text-disabled:  oklch(0.380 0.014 60);
+  --color-text-on-accent: oklch(0.16 0.012 60);       /* dark warm ON copper */
 
-  --color-accent:         var(--amber-9);
-  --color-accent-hover:   var(--amber-10);
-  --color-accent-text:    var(--amber-11);
-  --color-focus-ring:     var(--amber-8);
+  --color-accent:         var(--bronze-500);          /* cuivre patiné */
+  --color-accent-hover:   oklch(0.68 0.135 48);
+  --color-accent-text:    var(--honey-500);
+  --color-focus-ring:     oklch(0.78 0.142 76);
 
-  --color-success: var(--green-9);
-  --color-warning: var(--coral-9);
-  --color-danger:  var(--red-9);
+  --color-success: var(--sage-500);
+  --color-warning: var(--honey-500);
+  --color-danger:  var(--terra-500);
 
   /* Diff highlights (accordés à la palette syntaxique) */
-  --color-diff-add:           rgba(157, 190, 142, 0.16);
-  --color-diff-add-strong:    rgba(157, 190, 142, 0.36);
-  --color-diff-remove:        rgba(224, 108, 108, 0.16);
-  --color-diff-remove-strong: rgba(224, 108, 108, 0.36);
+  --color-diff-add:           oklch(0.66 0.118 145 / 0.16);
+  --color-diff-add-strong:    oklch(0.66 0.118 145 / 0.36);
+  --color-diff-remove:        oklch(0.62 0.176 30 / 0.16);
+  --color-diff-remove-strong: oklch(0.62 0.176 30 / 0.36);
 
-  /* « Apple touch » inset highlights — top-edge 1px white at low alpha.
-     Tokens nommés par intensité plutôt que par usage pour rester
-     composables sur n'importe quelle surface. */
-  --inset-highlight-subtle:  rgba(255, 255, 255, 0.04);
-  --inset-highlight-soft:    rgba(255, 255, 255, 0.06);
-  --inset-highlight-medium:  rgba(255, 255, 255, 0.10);
-  --inset-highlight-strong:  rgba(255, 255, 255, 0.18);
-  --inset-shadow-deep:       rgba(0, 0, 0, 0.40);
+  /* « Apple touch » inset highlights — top-edge 1px white at low alpha. */
+  --inset-highlight-subtle:  oklch(0.96 0.012 85 / 0.04);
+  --inset-highlight-soft:    oklch(0.96 0.012 85 / 0.06);
+  --inset-highlight-medium:  oklch(0.96 0.012 85 / 0.10);
+  --inset-highlight-strong:  oklch(0.96 0.012 85 / 0.18);
+  --inset-shadow-deep:       oklch(0.06 0.020 50 / 0.42);
 
-  /* File kind colours — intentionally chromatic (langage = identité).
-     Désaturés pour harmoniser avec le warm-espresso, restent
+  /* Selection (text) — bronze translucent */
+  --selection-bg: oklch(0.40 0.080 50 / 0.45);
+  --selection-fg: oklch(0.96 0.012 85);
+
+  /* Scrollbar — warm muted */
+  --scrollbar-thumb:       oklch(0.36 0.024 60 / 0.7);
+  --scrollbar-thumb-hover: oklch(0.46 0.030 58);
+
+  /* File kind colours — Atelier-tinted re-balance.
+     Désaturés pour harmoniser avec parch / bronze / honey, restent
      distinctifs au premier coup d'œil. */
-  --kind-folder:  #C49A48;
-  --kind-ts:      #6FA8C9;
-  --kind-js:      #D4B860;
-  --kind-json:    #C49A48;
-  --kind-md:      #9DA8B8;
-  --kind-css:     #82A4C2;
-  --kind-html:    #D87850;
-  --kind-image:   #A88BC0;
-  --kind-shell:   #88B582;
-  --kind-lock:    #C46060;
-  --kind-config:  #909090;
-  --kind-lua:     #6080DC;
-  --kind-cpp:     #76A4C2;
-  --kind-python:  #D8B538;
-  --kind-rust:    #C07050;
-  --kind-go:      #6FBED6;
-  --kind-java:    #D08060;
-  --kind-csharp:  #8060B0;
-  --kind-php:     #8E96BE;
-  --kind-ruby:    #B83C40;
-  --kind-sql:     #C49060;
-  --kind-yaml:    #C8A06E;
-  --kind-xml:     #B89060;
-  --kind-pdf:     #C45050;
-  --kind-archive: #B89060;
-  --kind-binary:  #828896;
-  --kind-plain:   #8A93A8;
+  --kind-folder:  oklch(0.74 0.118 76);    /* honey */
+  --kind-ts:      oklch(0.66 0.090 230);   /* slate */
+  --kind-js:      oklch(0.78 0.130 86);    /* honey-300 */
+  --kind-json:    var(--honey-500);
+  --kind-md:      oklch(0.68 0.040 80);
+  --kind-css:     oklch(0.66 0.080 220);
+  --kind-html:    oklch(0.65 0.150 38);    /* warm orange */
+  --kind-image:   oklch(0.70 0.090 320);
+  --kind-shell:   var(--sage-500);
+  --kind-lock:    var(--terra-500);
+  --kind-config:  oklch(0.62 0.014 70);
+  --kind-lua:     oklch(0.58 0.140 260);
+  --kind-cpp:     oklch(0.66 0.090 220);
+  --kind-python:  var(--honey-400);
+  --kind-rust:    var(--bronze-500);
+  --kind-go:      oklch(0.72 0.090 210);
+  --kind-java:    oklch(0.66 0.140 40);
+  --kind-csharp:  oklch(0.60 0.120 290);
+  --kind-php:     oklch(0.62 0.060 270);
+  --kind-ruby:    var(--terra-600);
+  --kind-sql:     var(--honey-600);
+  --kind-yaml:    oklch(0.70 0.085 75);
+  --kind-xml:     oklch(0.64 0.060 70);
+  --kind-pdf:     var(--terra-500);
+  --kind-archive: oklch(0.66 0.080 75);
+  --kind-binary:  oklch(0.60 0.014 240);
+  --kind-plain:   oklch(0.62 0.018 240);
 
   /* Dimensions de layout (stable) */
-  --titlebar-height:  36px;
-  --sidebar-width:    260px;
-  --ai-panel-width:   420px;
+  --titlebar-height:    36px;
+  --sidebar-width:      260px;
+  --ai-panel-width:     420px;
   --activity-bar-width: 48px;
-  --statusbar-height: 24px;
+  --statusbar-height:   24px;
 
   color-scheme: dark;
 }
 
-/* === MODE LIGHT (override sémantiques uniquement) === */
+/* === MODE LIGHT — parchment / paper === */
 [data-theme='light'] {
-  --color-bg-canvas:   #F8F6F1;   /* warm off-white, papier-cahier */
-  --color-bg-base:     #FFFFFF;
-  --color-bg-surface:  #F5F2EB;
-  --color-bg-elevated: #FFFFFF;
-  --color-bg-overlay:  #FFFFFF;
-  --color-bg-hover:    #F0EBE0;
-  --color-bg-pressed:  #E8E1D2;
+  --color-bg-canvas:   oklch(0.970 0.014 78);   /* parchemin warm */
+  --color-bg-base:     oklch(0.985 0.010 78);
+  --color-bg-surface:  oklch(0.955 0.016 76);
+  --color-bg-elevated: oklch(0.940 0.018 74);
+  --color-bg-overlay:  oklch(0.920 0.020 72);
+  --color-bg-hover:    oklch(0.920 0.020 72);
+  --color-bg-pressed:  oklch(0.880 0.024 70);
 
-  --color-border-subtle:  rgba(15, 14, 13, 0.05);
-  --color-border-default: rgba(15, 14, 13, 0.10);
-  --color-border-strong:  rgba(15, 14, 13, 0.18);
+  --color-border-subtle:  oklch(0.890 0.022 72);
+  --color-border-default: oklch(0.820 0.026 68);
+  --color-border-strong:  oklch(0.680 0.028 64);
 
-  --color-text-primary:   #1F1B16;
-  --color-text-secondary: #5C5347;
-  --color-text-tertiary:  #8A7E6E;
-  --color-text-disabled:  #B5AC9D;
-  --color-text-on-accent: #1F1B16;
+  --color-text-primary:   oklch(0.260 0.018 50);
+  --color-text-secondary: oklch(0.460 0.020 56);
+  --color-text-tertiary:  oklch(0.580 0.018 60);
+  --color-text-disabled:  oklch(0.700 0.020 65);
+  --color-text-on-accent: oklch(0.985 0.010 78);
 
-  --color-accent:       #B8893B;
-  --color-accent-hover: #A37828;
-  --color-accent-text:  #8C6822;
-  --color-focus-ring:   #B8893B;
+  --color-accent:       oklch(0.52 0.140 44);   /* cuivre saturé sur fond clair */
+  --color-accent-hover: oklch(0.46 0.140 44);
+  --color-accent-text:  oklch(0.40 0.120 40);
+  --color-focus-ring:   oklch(0.62 0.140 72);
 
-  /* Shadows light : drop-shadows tintés vers le bg */
+  --color-success: oklch(0.50 0.110 145);
+  --color-warning: oklch(0.62 0.140 72);
+  --color-danger:  oklch(0.50 0.176 28);
+
+  /* Selection light */
+  --selection-bg: oklch(0.78 0.10 50 / 0.40);
+  --selection-fg: oklch(0.180 0.020 48);
+
+  --color-diff-add:           oklch(0.66 0.118 145 / 0.18);
+  --color-diff-add-strong:    oklch(0.66 0.118 145 / 0.40);
+  --color-diff-remove:        oklch(0.62 0.176 30 / 0.16);
+  --color-diff-remove-strong: oklch(0.62 0.176 30 / 0.40);
+
+  /* Shadows light : drop-shadows tintés vers le bg parchemin */
+  --shadow-xs:  0 1px 2px 0 oklch(0.30 0.030 50 / 0.10);
   --shadow-sm:
-    0 0 0 1px rgba(60, 40, 20, 0.06),
-    0 1px 2px rgba(60, 40, 20, 0.04);
+    0 0 0 1px oklch(0.30 0.030 50 / 0.08),
+    0 2px 4px -1px oklch(0.30 0.030 50 / 0.10),
+    0 1px 2px -1px oklch(0.30 0.030 50 / 0.06);
   --shadow-md:
-    0 0 0 1px rgba(60, 40, 20, 0.06),
-    0 1px 2px rgba(60, 40, 20, 0.04),
-    0 4px 8px rgba(60, 40, 20, 0.06),
-    0 8px 16px rgba(60, 40, 20, 0.05);
+    0 0 0 1px oklch(0.30 0.030 50 / 0.10),
+    0 6px 14px -4px oklch(0.30 0.030 50 / 0.14),
+    0 2px 6px -2px oklch(0.30 0.030 50 / 0.08);
   --shadow-lg:
-    0 0 0 1px rgba(60, 40, 20, 0.08),
-    0 1px 2px rgba(60, 40, 20, 0.06),
-    0 4px 8px rgba(60, 40, 20, 0.08),
-    0 16px 32px rgba(60, 40, 20, 0.10);
+    0 0 0 1px oklch(0.30 0.030 50 / 0.12),
+    0 14px 32px -8px oklch(0.30 0.030 50 / 0.18),
+    0 4px 12px -4px oklch(0.30 0.030 50 / 0.10);
   --shadow-xl:
-    0 0 0 1px rgba(60, 40, 20, 0.10),
-    0 8px 16px rgba(60, 40, 20, 0.10),
-    0 24px 48px rgba(60, 40, 20, 0.12),
-    0 48px 96px rgba(60, 40, 20, 0.10);
+    0 0 0 1px oklch(0.30 0.030 50 / 0.14),
+    0 28px 64px -12px oklch(0.30 0.030 50 / 0.22),
+    0 8px 24px -8px oklch(0.30 0.030 50 / 0.12);
   --shadow-accent-glow:
-    0 0 0 1px rgba(184, 137, 59, 0.35),
-    0 0 24px -4px rgba(184, 137, 59, 0.30),
-    0 0 64px -16px rgba(184, 137, 59, 0.20);
+    0 0 0 1px oklch(0.52 0.140 44 / 0.35),
+    0 0 24px -4px oklch(0.52 0.140 44 / 0.30),
+    0 0 64px -16px oklch(0.62 0.140 72 / 0.20);
 
-  --color-diff-add:           rgba(120, 160, 100, 0.18);
-  --color-diff-add-strong:    rgba(120, 160, 100, 0.40);
-  --color-diff-remove:        rgba(200, 90, 90, 0.16);
-  --color-diff-remove-strong: rgba(200, 90, 90, 0.40);
+  --scrollbar-thumb:       oklch(0.70 0.020 65 / 0.7);
+  --scrollbar-thumb-hover: oklch(0.55 0.024 62);
 
   color-scheme: light;
 }
 
-/* Reduced motion — opt-OUT pour accessibilité */
+/* === sRGB FALLBACK pour vieilles WebViews sans OKLCH ===
+   Chromium 111+, Firefox 113+, Safari 15.4+ supportent OKLCH.
+   Ce bloc cible les WebView2 / Electron embedded < 2023. */
+@supports not (color: oklch(0 0 0)) {
+  :root {
+    --bronze-500: #b8784a;
+    --bronze-700: #6d4626;
+    --honey-500:  #d4a247;
+    --sage-500:   #8fa86c;
+    --terra-500:  #c75c3e;
+    --slate-400:  #6f9bbf;
+    --parch-1000: #1a1612;
+    --color-bg-canvas:   #1a1612;
+    --color-bg-base:     #1f1a16;
+    --color-bg-surface:  #1d1814;
+    --color-bg-elevated: #2a231d;
+    --color-bg-overlay:  #322a22;
+    --color-bg-hover:    #2e271f;
+    --color-bg-pressed:  #3a3027;
+    --color-border-subtle:  #332a22;
+    --color-border-default: #423629;
+    --color-border-strong:  #5a4a39;
+    --color-text-primary:   #e6dcc8;
+    --color-text-secondary: #a89a82;
+    --color-text-tertiary:  #7d7060;
+    --color-text-disabled:  #5a4a39;
+    --color-text-on-accent: #1f1a16;
+    --color-accent:         #b8784a;
+    --color-accent-hover:   #c2825a;
+    --color-accent-text:    #d4a247;
+    --color-focus-ring:     #d4a247;
+    --color-success:        #8fa86c;
+    --color-warning:        #d4a247;
+    --color-danger:         #c75c3e;
+    --selection-bg:         rgba(184, 120, 74, 0.45);
+  }
+  [data-theme='light'] {
+    --color-bg-canvas:   #f5ede0;
+    --color-bg-base:     #faf5ea;
+    --color-bg-surface:  #efe6d5;
+    --color-bg-elevated: #e7ddc9;
+    --color-bg-overlay:  #ddd2bb;
+    --color-text-primary:   #3a2e21;
+    --color-text-secondary: #6b5a45;
+    --color-accent:         #94532c;
+    --color-success:        #6b864a;
+    --color-danger:         #a04020;
+  }
+}
+
+/* === Reduced motion — opt-OUT pour accessibilité === */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  :root {
+    --dur-base:    0.01ms;
+    --dur-medium:  0.01ms;
+    --dur-slow:    0.01ms;
   }
 }

@@ -12,8 +12,9 @@
 
 ## En cours
 
-_V2.3 livrée — voir Revue ci-dessous. Output panel (A7) + EOL/Encoding
-(A8) + multi-root workspaces restent dans le backlog V2.4._
+_V3.0.0 livrée — voir Revue ci-dessous. Repaint per-composant
+(hero typography, brand-mark, etc.) + intégration des ~90 icônes
+custom du bundle restent dans le backlog V3.1._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +99,62 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.0.0 refonte visuelle « Atelier Dark »
+- **Fait** :
+  - **Source** : bundle `suxaia/` reçu de `claude.ai/design` (URL
+    Anthropic Design hostée). README direct : « recreate them
+    pixel-perfectly in whatever technology fits the codebase » +
+    consigne explicite de NE PAS render dans le browser (lire le
+    code directement). Architecture 3 couches OKLCH.
+  - **Fonts** (L1) : swap `@fontsource-variable/inter` +
+    `@fontsource-variable/geist-mono` → `@fontsource-variable/geist`
+    + `@fontsource/monaspace-argon`. Tokens `--font-sans` /
+    `--font-mono` / `--font-display` / nouveau `--font-ghost`
+    (Departure Mono attendu, fallback Monaspace Radon → Argon).
+  - **theme.css** (L2) : réécriture complète. Nouvelles primitives
+    bronze / honey / sage / terra / slate / parch (12 stops OKLCH
+    chacune), tier 2 sémantiques `--color-bg-*` / `--color-text-*` /
+    `--color-accent` (bronze-500) / `--color-accent-text` (honey-500)
+    / success/warning/danger/focus-ring mappés sur les nouvelles
+    primitives. **Legacy aliases conservés** : `--amber-1..12`,
+    `--neutral-1..12`, `--green-9`, `--coral-9`, `--terra-9`,
+    `--teal-9`, `--rose-9`, `--red-9` pointent désormais sur la
+    palette Atelier Dark — la cascade CSS applique automatiquement
+    la nouvelle direction sans toucher un seul composant. Variante
+    light parchment + fallback hex `@supports not (color: oklch(0 0 0))`.
+  - **Monaco theme** (L3) : `lib/monaco-suxai-theme.ts` réécrit
+    avec la palette Atelier Dark (bg `#26201a`, fg `#d9cfb9`,
+    cursor honey `#d4a247`, brackets cuivre/miel/sauge/lavande/
+    ciel/orange en 6 niveaux distincts, gutter add/modified/deleted
+    sage/honey/terra). Variant light parchemin avec primary
+    `#94532c`.
+  - **Mosa mascot** (L4) : `components/ui/MosaMascot.tsx` —
+    composant React qui inline le SVG `mosa-base.svg` (champignon
+    cuivre + ventre miel + luciole compagnon en glow filter). IDs
+    suffixés via `useId()` pour éviter les collisions defs entre
+    instances. Exposé pour Welcome / splash / About — non placé
+    automatiquement dans cette PR (à brancher quand utile).
+  - **globals.css** (L5) : aucun changement nécessaire — `::selection`
+    et `::-webkit-scrollbar-thumb` consomment déjà
+    `var(--color-accent)` via `color-mix`, donc la cascade applique
+    bronze automatiquement. Idem pour `.gradient-border` qui utilise
+    `var(--amber-9)` (alias → bronze-500).
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V3.0.0 (déféré V3.1)** :
+  - Repaint per-composant (TitleBar brand-mark gradient, hero
+    typography Welcome, AIPanel polishing) — la cascade suffit
+    pour un premier pass mais finition ciblée à faire
+  - Set ~90 icônes custom du bundle (`icons.svg`) — swap de
+    `lib/file-icon.tsx` mérite son propre lot
+  - Departure Mono pour ghost text IA — pas dispo sur fontsource,
+    fallback actuel Monaspace Argon
+  - Output panel (A7), EOL/Encoding (A8), multi-root workspaces
+- **Suivi** : tester en runtime sur la prochaine build (`.exe` via
+  GitHub Actions) — vérifier que la palette bronze/miel rend bien,
+  que Monaco ouvre dans le nouveau thème, que les fontes Geist +
+  Monaspace Argon s'affichent. Si le rendu manque de cohésion
+  visuelle, planifier un V3.1 polishing ciblé.
 
 ### 2026-04-28 — V2.3.0 parité VSCode (Lot C git avancé)
 - **Fait** :

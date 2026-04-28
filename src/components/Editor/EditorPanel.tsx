@@ -1108,7 +1108,7 @@ function EditorWelcome() {
   const onOpenRecent = async (path: string, name: string) => {
     try {
       const file = await window.suxai.fs.readFile(path);
-      openFile({ path: file.path, name, content: file.content });
+      openFile({ path: file.path, name, content: file.content, eol: file.eol, encoding: file.encoding });
     } catch (err) {
       // v0.13.16 (audit #10): drop the recent entry only when the file
       // is genuinely missing — keep it on transient errors so the user

@@ -770,7 +770,33 @@ function registerIpc() {
     // clean string. We restore both at write time.
     let content = quirks.bom ? raw.subarray(3).toString('utf8') : raw.toString('utf8');
     if (quirks.eol === '\r\n') content = content.replace(/\r\n/g, '\n');
-    return { path: safe, content, mtimeMs: stat.mtimeMs };
+    // v3.5 — expose EOL + encoding to the renderer for the StatusBar
+    // indicators (A8). UTF-8 is the only encoding we currently read
+    // (with optional BOM) ; UTF-16 / Windows-1252 / etc. would need
+    // an iconv pass to be supported, deferred.
+    return {
+      path: safe,
+      content,
+      mtimeMs: stat.mtimeMs,
+      eol: quirks.eol === '\r\n' ? 'CRLF' : 'LF',
+      encoding: quirks.bom ? 'UTF-8 with BOM' : 'UTF-8',
+    };
+  });
+
+  // v3.5 (A8) — change the saved EOL of a file without altering its
+  // visible content. The renderer drives this from the StatusBar EOL
+  // indicator dropdown ; the next write will use the new EOL because
+  // applyQuirks reads from lastSeenQuirks.
+  ipcMain.handle('fs:set-eol', async (_e, input: { path: string; eol: 'LF' | 'CRLF' }) => {
+    let safe: string;
+    try { safe = sanitizeFsPath(input?.path, { mustExist: true }); }
+    catch (err) { return { ok: false, error: (err as Error).message }; }
+    if (input?.eol !== 'LF' && input?.eol !== 'CRLF') {
+      return { ok: false, error: 'invalid eol' };
+    }
+    const prev = lastSeenQuirks.get(safe) ?? { eol: '\n', bom: false };
+    lastSeenQuirks.set(safe, { ...prev, eol: input.eol === 'CRLF' ? '\r\n' : '\n' });
+    return { ok: true };
   });
 
   /**

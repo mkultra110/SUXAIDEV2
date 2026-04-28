@@ -175,7 +175,7 @@ export function SearchInFiles() {
         // reveal would persist forever and apply to a future,
         // unrelated open of the same path.
         setPendingReveal(file.path, row.hit.line, 1);
-        openFile({ path: file.path, name, content: file.content });
+        openFile({ path: file.path, name, content: file.content, eol: file.eol, encoding: file.encoding });
         close();
       } catch (err) {
         setErrorMsg(`Cannot open ${name}: ${(err as Error).message}`);

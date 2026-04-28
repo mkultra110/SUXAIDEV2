@@ -140,7 +140,7 @@ export function SourceControlPanel() {
     const name = absPath.split(/[\\/]/).pop() ?? absPath;
     try {
       const file = await window.suxai.fs.readFile(absPath);
-      openFile({ path: file.path, name, content: file.content });
+      openFile({ path: file.path, name, content: file.content, eol: file.eol, encoding: file.encoding });
     } catch {
       // Deleted files can't be opened — silently swallow.
     }

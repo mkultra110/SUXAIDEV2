@@ -73,7 +73,7 @@ export function ProblemsPanel({ height, onClose }: ProblemsPanelProps) {
       try {
         const fresh = await window.suxai.fs.readFile(d.path);
         const name = d.path.split(/[\\/]/).pop() ?? d.path;
-        openFile({ path: d.path, name, content: fresh.content });
+        openFile({ path: d.path, name, content: fresh.content, eol: fresh.eol, encoding: fresh.encoding });
       } catch {
         /* file no longer on disk — silently ignore */
         return;

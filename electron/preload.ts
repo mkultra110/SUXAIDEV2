@@ -64,8 +64,22 @@ const api = {
     openFile: (): Promise<OpenFileResult> => ipcRenderer.invoke('fs:open-file'),
     openFolder: (): Promise<string | null> => ipcRenderer.invoke('fs:open-folder'),
     readDir: (p: string): Promise<FileEntry[]> => ipcRenderer.invoke('fs:read-dir', p),
-    readFile: (p: string): Promise<{ path: string; content: string; mtimeMs: number }> =>
+    readFile: (p: string): Promise<{
+      path: string;
+      content: string;
+      mtimeMs: number;
+      /** v3.5 — line ending detected at read time. */
+      eol: 'LF' | 'CRLF';
+      /** v3.5 — file encoding (currently UTF-8 ± BOM). */
+      encoding: 'UTF-8' | 'UTF-8 with BOM';
+    }> =>
       ipcRenderer.invoke('fs:read-file', p),
+    /** v3.5 — change the saved EOL of a file. Doesn't touch the
+     *  current visible content ; the next writeFile will serialise
+     *  with the new EOL via applyQuirks(). */
+    setEol: (input: { path: string; eol: 'LF' | 'CRLF' }): Promise<{
+      ok: true;
+    } | { ok: false; error: string }> => ipcRenderer.invoke('fs:set-eol', input),
     writeFile: (
       p: string,
       content: string,

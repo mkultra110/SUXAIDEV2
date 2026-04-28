@@ -128,6 +128,41 @@ export function StatusBar({
               Ln {pos.line}, Col {pos.column}
               {pos.selection > 0 && ` · ${pos.selection} chars`}
             </span>
+            {/* v3.5 (A8) — Encoding indicator. Shows the encoding
+                detected at read time. UTF-8 ± BOM aujourd'hui ;
+                reste read-only (basculer l'encoding nécessite une
+                conversion iconv hors scope). */}
+            {activeFile.encoding && (
+              <span className="statusbar__item" title={`Encoding: ${activeFile.encoding}`}>
+                {activeFile.encoding === 'UTF-8 with BOM' ? 'UTF-8 BOM' : 'UTF-8'}
+              </span>
+            )}
+            {/* v3.5 (A8) — EOL indicator. Cliquable : toggle entre LF
+                et CRLF, persiste côté main process via fs:set-eol. La
+                prochaine writeFile sérialise avec le nouvel EOL. */}
+            {activeFile.eol && !activeFile.untitled && (
+              <button
+                type="button"
+                className="statusbar__item statusbar__btn"
+                title={`End of Line — click to switch to ${activeFile.eol === 'LF' ? 'CRLF' : 'LF'}`}
+                onClick={async () => {
+                  const next = activeFile.eol === 'LF' ? 'CRLF' : 'LF';
+                  try {
+                    const res = await window.suxai.fs.setEol({ path: activeFile.path, eol: next });
+                    if (res.ok) {
+                      window.dispatchEvent(
+                        new CustomEvent<{ path: string; eol: 'LF' | 'CRLF' }>(
+                          'suxai:eol-changed',
+                          { detail: { path: activeFile.path, eol: next } },
+                        ),
+                      );
+                    }
+                  } catch { /* swallow — surfaced via IPC error */ }
+                }}
+              >
+                {activeFile.eol}
+              </button>
+            )}
           </>
         )}
       </div>

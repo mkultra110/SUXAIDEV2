@@ -12,11 +12,9 @@
 
 ## En cours
 
-_V3.4.0 livrée — sweep AtelierIcon désormais quasi-complet
-(SourceControl rows/sections, DiffView accept/reject, ModelSelector,
-ToolCall, UpdateDialog, UpgradeDialog, HistoryDialog, CompareDialog,
-TitleBar). Reste : Departure Mono ghost text + Output panel (A7) +
-EOL/Encoding (A8) + multi-root workspaces._
+_V3.5.0 livrée (A8 EOL/Encoding indicators) — voir Revue ci-dessous.
+Restent : Output panel (A7) + multi-root workspaces + Departure Mono
+ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -101,6 +99,42 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.5.0 EOL + Encoding indicators (A8, parité VSCode)
+- **Fait** :
+  - **IPC** : `fs:read-file` exposait déjà la détection BOM + EOL via
+    `detectQuirks` (les valeurs étaient stockées en `lastSeenQuirks`
+    pour `applyQuirks` au write). Cette PR les expose au renderer
+    dans le retour : `{ ..., eol: 'LF' | 'CRLF', encoding: 'UTF-8' |
+    'UTF-8 with BOM' }`. Nouveau handler `fs:set-eol` qui patche
+    `lastSeenQuirks[path].eol` — la prochaine writeFile sérialise
+    avec le nouvel EOL.
+  - **Preload** : extension du type retour `readFile()` + nouveau
+    `setEol({path, eol})`.
+  - **`OpenFile`** : ajout de `eol?: 'LF' | 'CRLF'` et
+    `encoding?: 'UTF-8' | 'UTF-8 with BOM'`. 8 call sites
+    `openFile({...})` dans le code propagent désormais
+    `result.eol` / `result.encoding` (Sidebar tree, drop handler,
+    Welcome recent, ProblemsPanel jump, SearchInFiles, QuickOpen,
+    SourceControl, CommandPalette). Le path `fs.openFile()` (file
+    picker dialog) ne propage pas — handler retourne `'utf8'` plain
+    sans détection, encodage UTF-8 assumé.
+  - **StatusBar** : 2 nouveaux items à droite, après "Ln/Col" :
+    `UTF-8` (ou `UTF-8 BOM`) read-only + un bouton EOL `LF`/`CRLF`
+    cliquable qui toggle via `fs:set-eol`, dispatch
+    `suxai:eol-changed`, et marque le fichier dirty pour pousser le
+    prochain Cmd+S à réécrire avec le nouvel EOL.
+  - **WorkspaceContext** : listener `suxai:eol-changed` qui met à
+    jour le `eol` de l'`OpenFile` correspondant pour que la
+    StatusBar bascule visuellement immédiatement.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope** : conversion d'encoding (UTF-8 ↔ UTF-16 ↔
+  Windows-1252) — nécessiterait `iconv-lite` côté main process,
+  pas une priorité immédiate. CommandPalette « Change End of Line »
+  déféré (le click StatusBar suffit pour l'usage courant).
+- **Suivi** : tester sur un repo Windows (CRLF natif) que les
+  toggles persistent correctement après save+reload, et que les
+  fichiers BOM-prefixed sont identifiés en `UTF-8 BOM`.
 
 ### 2026-04-28 — V3.4.0 sweep AtelierIcon round 2 (SourceControl + modals + TitleBar)
 - **Fait** : second tour de sweep sur les composants de plus de

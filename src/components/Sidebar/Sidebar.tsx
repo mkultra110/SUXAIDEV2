@@ -229,7 +229,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
     if (!entry.isDirectory) {
       try {
         const file = await window.suxai.fs.readFile(entry.path);
-        openFile({ path: file.path, name: entry.name, content: file.content });
+        openFile({ path: file.path, name: entry.name, content: file.content, eol: file.eol, encoding: file.encoding });
       } catch (err) {
         console.error(err);
       }

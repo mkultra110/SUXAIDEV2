@@ -13,6 +13,11 @@ export interface OpenFile {
   pinned?: boolean;
   /** True for files created in-memory that haven't been saved to disk yet. */
   untitled?: boolean;
+  /** v3.5 — line ending detected at read time. Drives the StatusBar
+   *  EOL indicator and gets restored at write time. */
+  eol?: 'LF' | 'CRLF';
+  /** v3.5 — file encoding (currently UTF-8 ± BOM). */
+  encoding?: 'UTF-8' | 'UTF-8 with BOM';
 }
 
 export interface PendingDiff {
@@ -340,6 +345,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       .map((f) => f.path);
     return `${state.workspaceRoot ?? ''}||${paths.join('|')}||${state.activePath ?? ''}`;
   }, [state.workspaceRoot, state.openFiles, state.activePath]);
+
+  // v3.5 (A8) — sync openFiles[*].eol when StatusBar toggles via
+  // fs:set-eol. The IPC has already updated the main-process record ;
+  // we mirror it locally so the StatusBar pill flips immediately.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ path: string; eol: 'LF' | 'CRLF' }>).detail;
+      if (!detail) return;
+      setState((s) => ({
+        ...s,
+        openFiles: s.openFiles.map((f) =>
+          f.path === detail.path ? { ...f, eol: detail.eol, dirty: true } : f,
+        ),
+      }));
+    };
+    window.addEventListener('suxai:eol-changed', handler);
+    return () => window.removeEventListener('suxai:eol-changed', handler);
+  }, []);
 
   useEffect(() => {
     if (!restored) return;

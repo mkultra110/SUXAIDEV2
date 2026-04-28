@@ -169,7 +169,7 @@ export function QuickOpen() {
           : { path: item.file.path, name: item.file.name };
       try {
         const content = await window.suxai.fs.readFile(target.path);
-        openFile({ path: content.path, name: target.name, content: content.content });
+        openFile({ path: content.path, name: target.name, content: content.content, eol: content.eol, encoding: content.encoding });
       } catch (err) {
         // v0.13.16 (audit #10): only drop the recent entry when the
         // file is genuinely gone — a transient permission error

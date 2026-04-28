@@ -37,7 +37,7 @@ function WorkspaceHotkeys() {
         try {
           const result = await window.suxai.fs.readFile(anyFile.path);
           const name = anyFile.path.split(/[\\/]/).pop() ?? anyFile.path;
-          openFile({ path: result.path, name, content: result.content });
+          openFile({ path: result.path, name, content: result.content, eol: result.eol, encoding: result.encoding });
         } catch (err) {
           console.error('Failed to open dropped file:', err);
           toast.error('Cannot open file', (err as Error).message);

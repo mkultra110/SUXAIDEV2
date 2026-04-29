@@ -41,7 +41,13 @@ export interface PendingDiff {
 }
 
 interface WorkspaceState {
+  /** v3.9 — primary alias of `workspaceRoots[0] ?? null`. Kept as a
+   *  field on state so existing single-root consumers (sidebar git
+   *  status, breadcrumb root, etc.) keep working without iteration. */
   workspaceRoot: string | null;
+  /** v3.9 — multi-root list. Empty when no folder is open. The first
+   *  entry is the « primary » root used by single-root call sites. */
+  workspaceRoots: string[];
   openFiles: OpenFile[];
   activePath: string | null;
   selection: string;
@@ -108,6 +114,14 @@ export type SaveOutcome = 'saved' | 'unchanged' | 'cancelled' | 'error';
 
 interface WorkspaceValue extends WorkspaceState {
   setWorkspaceRoot: (root: string | null) => void;
+  /** v3.9 — set the entire roots list at once. Used by persisted
+   *  restore + the « close all folders » command. */
+  setWorkspaceRoots: (roots: string[]) => void;
+  /** v3.9 — append `root` to the workspaceRoots if not already
+   *  present. No-op if root is already in the list. */
+  addWorkspaceRoot: (root: string) => void;
+  /** v3.9 — remove `root` from the workspaceRoots. */
+  removeWorkspaceRoot: (root: string) => void;
   openFile: (file: OpenFile) => void;
   closeFile: (path: string) => void;
   closeOthers: (keepPath: string) => void;
@@ -218,7 +232,12 @@ function langFromPath(p: string): string {
 const PERSIST_KEY = 'suxai.workspace.v1';
 
 interface PersistedWorkspace {
+  /** v3.9 — multi-root persisted shape. Older sessions wrote the
+   *  legacy `workspaceRoot` only ; we still read both for forward
+   *  compat. New writes always include both fields with `roots[0]`
+   *  mirrored into `workspaceRoot`. */
   workspaceRoot: string | null;
+  workspaceRoots?: string[];
   openPaths: string[];
   activePath: string | null;
 }
@@ -246,6 +265,7 @@ function savePersisted(state: PersistedWorkspace): void {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WorkspaceState>({
     workspaceRoot: null,
+    workspaceRoots: [],
     openFiles: [],
     activePath: null,
     selection: '',
@@ -289,8 +309,59 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // v3.9 — multi-root setters. `setWorkspaceRoot` is preserved for
+  // back-compat (replaces the entire list with [root] or []). The
+  // canonical truth is `workspaceRoots` ; `workspaceRoot` is mirrored
+  // to `roots[0] ?? null` so existing consumers keep working without
+  // touching them.
+  const setWorkspaceRoots = useCallback((roots: string[]) => {
+    // Dedupe + drop empties + normalise (no trailing slash) so that
+    // toggling a root back and forth doesn't duplicate it.
+    const seen = new Set<string>();
+    const normed: string[] = [];
+    for (const r of roots) {
+      if (typeof r !== 'string' || r.length === 0) continue;
+      const norm = r.replace(/[\\/]+$/, '');
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      normed.push(norm);
+    }
+    setState((s) => ({
+      ...s,
+      workspaceRoots: normed,
+      workspaceRoot: normed[0] ?? null,
+    }));
+  }, []);
+
   const setWorkspaceRoot = useCallback((root: string | null) => {
-    setState((s) => ({ ...s, workspaceRoot: root }));
+    setWorkspaceRoots(root ? [root] : []);
+  }, [setWorkspaceRoots]);
+
+  const addWorkspaceRoot = useCallback((root: string) => {
+    if (typeof root !== 'string' || root.length === 0) return;
+    const norm = root.replace(/[\\/]+$/, '');
+    setState((s) => {
+      if (s.workspaceRoots.includes(norm)) return s;
+      const nextRoots = [...s.workspaceRoots, norm];
+      return {
+        ...s,
+        workspaceRoots: nextRoots,
+        workspaceRoot: nextRoots[0] ?? null,
+      };
+    });
+  }, []);
+
+  const removeWorkspaceRoot = useCallback((root: string) => {
+    const norm = root.replace(/[\\/]+$/, '');
+    setState((s) => {
+      const nextRoots = s.workspaceRoots.filter((r) => r !== norm);
+      if (nextRoots.length === s.workspaceRoots.length) return s;
+      return {
+        ...s,
+        workspaceRoots: nextRoots,
+        workspaceRoot: nextRoots[0] ?? null,
+      };
+    });
   }, []);
 
   // Restore last session on first mount.
@@ -303,8 +374,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     (async () => {
       try {
-        if (persisted.workspaceRoot) {
-          setState((s) => ({ ...s, workspaceRoot: persisted.workspaceRoot }));
+        // v3.9 — restore the multi-root list. Older sessions only
+        // wrote `workspaceRoot` (singleton) ; we coerce that to a
+        // single-element list. New sessions write `workspaceRoots`
+        // explicitly.
+        const restoredRoots: string[] = (() => {
+          if (Array.isArray(persisted.workspaceRoots) && persisted.workspaceRoots.length > 0) {
+            return persisted.workspaceRoots.filter((r): r is string => typeof r === 'string');
+          }
+          if (persisted.workspaceRoot) return [persisted.workspaceRoot];
+          return [];
+        })();
+        if (restoredRoots.length > 0) {
+          setWorkspaceRoots(restoredRoots);
         }
         const files: OpenFile[] = [];
         for (const p of persisted.openPaths ?? []) {
@@ -343,8 +425,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const paths = state.openFiles
       .filter((f) => !f.untitled && !f.path.startsWith('untitled://'))
       .map((f) => f.path);
-    return `${state.workspaceRoot ?? ''}||${paths.join('|')}||${state.activePath ?? ''}`;
-  }, [state.workspaceRoot, state.openFiles, state.activePath]);
+    // v3.9 — fingerprint includes the full roots list so adding/removing
+    // a folder triggers a savePersisted. The legacy `workspaceRoot` field
+    // is mirrored from `roots[0]` so we don't double-count it.
+    const rootsKey = state.workspaceRoots.join('|');
+    return `${rootsKey}||${paths.join('|')}||${state.activePath ?? ''}`;
+  }, [state.workspaceRoots, state.openFiles, state.activePath]);
 
   // v3.5 (A8) — sync openFiles[*].eol when StatusBar toggles via
   // fs:set-eol. The IPC has already updated the main-process record ;
@@ -366,9 +452,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!restored) return;
-    const [root = '', pathStr = '', active = ''] = persistedFingerprint.split('||');
+    const [rootsKey = '', pathStr = '', active = ''] = persistedFingerprint.split('||');
+    const roots = rootsKey ? rootsKey.split('|').filter(Boolean) : [];
     savePersisted({
-      workspaceRoot: root || null,
+      // v3.9 — write both shapes : the new `workspaceRoots[]` is the
+      // canonical truth ; `workspaceRoot` is mirrored to the primary
+      // root so a downgrade to V3.8 (which only reads `workspaceRoot`)
+      // still loads the user's main folder.
+      workspaceRoot: roots[0] ?? null,
+      workspaceRoots: roots,
       openPaths: pathStr ? pathStr.split('|') : [],
       activePath: active || null,
     });
@@ -889,6 +981,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       activeFile,
       hasUnsaved,
       setWorkspaceRoot,
+      setWorkspaceRoots,
+      addWorkspaceRoot,
+      removeWorkspaceRoot,
       openFile,
       closeFile,
       closeOthers,
@@ -915,7 +1010,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       recordEdit,
     }),
     [
-      state, activeFile, hasUnsaved, setWorkspaceRoot, openFile, closeFile,
+      state, activeFile, hasUnsaved,
+      setWorkspaceRoot, setWorkspaceRoots, addWorkspaceRoot, removeWorkspaceRoot,
+      openFile, closeFile,
       closeOthers, closeToTheRight, closeAll, setActive, rejectPendingDiffs,
       updateActiveContent, setSelection, saveActiveFile, saveAllDirty, reloadActiveFromDisk, newUntitled,
       reopenLastClosed, reorderTab,

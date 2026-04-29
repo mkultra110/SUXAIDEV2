@@ -23,7 +23,10 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const { openFile, setWorkspaceRoot, saveActiveFile, saveAllDirty, activeFile, workspaceRoot } = useWorkspace();
+  const {
+    openFile, saveActiveFile, saveAllDirty, activeFile, workspaceRoot, workspaceRoots,
+    setWorkspaceRoot, addWorkspaceRoot, removeWorkspaceRoot,
+  } = useWorkspace();
   const { logout, user } = useAuth();
   const toast = useToast();
   const tasks = useTasks(workspaceRoot);
@@ -176,13 +179,42 @@ export function CommandPalette() {
       },
       {
         id: 'workspace.close',
-        label: 'Workspace: Close current folder',
+        label: workspaceRoots.length > 1
+          ? 'Workspace: Close all folders'
+          : 'Workspace: Close current folder',
         group: 'Workspace',
         run: () => {
           setWorkspaceRoot(null);
-          toast.info('Workspace closed');
+          toast.info(workspaceRoots.length > 1 ? 'All folders closed' : 'Workspace closed');
         },
       },
+      {
+        id: 'workspace.add-folder',
+        label: 'Workspace: Add folder…',
+        group: 'Workspace',
+        run: async () => {
+          const root = await window.suxai.fs.openFolder();
+          if (!root) return;
+          addWorkspaceRoot(root);
+          const name = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+          toast.success('Folder added', name);
+        },
+      },
+      ...(workspaceRoots.length > 1
+        ? workspaceRoots.map((root) => {
+            const name = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+            return {
+              id: `workspace.remove-folder:${root}`,
+              label: `Workspace: Remove folder « ${name} »`,
+              hint: root,
+              group: 'Workspace' as const,
+              run: () => {
+                removeWorkspaceRoot(root);
+                toast.info('Folder removed', name);
+              },
+            };
+          })
+        : []),
       {
         id: 'view.toggle-output',
         label: 'View: Toggle Output Panel',
@@ -307,7 +339,8 @@ export function CommandPalette() {
     }
     return list;
   }, [
-    openFile, setWorkspaceRoot, saveActiveFile, saveAllDirty, activeFile, logout, user, toast,
+    openFile, setWorkspaceRoot, addWorkspaceRoot, removeWorkspaceRoot,
+    saveActiveFile, saveAllDirty, activeFile, workspaceRoots, logout, user, toast,
     workspaceRoot, tasks,
   ]);
 

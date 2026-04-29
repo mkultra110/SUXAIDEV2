@@ -148,33 +148,50 @@ function mapVscodeKeys(raw: Record<string, unknown>): Partial<Settings> {
   return out;
 }
 
-/**
- * Read and apply `.vscode/settings.json` from the workspace root.
- * - File missing or unreadable: clears any existing overrides (silent).
- * - Parse error: clears overrides + console warns (so the user can
- *   spot bad JSONC without an in-app dialog).
- * - Success: applies the mapped subset via `setWorkspaceOverrides()`.
- */
-export async function applyWorkspaceSettings(root: string | null): Promise<void> {
-  if (!root) {
-    clearWorkspaceOverrides();
-    return;
-  }
+async function readOneRoot(root: string): Promise<Partial<Settings>> {
   const path = joinPath(root, FILE_REL);
   let text: string;
   try {
     const res = await window.suxai.fs.readFile(path);
     text = res.content;
   } catch {
-    clearWorkspaceOverrides();
-    return;
+    return {};
   }
   const parsed = parseJsonc(text);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     console.warn(`[workspace-settings] Could not parse ${path} as JSONC.`);
+    return {};
+  }
+  return mapVscodeKeys(parsed as Record<string, unknown>);
+}
+
+/**
+ * Read and apply `.vscode/settings.json` from each workspace root,
+ * merging in declaration order. Later roots override earlier ones —
+ * mirrors VSCode's multi-root precedence (the « primary » root is
+ * read first, secondary roots layer on top).
+ *
+ * - All roots missing the file → clears overrides (silent).
+ * - Parse error on one → that root's settings are skipped + console
+ *   warn ; the others still merge.
+ *
+ * Accepts a single root string for back-compat ; v3.9 callers pass
+ * the full `workspaceRoots` array.
+ */
+export async function applyWorkspaceSettings(rootOrRoots: string | string[] | null): Promise<void> {
+  const roots: string[] = (() => {
+    if (rootOrRoots === null) return [];
+    if (typeof rootOrRoots === 'string') return rootOrRoots ? [rootOrRoots] : [];
+    return rootOrRoots.filter((r) => typeof r === 'string' && r.length > 0);
+  })();
+  if (roots.length === 0) {
     clearWorkspaceOverrides();
     return;
   }
-  const overrides = mapVscodeKeys(parsed as Record<string, unknown>);
-  setWorkspaceOverrides(overrides);
+  let merged: Partial<Settings> = {};
+  for (const root of roots) {
+    const fragment = await readOneRoot(root);
+    merged = { ...merged, ...fragment };
+  }
+  setWorkspaceOverrides(merged);
 }

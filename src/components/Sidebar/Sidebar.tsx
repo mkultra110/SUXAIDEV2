@@ -44,8 +44,11 @@ export interface SidebarProps {
 }
 
 export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps = {}) {
-  const { workspaceRoot, setWorkspaceRoot, openFile, activePath, closeFile, renameFile } =
-    useWorkspace();
+  const {
+    workspaceRoot, workspaceRoots,
+    setWorkspaceRoot, setWorkspaceRoots,
+    openFile, activePath, closeFile, renameFile,
+  } = useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
   const [internalView, setInternalView] = useState<'files' | 'changes'>('files');
   const view = viewProp ?? internalView;
@@ -296,8 +299,34 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
         <SourceControlPanel />
       ) : (
         <div className="sidebar__tree" role="tree">
-          <div className="sidebar__root" title={workspaceRoot}>
-            {workspaceRoot.split(/[\\/]/).filter(Boolean).pop() ?? workspaceRoot}
+          <div
+            className="sidebar__root"
+            title={workspaceRoots.length > 1
+              ? workspaceRoots.join('\n')
+              : workspaceRoot}
+          >
+            <span className="sidebar__root-name">
+              {workspaceRoot.split(/[\\/]/).filter(Boolean).pop() ?? workspaceRoot}
+            </span>
+            {/* v3.9 — Multi-root indicator. Quand 2+ folders sont ouverts,
+                affiche un pill « +N » qui retire le folder primaire au
+                click (tour de rôle parmi les roots). Le tooltip liste
+                tous les paths. La V3.10 fera le tree section-per-root ;
+                pour l'instant le tree montre le root primaire. */}
+            {workspaceRoots.length > 1 && (
+              <button
+                type="button"
+                className="sidebar__root-extra"
+                title={`Cycle to next root (${workspaceRoots.length} folders open)`}
+                onClick={() => {
+                  // Rotate primary : move roots[0] to the end so the
+                  // user cycles through which folder's tree is shown.
+                  setWorkspaceRoots([...workspaceRoots.slice(1), workspaceRoots[0]]);
+                }}
+              >
+                +{workspaceRoots.length - 1}
+              </button>
+            )}
           </div>
           {loading ? (
             <div className="sidebar__empty"><span>Loading…</span></div>

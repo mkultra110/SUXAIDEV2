@@ -12,9 +12,9 @@
 
 ## En cours
 
-_V3.8.0 livrée (live-stream IPC + runTask streaming + agent
-run_command streaming) — voir Revue ci-dessous. Restent : multi-root
-workspaces + Departure Mono ghost text._
+_V3.9.0 livrée (multi-root workspaces — premier cut) — voir Revue
+ci-dessous. Reste V3.10 le multi-tree-rendering visuel + Departure
+Mono ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +99,59 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.9.0 multi-root workspaces (premier cut)
+- **Fait** :
+  - **WorkspaceContext** : ajout de `workspaceRoots: string[]` à
+    `WorkspaceState`. Le legacy `workspaceRoot: string | null` est
+    conservé en alias mirror de `workspaceRoots[0] ?? null`, donc
+    tous les call sites existants (sidebar git, breadcrumbs,
+    settings, etc.) continuent de fonctionner sans changement.
+    Nouvelles API : `setWorkspaceRoots(roots)` (canonical),
+    `addWorkspaceRoot(root)` (idempotent), `removeWorkspaceRoot(root)`.
+    `setWorkspaceRoot(root)` reste exposé en compat = `setRoots([root])`.
+    Dédupe + normalize trailing slash dans tous les setters.
+  - **Persistence** : extension de `PersistedWorkspace` avec
+    `workspaceRoots?: string[]`. Le restore lit `workspaceRoots`
+    en priorité et fall back sur `workspaceRoot` (string singleton)
+    pour les anciennes sessions. Le save écrit toujours les deux
+    (downgrade-safe vers V3.8). Le fingerprint qui drive
+    `savePersisted` inclut désormais le full roots.join('|').
+  - **`applyWorkspaceSettings(rootOrRoots)`** :
+    `lib/workspace-settings.ts` accepte maintenant un `string[]` (ou
+    string single en back-compat). Itère sur chaque root, lit
+    `<root>/.vscode/settings.json` (silencieux si absent / parse
+    error logué + skip), merge en declaration order — les later
+    roots override les earlier (parité VSCode).
+  - **IDELayout** : `applyWorkspaceSettings(workspaceRoots)` au lieu
+    de single root. Re-trigger sur changement du tableau complet.
+  - **Sidebar** : header de root devient un row flex `<name> +
+    <pill +N>`. Le pill apparaît seulement quand `roots.length ≥ 2`
+    et cycle le primary root vers le suivant au click (rotation
+    `[a, b, c] → [b, c, a]` via `setWorkspaceRoots`). Tooltip liste
+    les paths multilignes. Le tree affiché reste celui du primary.
+  - **CommandPalette** :
+    - `Workspace: Add folder…` (additif, ne remplace pas)
+    - `Workspace: Close current folder` renommée
+      `Workspace: Close all folders` quand 2+ roots
+    - `Workspace: Remove folder « <name> »` injecté dynamiquement
+      pour chaque root quand multi-root, avec le full path en hint
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V3.9 (déféré V3.10)** :
+  - **Multi-tree-rendering** : visuellement, V3.9 montre une seule
+    arbre (le primary). Pour aligner sur VSCode (toutes les roots
+    visibles simultanément en sections), il faut extraire un
+    `<RootTree root>` autonome avec son propre tree state +
+    git status + context menu, et faire boucler la Sidebar dessus.
+    Substantial refactor → V3.10.
+  - **Search across roots** : SearchInFiles iterate seulement le
+    primary root pour l'instant. À itérer sur tous + concaténer les
+    hits avec préfixe root.
+  - **Git status par-root** : `useGitStatus(workspaceRoot)` lit
+    seulement le primary. Multi-root nécessiterait `useGitStatusMulti`
+    avec un Map<root, statuses> + render des badges per-root.
+  - **`.code-workspace` save/load** : pas livré, juste l'état runtime.
+  - **Departure Mono ghost text** — pas dispo sur fontsource.
 
 ### 2026-04-28 — V3.8.0 live-stream IPC (chunks chemin OutputPanel)
 - **Fait** :

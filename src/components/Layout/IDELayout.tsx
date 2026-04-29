@@ -213,17 +213,18 @@ export function IDELayout() {
   useEffect(() => {
     persistLayout({ sidebarOpen, aiOpen, sidebarView });
   }, [sidebarOpen, aiOpen, sidebarView]);
-  const { workspaceRoot } = useWorkspace();
+  const { workspaceRoot, workspaceRoots } = useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
   const dirtyCount = Object.keys(gitStatus).length;
 
-  // v2.2 (B6) — Re-read `<root>/.vscode/settings.json` whenever the
-  // workspace root changes. Effective Settings = user localStorage +
-  // these overrides ; the dialog still writes only to user-level so
-  // workspace prefs cannot leak when the folder closes.
+  // v2.2 (B6) → v3.9 — re-read `.vscode/settings.json` from chaque
+  // workspace root et merge en declaration order (les later roots
+  // override les earlier). Effective Settings = user localStorage +
+  // ces overrides ; le dialog écrit toujours user-level, donc
+  // workspace prefs ne fuient pas en localStorage au close.
   useEffect(() => {
-    void applyWorkspaceSettings(workspaceRoot);
-  }, [workspaceRoot]);
+    void applyWorkspaceSettings(workspaceRoots);
+  }, [workspaceRoots]);
   const bodyClass =
     'ide__body' +
     (sidebarOpen ? '' : ' ide__body--no-sidebar') +

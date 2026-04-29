@@ -668,7 +668,9 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
           }
         }
         try {
-          let result;
+          // v3.16.1 — explicit type so the Promise.race below n'infère
+          // pas un union avec `undefined` qui foire le typecheck.
+          let result: { tool_use_id: string; content: string; is_error?: boolean };
           if (isMcpToolName(call.name)) {
             // v0.16.13 — route MCP tool calls through the dedicated
             // executor. The user-approval flow still gates these via
@@ -704,19 +706,40 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
               }
             }
           } else {
-            result = await executeTool(call, {
-              approve: (c, preview) => args.requestApproval(c, preview),
-              workspaceRoot: args.workspaceRoot ?? null,
-              applyLazyEdit: args.applyLazyEdit,
-              pathLocks,
-              notifyEdit: ({ path, added, removed, partial }) => {
-                const name = path.split(/[\\/]/).pop() ?? path;
-                toast.info(
-                  `Edited ${name}`,
-                  `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
-                );
-              },
-            });
+            // v3.16.1 — timeout 5min hard cap par tool call. Backstop
+            // anti-hang : si l'IPC n'a pas son propre timeout (read-dir
+            // depuis 3.16.1 en a un de 8s, run_command a son propre
+            // timeout configurable), un tool malformé peut bloquer le
+            // Promise.all indéfiniment et la conversation tourne en
+            // rond. 5min couvre tous les usages légitimes (build long,
+            // commande shell utilisateur) ; au-delà c'est forcément
+            // pathologique.
+            const TOOL_TIMEOUT_MS = 300_000;
+            result = await Promise.race([
+              executeTool(call, {
+                approve: (c, preview) => args.requestApproval(c, preview),
+                workspaceRoot: args.workspaceRoot ?? null,
+                applyLazyEdit: args.applyLazyEdit,
+                pathLocks,
+                notifyEdit: ({ path, added, removed, partial }) => {
+                  const name = path.split(/[\\/]/).pop() ?? path;
+                  toast.info(
+                    `Edited ${name}`,
+                    `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
+                  );
+                },
+              }),
+              new Promise<{ tool_use_id: string; content: string; is_error?: boolean }>((_, reject) =>
+                setTimeout(
+                  () => reject(new Error(
+                    `Tool ${call.name} timed out after ${TOOL_TIMEOUT_MS / 1000}s — ` +
+                    `the underlying IPC or subprocess didn't respond. Likely a hung file ` +
+                    `system call (network drive, antivirus) or a runaway command.`,
+                  )),
+                  TOOL_TIMEOUT_MS,
+                ),
+              ),
+            ]);
           }
           const status: ToolCallSnapshot['status'] = result.is_error
             ? 'error'

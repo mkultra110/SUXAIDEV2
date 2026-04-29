@@ -12,8 +12,8 @@
 
 ## En cours
 
-_V3.16.0 livrée (Zen mode Cmd+K Z + theme switcher live) — voir
-Revue ci-dessous._
+_V3.16.1 hotfix livré (timeout IPC fs:read-dir + tool exec timeout
+5min). Cf leçon V8._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +98,24 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.16.1 hotfix tool RUNNING infini (timeout IPC + exec)
+- **Symptôme remonté par l'user** (screenshot) : agent loop sur
+  Windows. 4 list_dir lancés en parallèle, tous RUNNING, jamais
+  résolus. Conversation re-emit la même réponse en boucle.
+- **Fix 1** : `fs:read-dir` (electron/main.ts) wrap `fs.readdir` dans
+  un `Promise.race` avec timeout 8 s. Si le syscall hang
+  (antivirus, drive réseau, perms), reject explicite avec un message
+  descriptif. Le renderer reçoit l'erreur, marque le tool en
+  `error`, et le model peut adapter.
+- **Fix 2** : dans `runAgentLoop` (AIPanel.tsx), chaque `executeTool`
+  est wrappé dans un `Promise.race` avec timeout 5 min comme
+  backstop défensif. Couvre tous les usages légitimes (build long,
+  shell user) ; au-delà c'est forcément pathologique. Sans ce
+  backstop, un IPC qui oublierait son propre timeout bloquerait le
+  `Promise.all` du loop indéfiniment.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Leçon V8** ajoutée dans `tâches/leçons.md`.
 
 ### 2026-04-28 — V3.16.0 Zen mode + theme switcher live
 - **Fait** :

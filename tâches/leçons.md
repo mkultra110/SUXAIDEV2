@@ -161,6 +161,36 @@ _(à remplir au fur et à mesure)_
   Mettre à jour à chaque commit. Permet `cat refactor-progress.md
   → continue` après reset propre.
 
+### V8 — Tool stuck en RUNNING quand l'IPC main hang silencieusement
+- **Symptôme** : agent emit 4 list_dir parallèles, tous restent
+  `status: 'running'` indéfiniment. La conversation re-emit la même
+  réponse (« Oui, je peux lire ton projet… » + 4 list_dir) en
+  boucle parce que le V3.14 fix drop le message assistant incomplet
+  → le model voit un historique propre → re-stratégise → re-emit le
+  même tool. Boucle infinie visible côté user (deux messages
+  identiques empilés, 8 tools tous RUNNING).
+- **Cause** : `fs.readdir` (Node) sur Windows peut hanger
+  indéfiniment sans throw — antivirus qui scanne le dossier ciblé,
+  drive réseau, dossier sans permissions, ou un cas pathologique
+  d'enumeration. Le syscall reste bloqué côté OS, le `await` JS
+  ne résout jamais, le tool côté agent reste RUNNING. Le
+  `Promise.all` du loop ne peut pas avancer.
+- **Règle 1 (IPC level)** : tout IPC handler qui appelle un syscall
+  potentiellement bloquant (readdir, readFile, stat sur drive
+  réseau, exec subprocess) doit avoir un `Promise.race` contre un
+  timeout explicite. Pour `fs:read-dir`, 8s suffit largement (un
+  dossier local prend < 100 ms).
+- **Règle 2 (Tool level)** : dans le loop agent, wrap chaque
+  `executeTool` dans un `Promise.race` avec un timeout cap
+  pathologique (ex. 5 min). Backstop défensif : si un IPC oublie
+  son timeout, le loop ne hang pas sur Promise.all.
+- **Lien V3.14** : le hotfix V3.14 « drop assistant message si
+  pending tools » corrige le 400 prefill MAIS masque ce bug-ci en
+  boucle silencieuse. Les deux fixes sont nécessaires : V3.14
+  protège contre les races mid-stream, V3.16.1 protège contre les
+  IPC stuck. Cf. main.ts fs:read-dir + AIPanel.tsx executeTool
+  Promise.race commit v3.16.1.
+
 ### V7 — Trailing assistant message → upstream 400 « assistant prefill »
 - **Symptôme** : pendant un tool call agent (ex. `read_file`) sur un
   fichier lent ou avec une race avec un nouveau streamAi, l'upstream

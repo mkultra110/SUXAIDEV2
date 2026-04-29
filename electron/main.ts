@@ -638,10 +638,25 @@ function registerIpc() {
     // FS_DENY-listed directory. mustExist:true guarantees we don't
     // 404-leak by reflecting the input path on a non-existent target.
     const safe = sanitizeFsPath(dirPath, { mustExist: true });
-    const entries = await fs.readdir(safe, { withFileTypes: true });
+    // v3.16.1 — timeout 8s. Sur Windows, antivirus + drives réseau +
+    // dossiers sans perms peuvent faire hanger fs.readdir indéfiniment
+    // (le syscall reste bloqué côté OS sans throw). Sans cap, le tool
+    // côté agent reste « RUNNING » forever et la conversation tourne
+    // en rond. Promise.race avec un timeout qui throw une erreur
+    // explicite — le renderer reçoit l'erreur, marque le tool en
+    // « error » et le model peut adapter sa stratégie.
+    const READDIR_TIMEOUT_MS = 8_000;
+    const readdirP = fs.readdir(safe, { withFileTypes: true });
+    const timeoutP = new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`fs:read-dir timed out after ${READDIR_TIMEOUT_MS}ms (${safe})`)),
+        READDIR_TIMEOUT_MS,
+      ).unref(),
+    );
+    const entries = await Promise.race([readdirP, timeoutP]);
     return entries.map((e) => ({
       name: e.name,
-      path: path.join(safe, e.name),
+      path: path.join(safe, String(e.name)),
       isDirectory: e.isDirectory(),
     }));
   });

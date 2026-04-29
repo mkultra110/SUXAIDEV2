@@ -12,6 +12,7 @@ import {
   serializeCodeWorkspace,
   makeCodeWorkspace,
 } from '../../lib/code-workspace';
+import { setColorTheme, toggleColorTheme } from '../../lib/theme';
 import './CommandPalette.css';
 
 interface Command {
@@ -311,6 +312,42 @@ export function CommandPalette() {
         group: 'Workspace',
         run: () => {
           window.dispatchEvent(new CustomEvent('suxai:open-output'));
+        },
+      },
+      {
+        id: 'view.toggle-zen',
+        label: 'View: Toggle Zen Mode',
+        hint: 'Ctrl+K Z',
+        group: 'Workspace',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:toggle-zen-mode'));
+        },
+      },
+      {
+        id: 'theme.dark',
+        label: 'Preferences: Color Theme — Atelier Dark',
+        group: 'Account',
+        run: () => {
+          setColorTheme('dark');
+          toast.info('Theme', 'Atelier Dark activated');
+        },
+      },
+      {
+        id: 'theme.light',
+        label: 'Preferences: Color Theme — Atelier Light',
+        group: 'Account',
+        run: () => {
+          setColorTheme('light');
+          toast.info('Theme', 'Atelier Light activated');
+        },
+      },
+      {
+        id: 'theme.toggle',
+        label: 'Preferences: Toggle Light/Dark',
+        group: 'Account',
+        run: () => {
+          const next = toggleColorTheme();
+          toast.info('Theme', next === 'light' ? 'Atelier Light activated' : 'Atelier Dark activated');
         },
       },
       {

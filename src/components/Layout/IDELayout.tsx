@@ -209,6 +209,12 @@ export function IDELayout() {
   const [problemsOpen, setProblemsOpen] = useState(false);
   // v3.6 — Output panel toggle (Cmd/Ctrl+Shift+U, parité VSCode A7).
   const [outputOpen, setOutputOpen] = useState(false);
+  // v3.16 — Zen mode (parité VSCode Cmd+K Z). Quand on, hide
+  // ActivityBar / Sidebar / AIPanel / Terminal / Problems / Output
+  // pour ne laisser QUE l'éditeur. La TitleBar + StatusBar restent
+  // visibles (perdre la titlebar fait disparaître les window
+  // controls — gênant). Cmd+K Z pour toggle, Esc pour exit.
+  const [zenMode, setZenMode] = useState(false);
   // Cmd/Ctrl+Shift+M (Problems) + Cmd/Ctrl+Shift+U (Output) global hotkeys.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -231,6 +237,42 @@ export function IDELayout() {
     window.addEventListener('suxai:open-output', handler);
     return () => window.removeEventListener('suxai:open-output', handler);
   }, []);
+
+  // v3.16 — Cmd+K Z (zen mode chord) + Esc to exit. Pattern chord :
+  // après un Cmd+K dans une fenêtre courte (1500 ms), un Z suivant
+  // toggle zen mode. Aussi écoute `suxai:toggle-zen-mode` event pour
+  // que la palette puisse trigger via une commande.
+  useEffect(() => {
+    let chordPending = 0;
+    const onKey = (e: KeyboardEvent) => {
+      if (chordPending > 0 && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault();
+        chordPending = 0;
+        setZenMode((z) => !z);
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K') && !e.shiftKey && !e.altKey) {
+        // Cmd+K solo : start chord. Note that EditorPanel a son propre
+        // Cmd+K listener pour l'inline edit ; il ne preventDefault pas
+        // ici, donc le suivant reste possible. Si l'utilisateur tape
+        // Cmd+K Z avec curseur dans Monaco, le K sera consommé par
+        // l'inline-edit dialog — fenêtre Z se ferme à 1500 ms.
+        chordPending = window.setTimeout(() => { chordPending = 0; }, 1500);
+        return;
+      }
+      if (zenMode && e.key === 'Escape') {
+        e.preventDefault();
+        setZenMode(false);
+      }
+    };
+    const onZenEvent = () => setZenMode((z) => !z);
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('suxai:toggle-zen-mode', onZenEvent);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('suxai:toggle-zen-mode', onZenEvent);
+    };
+  }, [zenMode]);
   const initialLayout = loadLayout();
   const [sidebarOpen, setSidebarOpen] = useState(initialLayout.sidebarOpen);
   const [aiOpen, setAiOpen] = useState(initialLayout.aiOpen);
@@ -279,7 +321,7 @@ export function IDELayout() {
     (sidebarOpen ? '' : ' ide__body--no-sidebar') +
     (aiOpen ? '' : ' ide__body--no-ai');
   return (
-    <div className="ide">
+    <div className={`ide${zenMode ? ' ide--zen' : ''}`}>
       <WorkspaceHotkeys />
       <WindowState />
       <TerminalHotkey onToggle={() => setTerminalOpen((o) => !o)} />

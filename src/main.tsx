@@ -24,9 +24,15 @@ import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
 
 import { App } from './App';
 import { startAllDiagnosticsStream } from './lib/all-diagnostics';
+import { bootColorTheme } from './lib/theme';
 import './styles/theme.css';
 import './styles/globals.css';
 import './styles/grain.css';
+
+// v3.16 — restaure le mode dark/light persisté AVANT que React mount
+// pour que la première peinture ait déjà la bonne palette (pas de
+// flash dark→light au boot).
+bootColorTheme();
 
 // v2.1 — boot the cross-file Monaco markers stream once. The Problems
 // panel + status-bar counters subscribe via `useAllDiagnostics()`. Idempotent.

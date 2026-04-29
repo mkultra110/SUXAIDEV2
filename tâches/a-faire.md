@@ -12,8 +12,8 @@
 
 ## En cours
 
-_V3.15.0 livrée (ghost text styling + TitleBar chip cliquable +
-Ctrl+Shift+E/G sidebar focus) — voir Revue ci-dessous._
+_V3.16.0 livrée (Zen mode Cmd+K Z + theme switcher live) — voir
+Revue ci-dessous._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +98,31 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.16.0 Zen mode + theme switcher live
+- **Fait** :
+  - **`lib/theme.ts`** : nouveau module qui pilote `data-theme`
+    sur `<html>`, persiste dans `localStorage['suxai.theme.v1']`
+    et broadcast via event `suxai:theme-changed`. API :
+    `setColorTheme(mode)`, `toggleColorTheme()`, `currentColorTheme()`,
+    `bootColorTheme()` (à appeler avant React mount, fait dans
+    `main.tsx` — pas de flash dark→light au boot).
+  - **EditorPanel** : nouveau listener `suxai:theme-changed` qui
+    re-call `monaco.editor.setTheme(suxaiThemeForMode(mode))` sur
+    chaque toggle. Sans ça, le `data-theme` flippait seulement les
+    surfaces React/CSS et l'éditeur restait dans son thème initial.
+  - **Zen mode** : nouveau state `zenMode` dans IDELayout +
+    chord clavier Cmd/Ctrl+K → Z (fenêtre 1500 ms après le K), Esc
+    pour exit. Class root `ide--zen` qui hide ActivityBar /
+    Sidebar / AIPanel / Terminal / Problems / Output / StatusBar
+    via `display: none` (TitleBar reste visible pour garder les
+    window controls). Anim fade-collapse smooth.
+  - **CommandPalette** : 4 nouvelles entrées :
+    - `View: Toggle Zen Mode` (Ctrl+K Z)
+    - `Preferences: Color Theme — Atelier Dark`
+    - `Preferences: Color Theme — Atelier Light`
+    - `Preferences: Toggle Light/Dark`
+- **Validation** : `npm run typecheck` + `npm run build` OK.
 
 ### 2026-04-28 — V3.15.0 polish UX (ghost text + TitleBar click + sidebar focus)
 - **Fait** :

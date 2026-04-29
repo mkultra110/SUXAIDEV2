@@ -647,6 +647,19 @@ export function EditorPanel() {
       const initialMode =
         document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
       monaco.editor.setTheme(suxaiThemeForMode(initialMode));
+      // v3.16 — re-set Monaco theme à chaque toggle dark/light dispatched
+      // par lib/theme.ts. Sans ça, le `data-theme` flippe seulement les
+      // surfaces React/CSS, l'éditeur reste dans son thème initial.
+      const themeListener = (e: Event) => {
+        const detail = (e as CustomEvent<'dark' | 'light'>).detail;
+        if (detail === 'dark' || detail === 'light') {
+          monaco.editor.setTheme(suxaiThemeForMode(detail));
+        }
+      };
+      window.addEventListener('suxai:theme-changed', themeListener);
+      editor.onDidDispose(() => {
+        window.removeEventListener('suxai:theme-changed', themeListener);
+      });
 
       // Cmd+S inside Monaco is unbound by default but some bundles
       // claim it for "format". We register a no-op so Monaco never

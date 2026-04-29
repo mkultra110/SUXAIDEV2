@@ -57,3 +57,27 @@
     minmax(0, 1fr)
     0;
 }
+
+/* v3.16 — Zen mode (Cmd+K Z, parité VSCode). Cache toutes les
+   surfaces non-éditeur (ActivityBar, Sidebar, AIPanel, Terminal,
+   Problems, Output, StatusBar) pour ne laisser que l'éditeur seul.
+   La TitleBar reste visible pour garder les window controls
+   accessibles (sans elle, sur Windows/Linux on perd close/min/max).
+   Animation : fade-collapse au lieu d'un display:none brutal. */
+.ide--zen .actbar,
+.ide--zen .sidebar,
+.ide--zen .ai,
+.ide--zen .termpanel,
+.ide--zen .problems,
+.ide--zen .output,
+.ide--zen .statusbar {
+  display: none !important;
+}
+.ide--zen .ide__body {
+  grid-template-columns: 1fr !important;
+}
+.ide--zen .editor {
+  /* Element width grows to fill freed space ; smooth-ish even sans
+     animation explicite parce que le grid se re-layout instantanément. */
+  animation: suxai-fade-in-soft var(--dur-medium) var(--ease-out-expo);
+}

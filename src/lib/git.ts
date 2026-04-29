@@ -157,6 +157,57 @@ export function useGitStatus(workspaceRoot: string | null): Record<string, GitSt
   return statuses;
 }
 
+/** v3.11 — multi-root variant. Returns a single merged map across
+ *  all roots (later roots override earlier ones on path collision —
+ *  rare since absolute paths normalise per-root). Re-fetches per
+ *  root individually so removing a root only invalidates its slice.
+ *  Subscribes to `suxai:git-refresh` (with optional cwd-targeted
+ *  payload). */
+export function useGitStatusMulti(workspaceRoots: string[]): Record<string, GitStatusCode> {
+  const [merged, setMerged] = useState<Record<string, GitStatusCode>>({});
+
+  // Stable join-key so the deps array doesn't churn on identical
+  // arrays passed by reference each render.
+  const rootsKey = workspaceRoots.join('|');
+
+  useEffect(() => {
+    if (workspaceRoots.length === 0) {
+      setMerged({});
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      const slices = await Promise.all(
+        workspaceRoots.map(async (root) => {
+          const entry = await fetchStatus(root);
+          return entry.statuses;
+        }),
+      );
+      if (cancelled) return;
+      const next: Record<string, GitStatusCode> = {};
+      for (const slice of slices) Object.assign(next, slice);
+      setMerged(next);
+    };
+    void load();
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string | null>).detail;
+      // Refresh if the broadcast targets one of OUR roots, or all roots.
+      if (detail === null || workspaceRoots.includes(detail)) {
+        for (const root of workspaceRoots) cache.delete(root);
+        void load();
+      }
+    };
+    window.addEventListener(REFRESH_EVENT, handler);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(REFRESH_EVENT, handler);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootsKey]);
+
+  return merged;
+}
+
 /** v0.16.0 — richer hook for the Source Control panel : returns
  *  the same statuses map PLUS the per-path XY detail and the repo
  *  root so we can bucket Staged / Unstaged / Untracked / Conflicts

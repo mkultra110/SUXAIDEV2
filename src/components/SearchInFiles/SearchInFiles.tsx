@@ -8,6 +8,10 @@ interface Hit {
   path: string;
   line: number;
   text: string;
+  /** v3.11 — workspace root that produced the hit. Lets the
+   *  grouping compute the right relative path even when multiple
+   *  roots are open simultaneously. */
+  _root?: string;
 }
 
 type GroupedHits = { path: string; rel: string; hits: Hit[] };
@@ -15,7 +19,7 @@ type GroupedHits = { path: string; rel: string; hits: Hit[] };
 const DEBOUNCE_MS = 300;
 
 export function SearchInFiles() {
-  const { workspaceRoot, openFile } = useWorkspace();
+  const { workspaceRoot, workspaceRoots, openFile } = useWorkspace();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -66,10 +70,15 @@ export function SearchInFiles() {
     return () => clearTimeout(t);
   }, [query]);
 
-  // Run search on debounced query change.
+  // v3.11 — Run search across ALL workspace roots in parallel,
+  // tagging each hit with its source root so the grouping below
+  // can compute the right relative path. Errors per-root are
+  // surfaced as a synthesised error message but don't block the
+  // other roots from showing their hits.
+  const rootsKey = workspaceRoots.join('|');
   useEffect(() => {
     if (!open) return;
-    if (!workspaceRoot) {
+    if (workspaceRoots.length === 0) {
       setHits([]);
       setErrorMsg(null);
       return;
@@ -84,52 +93,72 @@ export function SearchInFiles() {
     const reqId = ++reqIdRef.current;
     setLoading(true);
     setErrorMsg(null);
-    // Pattern: literal substring by default — escape regex metachars
-    // unless the user explicitly enabled regex mode.
     const pattern = regex ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    window.suxai.search
-      .grep({
-        pattern,
-        cwd: workspaceRoot,
-        max_results: 200,
-        case_sensitive: caseSensitive,
-        glob: glob.trim() || undefined,
-      })
-      .then((res) => {
+    // Per-root cap so a single huge folder doesn't starve others.
+    const perRootCap = Math.max(20, Math.floor(200 / workspaceRoots.length));
+    Promise.all(
+      workspaceRoots.map((root) =>
+        window.suxai.search
+          .grep({
+            pattern,
+            cwd: root,
+            max_results: perRootCap,
+            case_sensitive: caseSensitive,
+            glob: glob.trim() || undefined,
+          })
+          .then((res) => ({ root, res }))
+          .catch((err: unknown) => ({
+            root,
+            res: { hits: [], error: (err as Error).message ?? 'Search failed' },
+          })),
+      ),
+    )
+      .then((results) => {
         if (reqId !== reqIdRef.current) return;
-        if (res.error) {
-          setErrorMsg(res.error);
-          setHits([]);
-        } else {
-          setHits(res.hits ?? []);
-          setErrorMsg(null);
+        const merged: Hit[] = [];
+        const errs: string[] = [];
+        for (const { root, res } of results) {
+          if (res.error) {
+            errs.push(`${root.split(/[\\/]/).filter(Boolean).pop() ?? root}: ${res.error}`);
+            continue;
+          }
+          for (const h of res.hits ?? []) {
+            merged.push({ ...h, _root: root });
+          }
         }
-      })
-      .catch((err: unknown) => {
-        if (reqId !== reqIdRef.current) return;
-        setErrorMsg((err as Error).message ?? 'Search failed');
-        setHits([]);
+        setHits(merged);
+        setErrorMsg(errs.length > 0 ? errs.join(' · ') : null);
       })
       .finally(() => {
         if (reqId === reqIdRef.current) setLoading(false);
       });
-  }, [open, debounced, workspaceRoot, caseSensitive, regex, glob]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, debounced, rootsKey, caseSensitive, regex, glob]);
 
   // Reset cursor whenever the visible list changes.
   useEffect(() => {
     setCursor(0);
   }, [hits]);
 
+  // v3.11 — multi-root grouping. Each hit knows its source root via
+  // `_root`. When there are multiple roots, the rel path gets a root
+  // prefix ("project-a/src/foo.ts") so the user can tell where a
+  // result is coming from. Single root keeps the bare relative path.
+  const showRootPrefix = workspaceRoots.length > 1;
   const grouped = useMemo<GroupedHits[]>(() => {
-    if (!workspaceRoot) return [];
+    if (workspaceRoots.length === 0) return [];
     const map = new Map<string, GroupedHits>();
     for (const h of hits) {
+      const root = h._root ?? workspaceRoot ?? '';
+      if (!root) continue;
       const abs = h.path.startsWith('/') || /^[a-zA-Z]:/.test(h.path)
         ? h.path
-        : workspaceRoot.replace(/[\\/]+$/, '') + '/' + h.path;
-      const rel = abs.startsWith(workspaceRoot)
-        ? abs.slice(workspaceRoot.length).replace(/^[\\/]+/, '')
+        : root.replace(/[\\/]+$/, '') + '/' + h.path;
+      const rootName = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+      const inside = abs.startsWith(root)
+        ? abs.slice(root.length).replace(/^[\\/]+/, '')
         : abs;
+      const rel = showRootPrefix ? `${rootName}/${inside}` : inside;
       const existing = map.get(abs);
       if (existing) {
         existing.hits.push({ ...h, path: abs });
@@ -138,7 +167,7 @@ export function SearchInFiles() {
       }
     }
     return Array.from(map.values());
-  }, [hits, workspaceRoot]);
+  }, [hits, workspaceRoot, workspaceRoots, showRootPrefix]);
 
   // Flatten back out for keyboard navigation. Each entry knows its
   // group + index-in-group so we can render headers inline.
@@ -206,13 +235,19 @@ export function SearchInFiles() {
           <input
             ref={inputRef}
             className="sif__input"
-            placeholder={workspaceRoot ? 'Search in files…' : 'Open a folder first'}
+            placeholder={
+              workspaceRoots.length === 0
+                ? 'Open a folder first'
+                : workspaceRoots.length > 1
+                  ? `Search in ${workspaceRoots.length} folders…`
+                  : 'Search in files…'
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onKey}
             autoComplete="off"
             spellCheck={false}
-            disabled={!workspaceRoot}
+            disabled={workspaceRoots.length === 0}
           />
           <div className="sif__toggles" role="group" aria-label="Search options">
             <button
@@ -247,7 +282,7 @@ export function SearchInFiles() {
           </span>
         </div>
         <div className="sif__list">
-          {!workspaceRoot ? (
+          {workspaceRoots.length === 0 ? (
             <div className="sif__empty">No workspace open — use File › Open folder.</div>
           ) : errorMsg ? (
             <div className="sif__empty sif__empty--error">{errorMsg}</div>

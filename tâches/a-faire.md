@@ -12,9 +12,9 @@
 
 ## En cours
 
-_V3.10.0 livrée (multi-tree visuel + Add folder CTA) — voir Revue
-ci-dessous. Restent : git status par-root, search across roots,
-`.code-workspace` save/load, Departure Mono ghost text._
+_V3.11.0 livrée (search across roots + git status agrégé) — voir
+Revue ci-dessous. Restent : `.code-workspace` save/load, Departure
+Mono ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +99,34 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.11.0 search across roots + git status agrégé
+- **Fait** :
+  - **`useGitStatusMulti(roots[])`** (lib/git.ts) : nouveau hook
+    qui prend la liste des roots, fetche `fetchStatus` per root en
+    parallèle (Promise.all), merge les maps `path → code` en un
+    seul snapshot. Subscribe à `suxai:git-refresh` et reload toutes
+    les roots ciblées (la slice de chaque root est invalidée du
+    cache module avant le re-fetch). RootsKey join-string en deps
+    pour éviter les re-runs sur reference inégalité.
+  - **Sidebar header dirtyCount** : passe à `useGitStatusMulti(
+    workspaceRoots)` au lieu de `useGitStatus(workspaceRoot)`. Le
+    badge SC du header représente désormais la totalité des dirty
+    files cross-roots.
+  - **SearchInFiles multi-root** : la grep IPC est appelée en
+    parallèle sur chaque root (`Promise.all`) avec un cap par root
+    de `floor(200/N)` (≥20). Chaque hit reçoit un tag interne
+    `_root` qui sert dans le grouping pour calculer le bon abs +
+    rel path. Errors par-root sont synthésisées en un message
+    inline (`folder1: msg · folder2: msg`) sans bloquer les autres.
+  - **Display** : quand 2+ roots ouverts, le rel path préfixe le
+    root name (« project-a/src/foo.ts »). Single root reste
+    inchangé. Placeholder input devient « Search in N folders… ».
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V3.11 (déféré V3.12)** :
+  - `.code-workspace` save/load (export/import multi-root config
+    en JSON file)
+  - Departure Mono ghost text (pas dispo sur fontsource)
 
 ### 2026-04-28 — V3.10.0 multi-tree visuel (RootTree autonome)
 - **Fait** :

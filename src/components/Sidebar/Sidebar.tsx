@@ -3,7 +3,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { Button } from '../ui/Button';
 import { ContextMenu, type MenuItem } from '../ui/ContextMenu';
 import { useToast } from '../ui/Toast';
-import { useGitStatus, normalizeGitPath, type GitStatusCode } from '../../lib/git';
+import { useGitStatus, useGitStatusMulti, normalizeGitPath, type GitStatusCode } from '../../lib/git';
 import {
   setSelectedForCompare,
   getSelectedForCompare,
@@ -45,18 +45,19 @@ export interface SidebarProps {
 
 export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps = {}) {
   const {
-    workspaceRoot, workspaceRoots,
+    workspaceRoots,
     setWorkspaceRoot, addWorkspaceRoot,
     openFile, activePath, closeFile, renameFile,
   } = useWorkspace();
-  // v3.10 — tous les RootTree consultent leur propre useGitStatus(root) ;
-  // ici on agrège le dirtyCount du primary pour le badge SC dans le header.
-  // Idéalement on sommerait toutes les roots ; déféré.
-  const primaryGitStatus = useGitStatus(workspaceRoot);
+  // v3.11 — agrège le git status de tous les workspace roots pour le
+  // badge du SC icon dans le header. Le hook fetche par root puis
+  // merge ; un suxai:git-refresh ciblé sur une seule root invalide
+  // sa slice et reload elle seule.
+  const aggregatedStatus = useGitStatusMulti(workspaceRoots);
   const [internalView, setInternalView] = useState<'files' | 'changes'>('files');
   const view = viewProp ?? internalView;
   const setView = setViewProp ?? setInternalView;
-  const dirtyCount = Object.keys(primaryGitStatus).length;
+  const dirtyCount = Object.keys(aggregatedStatus).length;
   const [menu, setMenu] = useState<{ x: number; y: number; entry: TreeEntry } | null>(null);
   const toast = useToast();
 

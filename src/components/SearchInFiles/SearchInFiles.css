@@ -199,3 +199,53 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* v3.17 — Replace mode (Cmd+Shift+H, parité VSCode). */
+.sif__bar--replace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 6px;
+}
+.sif__input--replace {
+  flex: 1;
+  height: 30px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color var(--dur-quick) var(--ease-standard);
+}
+.sif__input--replace:focus {
+  border-color: var(--color-accent);
+}
+.sif__input--replace:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sif__replace-all {
+  flex-shrink: 0;
+  padding: 0 12px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border: 1px solid var(--color-accent);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-standard),
+              filter var(--dur-quick) var(--ease-standard);
+}
+.sif__replace-all:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+.sif__replace-all:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

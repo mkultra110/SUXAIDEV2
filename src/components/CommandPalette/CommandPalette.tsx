@@ -213,6 +213,28 @@ export function CommandPalette() {
         },
       },
       {
+        id: 'editor.replace-in-files',
+        label: 'Edit: Replace in Files…',
+        hint: 'Ctrl+Shift+H',
+        group: 'Editor',
+        run: () => {
+          // Synthesize Ctrl+Shift+H so the SearchInFiles modal owner
+          // (its own keydown handler) opens with replace mode on.
+          const isMac =
+            typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+          window.dispatchEvent(
+            new KeyboardEvent('keydown', {
+              key: 'H',
+              code: 'KeyH',
+              ctrlKey: !isMac,
+              metaKey: isMac,
+              shiftKey: true,
+              bubbles: true,
+            }),
+          );
+        },
+      },
+      {
         id: 'workspace.close',
         label: workspaceRoots.length > 1
           ? 'Workspace: Close all folders'

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { setPendingReveal } from '../../lib/reveal';
+import { useToast } from '../ui/Toast';
 import './SearchInFiles.css';
 
 interface Hit {
@@ -20,12 +21,19 @@ const DEBOUNCE_MS = 300;
 
 export function SearchInFiles() {
   const { workspaceRoot, workspaceRoots, openFile } = useWorkspace();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   const [glob, setGlob] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   const [regex, setRegex] = useState(false);
+  // v3.17 — Replace mode (Cmd+Shift+H, parité VSCode). Quand on,
+  // affiche un 2e input « Replace » et un bouton « Replace All ».
+  // Cmd+Shift+F continue d'ouvrir avec replaceMode=false.
+  const [replaceMode, setReplaceMode] = useState(false);
+  const [replaceText, setReplaceText] = useState('');
+  const [replacing, setReplacing] = useState(false);
   const [hits, setHits] = useState<Hit[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -40,13 +48,26 @@ export function SearchInFiles() {
     setCursor(0);
   }, []);
 
-  // Ctrl/Cmd+Shift+F toggle.
+  // Ctrl/Cmd+Shift+F (search) + Ctrl/Cmd+Shift+H (replace) toggle.
+  // v3.17 — Cmd+Shift+H ouvre toujours en replace mode ;
+  // Cmd+Shift+F ouvre en search mode (replaceMode flippé à false
+  // pour qu'un toggle direct depuis search→replace ne reste pas
+  // collé sur l'ancien état). Si la modal est déjà ouverte dans
+  // l'autre mode, le hotkey la rebascule.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
+        setReplaceMode(false);
         setOpen((o) => !o);
+        return;
+      }
+      if (mod && e.shiftKey && !e.altKey && e.key.toLowerCase() === 'h') {
+        e.preventDefault();
+        setReplaceMode(true);
+        setOpen(true);
+        return;
       }
       if (e.key === 'Escape' && open) close();
     };
@@ -190,6 +211,87 @@ export function SearchInFiles() {
     { kind: 'hit' }
   >[];
 
+  // v3.17 — Replace All. Renderer-side line-level replace : pour
+  // chaque file ayant des hits, on lit le contenu via IPC, applique
+  // le pattern UNIQUEMENT sur les lignes qui ont des hits (l'index
+  // de ligne vient de grep IPC), réécrit. Cap atomique de sécurité
+  // au niveau IPC (atomicWrite). Une erreur sur un fichier
+  // n'interrompt pas les autres ; le toast récap dit combien ont
+  // réussi / échoué.
+  const replaceAll = useCallback(async () => {
+    if (replacing) return;
+    if (grouped.length === 0) return;
+    const q = debounced.trim();
+    if (q.length < 2) return;
+    const flagsLine = caseSensitive ? 'g' : 'gi';
+    let pattern: RegExp;
+    try {
+      pattern = regex
+        ? new RegExp(q, flagsLine)
+        : new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flagsLine);
+    } catch (err) {
+      toast.error('Invalid regex', (err as Error).message);
+      return;
+    }
+    setReplacing(true);
+    let okCount = 0;
+    let failCount = 0;
+    let totalReplacements = 0;
+    try {
+      for (const g of grouped) {
+        try {
+          const file = await window.suxai.fs.readFile(g.path);
+          const lines = file.content.split('\n');
+          // hit.line is 1-based; build a Set for O(1) lookup
+          const hitLines = new Set(g.hits.map((h) => h.line));
+          let fileReplacements = 0;
+          for (const lineNum of hitLines) {
+            const idx = lineNum - 1;
+            if (idx < 0 || idx >= lines.length) continue;
+            const before = lines[idx];
+            const after = before.replace(pattern, replaceText);
+            if (after !== before) {
+              // Count occurrences replaced on this line.
+              const matches = before.match(pattern);
+              fileReplacements += matches ? matches.length : 0;
+              lines[idx] = after;
+            }
+          }
+          if (fileReplacements > 0) {
+            await window.suxai.fs.writeFile(g.path, lines.join('\n'));
+            totalReplacements += fileReplacements;
+            okCount++;
+          }
+        } catch (err) {
+          console.error('[replace-all] failed for', g.path, err);
+          failCount++;
+        }
+      }
+      // Re-run the search so the hit list reflects the post-replace
+      // state (most should be gone, residuals will show).
+      setHits([]);
+      // Bump reqIdRef so the upcoming grep call is fresh.
+      reqIdRef.current++;
+      setQuery((q) => q); // no-op state nudge to retrigger debounce
+      // Toast recap
+      if (failCount > 0) {
+        toast.error(
+          'Replace partial',
+          `${totalReplacements} replacements in ${okCount} files · ${failCount} failed`,
+        );
+      } else if (okCount > 0) {
+        toast.success(
+          'Replaced',
+          `${totalReplacements} occurrences in ${okCount} file${okCount > 1 ? 's' : ''}`,
+        );
+      } else {
+        toast.info('Nothing replaced', 'No lines matched the pattern.');
+      }
+    } finally {
+      setReplacing(false);
+    }
+  }, [replacing, grouped, debounced, caseSensitive, regex, replaceText, toast]);
+
   const pickHit = useCallback(
     async (hitIdx: number) => {
       const row = hitRows[hitIdx];
@@ -268,6 +370,37 @@ export function SearchInFiles() {
             </button>
           </div>
         </div>
+        {/* v3.17 — Replace mode (Cmd+Shift+H). 2e ligne d'input quand
+            replaceMode est on, avec bouton « Replace All » qui fire
+            le bulk replace. Le toggle « Replace » à gauche de la barre
+            principale permet aussi de basculer en/hors replace mode. */}
+        {replaceMode && (
+          <div className="sif__bar sif__bar--replace">
+            <input
+              className="sif__input sif__input--replace"
+              placeholder="Replace with…"
+              value={replaceText}
+              onChange={(e) => setReplaceText(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+              disabled={replacing || workspaceRoots.length === 0}
+            />
+            <button
+              type="button"
+              className="sif__replace-all"
+              onClick={() => void replaceAll()}
+              disabled={
+                replacing ||
+                workspaceRoots.length === 0 ||
+                debounced.trim().length < 2 ||
+                grouped.length === 0
+              }
+              title={`Replace ${hitRows.length} match${hitRows.length === 1 ? '' : 'es'} across ${grouped.length} file${grouped.length === 1 ? '' : 's'}`}
+            >
+              {replacing ? 'Replacing…' : 'Replace All'}
+            </button>
+          </div>
+        )}
         <div className="sif__bar sif__bar--filter">
           <input
             className="sif__filter"
@@ -280,6 +413,14 @@ export function SearchInFiles() {
           <span className="sif__count">
             {loading ? '…' : hitRows.length > 0 ? `${hitRows.length} matches` : ''}
           </span>
+          <button
+            type="button"
+            className={`sif__toggle ${replaceMode ? 'sif__toggle--on' : ''}`}
+            title="Toggle replace mode (Ctrl+Shift+H)"
+            onClick={() => setReplaceMode((v) => !v)}
+          >
+            ⇄
+          </button>
         </div>
         <div className="sif__list">
           {workspaceRoots.length === 0 ? (

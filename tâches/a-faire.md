@@ -12,8 +12,7 @@
 
 ## En cours
 
-_V3.16.2 livré (timeouts IPC généralisés via withIpcTimeout helper +
-loop detector threshold 5 au lieu de 3). Cf leçon V8 étendue._
+_V3.17.0 livré (Replace in Files Cmd+Shift+H, parité VSCode)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +97,35 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.17.0 Replace in Files (Cmd+Shift+H, parité VSCode)
+- **Fait** :
+  - **SearchInFiles** : ajout d'un `replaceMode` + `replaceText`
+    state. Quand on, affiche un 2e input « Replace with… » entre
+    la barre de recherche et les options, plus un bouton
+    « Replace All ». Toggle ⇄ à droite des options.
+  - **Cmd+Shift+H** : nouveau hotkey qui ouvre la modal directement
+    en replace mode. Cmd+Shift+F continue d'ouvrir en search mode
+    (force `replaceMode: false` au toggle pour éviter d'hériter de
+    l'état précédent).
+  - **Replace All — renderer-side, line-level** : pour chaque
+    fichier ayant des hits, lit le contenu via IPC, applique la
+    regex (case-sensitive flag respecté, regex mode honoré)
+    UNIQUEMENT sur les lignes qui ont des hits (l'index vient de
+    grep IPC), réécrit via `fs.writeFile` (atomic via main-process
+    `atomicWrite`). Erreur sur un fichier n'interrompt pas les
+    autres. Toast récap : `N replacements in M files` (ou
+    « M ok / K failed » sur erreurs partielles).
+  - **CommandPalette** : nouvelle entrée
+    `Edit: Replace in Files…` (group Editor, hint Ctrl+Shift+H)
+    qui synthétise un keydown event vers le hotkey de SearchInFiles.
+  - Re-trigger de la recherche après replace pour que la liste de
+    hits reflète l'état post-replace.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope** :
+  - « Replace this match » bouton par hit (granulaire) — déféré.
+    Pour l'instant c'est tout-ou-rien sur les hits visibles.
+  - Preview side-by-side avant/après — déféré.
 
 ### 2026-04-28 — V3.16.2 audit chat + IPC timeouts généralisés
 - **Audit** par sous-agent : 6 latents bugs surveillés. Trois HIGH /

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { UpgradeDialog } from '../UpgradeDialog/UpgradeDialog';
 import { SuxaiLogo } from '../ui/SuxaiLogo';
 import { AtelierIcon } from '../ui/AtelierIcon';
@@ -7,6 +8,10 @@ import './TitleBar.css';
 
 export function TitleBar() {
   const { user, token, logout } = useAuth();
+  const { workspaceFile } = useWorkspace();
+  const workspaceFileName = workspaceFile
+    ? (workspaceFile.split(/[\\/]/).pop() ?? workspaceFile)
+    : null;
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [version, setVersion] = useState<string>('');
 
@@ -48,6 +53,19 @@ export function TitleBar() {
           <SuxaiLogo size={20} />
           <span className="titlebar__brand-name">SUXAI</span>
           {version && <span className="titlebar__version">v{version}</span>}
+          {/* v3.13 — workspace file indicator. Affiché en chip à droite
+              du version badge quand un .code-workspace est actif. Le
+              tooltip donne le full path. Click ouvre l'item dans
+              l'éditeur (utile pour éditer la config du workspace). */}
+          {workspaceFileName && (
+            <span
+              className="titlebar__workspace-file"
+              title={workspaceFile ?? ''}
+            >
+              <AtelierIcon name="i-package" size={11} />
+              {workspaceFileName}
+            </span>
+          )}
         </div>
       </div>
 

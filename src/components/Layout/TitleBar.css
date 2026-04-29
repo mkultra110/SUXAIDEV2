@@ -253,3 +253,26 @@
   color: var(--color-danger);
   border: 1px solid color-mix(in oklch, var(--color-danger) 34%, transparent);
 }
+
+/* v3.13 — Workspace file chip. Affiché à droite du version badge
+   quand l'utilisateur a Open Workspace From File. Donne un repère
+   visuel sur ce qui est chargé sans devoir ouvrir la palette. */
+.titlebar__workspace-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, var(--color-accent) 12%, transparent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 28%, transparent);
+  color: var(--color-accent-text);
+  font-size: var(--text-2xs);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: var(--tracking-normal);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

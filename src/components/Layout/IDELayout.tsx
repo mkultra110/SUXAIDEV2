@@ -19,6 +19,8 @@ function WorkspaceHotkeys() {
   const {
     openFile,
     setWorkspaceRoot,
+    setWorkspaceRoots,
+    setWorkspaceFile,
     reloadActiveFromDisk,
     activeFile,
   } = useWorkspace();
@@ -32,6 +34,33 @@ function WorkspaceHotkeys() {
       e.preventDefault();
       // Open every dropped file, not just the first.
       const files = Array.from(e.dataTransfer?.files ?? []);
+      // v3.13 — special-case .code-workspace : un drop sur la fenêtre
+      // charge le workspace au lieu d'ouvrir le file en éditeur. Si
+      // plusieurs `.code-workspace` sont droppés, on prend le premier.
+      const wsDrop = files.find((f) => {
+        const p = (f as unknown as { path?: string }).path;
+        return typeof p === 'string' && p.endsWith('.code-workspace');
+      }) as (File & { path: string }) | undefined;
+      if (wsDrop?.path) {
+        try {
+          const result = await window.suxai.fs.readFile(wsDrop.path);
+          const { parseCodeWorkspace } = await import('../../lib/code-workspace');
+          const ws = parseCodeWorkspace(result.content);
+          if (!ws) {
+            toast.error('Invalid .code-workspace', 'File could not be parsed.');
+            return;
+          }
+          setWorkspaceRoots(ws.folders.map((f) => f.path));
+          setWorkspaceFile(result.path);
+          const name = result.path.split(/[\\/]/).pop() ?? result.path;
+          toast.success(`Opened ${name}`, `${ws.folders.length} folders`);
+          return;
+        } catch (err) {
+          console.error('Failed to open dropped workspace:', err);
+          toast.error('Open Workspace failed', (err as Error).message);
+          return;
+        }
+      }
       for (const file of files) {
         const anyFile = file as unknown as { path?: string };
         if (!anyFile.path) continue;
@@ -213,18 +242,17 @@ export function IDELayout() {
   useEffect(() => {
     persistLayout({ sidebarOpen, aiOpen, sidebarView });
   }, [sidebarOpen, aiOpen, sidebarView]);
-  const { workspaceRoot, workspaceRoots } = useWorkspace();
+  const { workspaceRoot, workspaceRoots, workspaceFile } = useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
   const dirtyCount = Object.keys(gitStatus).length;
 
-  // v2.2 (B6) → v3.9 — re-read `.vscode/settings.json` from chaque
-  // workspace root et merge en declaration order (les later roots
-  // override les earlier). Effective Settings = user localStorage +
-  // ces overrides ; le dialog écrit toujours user-level, donc
-  // workspace prefs ne fuient pas en localStorage au close.
+  // v2.2 (B6) → v3.13 — re-read .vscode/settings.json from each root
+  // AND the top-level `settings` block of the active .code-workspace
+  // file if any. Merge order : per-root in declaration order, then
+  // workspace file on top (parité VSCode : workspace file wins).
   useEffect(() => {
-    void applyWorkspaceSettings(workspaceRoots);
-  }, [workspaceRoots]);
+    void applyWorkspaceSettings(workspaceRoots, workspaceFile);
+  }, [workspaceRoots, workspaceFile]);
   const bodyClass =
     'ide__body' +
     (sidebarOpen ? '' : ' ide__body--no-sidebar') +

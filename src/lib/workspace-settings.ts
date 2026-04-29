@@ -171,20 +171,28 @@ async function readOneRoot(root: string): Promise<Partial<Settings>> {
  * mirrors VSCode's multi-root precedence (the « primary » root is
  * read first, secondary roots layer on top).
  *
+ * v3.13 — accepte aussi un `workspaceFile` optionnel : un chemin de
+ * `.code-workspace` dont le block top-level `settings` est lu et
+ * mergé EN DERNIER (priorité maximale parité VSCode : workspace
+ * file beats per-root .vscode/settings.json).
+ *
  * - All roots missing the file → clears overrides (silent).
  * - Parse error on one → that root's settings are skipped + console
  *   warn ; the others still merge.
  *
- * Accepts a single root string for back-compat ; v3.9 callers pass
+ * Accepts a single root string for back-compat ; v3.9+ callers pass
  * the full `workspaceRoots` array.
  */
-export async function applyWorkspaceSettings(rootOrRoots: string | string[] | null): Promise<void> {
+export async function applyWorkspaceSettings(
+  rootOrRoots: string | string[] | null,
+  workspaceFile?: string | null,
+): Promise<void> {
   const roots: string[] = (() => {
     if (rootOrRoots === null) return [];
     if (typeof rootOrRoots === 'string') return rootOrRoots ? [rootOrRoots] : [];
     return rootOrRoots.filter((r) => typeof r === 'string' && r.length > 0);
   })();
-  if (roots.length === 0) {
+  if (roots.length === 0 && !workspaceFile) {
     clearWorkspaceOverrides();
     return;
   }
@@ -192,6 +200,23 @@ export async function applyWorkspaceSettings(rootOrRoots: string | string[] | nu
   for (const root of roots) {
     const fragment = await readOneRoot(root);
     merged = { ...merged, ...fragment };
+  }
+  if (workspaceFile) {
+    try {
+      const res = await window.suxai.fs.readFile(workspaceFile);
+      // .code-workspace est JSONC ; le parsing se fait via le helper
+      // strippeur local (mêmes mécaniques que readOneRoot).
+      const text = res.content;
+      // Lazy import : éviter dépendance circulaire avec code-workspace.ts
+      // qui pourrait à terme vouloir consommer workspace-settings.
+      const { parseCodeWorkspace } = await import('./code-workspace');
+      const ws = parseCodeWorkspace(text);
+      if (ws?.settings && typeof ws.settings === 'object') {
+        merged = { ...merged, ...mapVscodeKeys(ws.settings as Record<string, unknown>) };
+      }
+    } catch (err) {
+      console.warn(`[workspace-settings] Could not read workspaceFile ${workspaceFile}:`, err);
+    }
   }
   setWorkspaceOverrides(merged);
 }

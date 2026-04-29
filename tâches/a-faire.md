@@ -12,8 +12,9 @@
 
 ## En cours
 
-_V3.12.0 livrée (.code-workspace save/load) — multi-root est complet.
-Restent : Departure Mono ghost text (pas dispo sur fontsource)._
+_V3.13.0 livrée (top-level settings + drag-drop + TitleBar chip) —
+.code-workspace est intégralement vivant. Reste : Departure Mono
+ghost text (pas dispo sur fontsource)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +99,32 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.13.0 finitions .code-workspace (top-level settings + drag-drop + TitleBar)
+- **Fait** :
+  - **Top-level `settings` honored** : `applyWorkspaceSettings` accepte
+    désormais un 2e arg `workspaceFile?: string | null`. Quand
+    présent, lit le file via IPC, parse via `parseCodeWorkspace`,
+    map ses keys VSCode et merge **EN DERNIER** (priorité maximale,
+    parité VSCode : workspace file beats per-root). IDELayout
+    re-déclenche l'effect quand `workspaceFile` ou `workspaceRoots`
+    change.
+  - **Drag-drop `.code-workspace`** : le drop handler de
+    `WorkspaceHotkeys` (IDELayout) detect désormais l'extension
+    `.code-workspace` AVANT d'ouvrir comme un fichier texte. Si
+    présent : parse + setWorkspaceRoots + setWorkspaceFile + toast
+    success. Plusieurs `.code-workspace` droppés → premier seulement.
+    Erreur de parse → toast error sans bloquer.
+  - **TitleBar chip** : nouveau `.titlebar__workspace-file` à droite
+    du version badge — pill avec icône `i-package`, max-width 220px
+    avec ellipsis. Tooltip = full path. Visible seulement quand
+    `workspaceFile` est non-null. Match palette accent (honey-text
+    sur background mix accent 12%).
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope (suite)** :
+  - Click sur le chip TitleBar pour ouvrir le `.code-workspace`
+    dans l'éditeur (utile pour éditer la config) — déféré.
+  - Departure Mono ghost text (pas dispo sur fontsource).
 
 ### 2026-04-28 — V3.12.0 .code-workspace save/load (parité VSCode)
 - **Fait** :

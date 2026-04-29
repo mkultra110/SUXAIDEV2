@@ -90,6 +90,16 @@ const api = {
       ipcRenderer.invoke('fs:forget-mtime', p),
     saveAs: (content: string, suggestedName?: string): Promise<string | null> =>
       ipcRenderer.invoke('fs:save-as', content, suggestedName),
+    /** v3.12 — write a `.code-workspace` JSON file via Save dialog
+     *  (filtered to .code-workspace extension). Resolves to the
+     *  written absolute path or null if the user cancelled. */
+    saveWorkspace: (content: string, suggestedName?: string): Promise<string | null> =>
+      ipcRenderer.invoke('fs:save-workspace', content, suggestedName),
+    /** v3.12 — pick a `.code-workspace` file via Open dialog and
+     *  read its raw content. The renderer parses + applies via
+     *  lib/code-workspace.ts. */
+    openWorkspace: (): Promise<{ path: string; content: string } | null> =>
+      ipcRenderer.invoke('fs:open-workspace'),
     createFile: (parent: string, name: string): Promise<string> =>
       ipcRenderer.invoke('fs:create-file', parent, name),
     createDir: (parent: string, name: string): Promise<string> =>

@@ -967,6 +967,42 @@ function registerIpc() {
     return safe;
   });
 
+  // v3.12 — `.code-workspace` save / open. Pure JSON file shape :
+  //   { "folders": [{ "path": "/abs/..." }, ...], "settings"?: {...} }
+  // VSCode parity. Le main process gère seulement le dialog + le
+  // I/O atomic ; le parsing + le mapping vers WorkspaceContext sont
+  // côté renderer (lib/code-workspace.ts).
+  ipcMain.handle('fs:save-workspace', async (_e, content: string, suggestedName?: string) => {
+    if (!mainWindow) return null;
+    if (typeof content !== 'string') throw new Error('Content must be a string');
+    const defaultName = suggestedName && suggestedName.endsWith('.code-workspace')
+      ? suggestedName
+      : `${suggestedName ?? 'untitled'}.code-workspace`;
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: defaultName,
+      filters: [{ name: 'Code Workspace', extensions: ['code-workspace'] }],
+    });
+    if (result.canceled || !result.filePath) return null;
+    const safe = sanitizeFsPath(result.filePath);
+    await atomicWrite(safe, content);
+    return safe;
+  });
+
+  ipcMain.handle('fs:open-workspace', async () => {
+    if (!mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Code Workspace', extensions: ['code-workspace'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const safe = sanitizeFsPath(result.filePaths[0], { mustExist: true });
+    const content = await fs.readFile(safe, 'utf8');
+    return { path: safe, content };
+  });
+
   ipcMain.handle('fs:create-file', async (_e, parent: string, name: string) => {
     const safeParent = sanitizeFsPath(parent, { mustExist: true });
     if (typeof name !== 'string' || name.length === 0 || /[\0/\\]/.test(name)) {

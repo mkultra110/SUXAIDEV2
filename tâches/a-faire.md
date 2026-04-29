@@ -12,9 +12,8 @@
 
 ## En cours
 
-_V3.11.0 livrée (search across roots + git status agrégé) — voir
-Revue ci-dessous. Restent : `.code-workspace` save/load, Departure
-Mono ghost text._
+_V3.12.0 livrée (.code-workspace save/load) — multi-root est complet.
+Restent : Departure Mono ghost text (pas dispo sur fontsource)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +98,48 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.12.0 .code-workspace save/load (parité VSCode)
+- **Fait** :
+  - **IPC** : `fs:save-workspace(content, suggestedName)` et
+    `fs:open-workspace()` côté main process. Les deux passent par
+    `dialog.showSaveDialog` / `showOpenDialog` filtré sur l'extension
+    `.code-workspace`. Save écrit atomic via `atomicWrite` ; open
+    retourne `{ path, content }` raw pour parsing renderer-side.
+  - **Préload** : `fs.saveWorkspace(content, suggestedName?)` et
+    `fs.openWorkspace()` exposés.
+  - **`lib/code-workspace.ts`** : helper module avec
+    `parseCodeWorkspace(text)` (JSONC tolérant — strip line/block
+    comments + trailing commas, vendored mini-parser pour éviter
+    dépendance circulaire avec workspace-settings),
+    `serializeCodeWorkspace(ws)` (pretty-print 2-space + trailing
+    newline), `makeCodeWorkspace(roots[])`. Format VSCode :
+    `{ folders: [{path, name?}], settings? }`.
+  - **WorkspaceContext** : ajout de `workspaceFile: string | null`
+    à WorkspaceState + `setWorkspaceFile` setter. Persisté
+    alongside workspaceRoots (downgrade-safe). Fingerprint inclut
+    le file path. Switching roots out detache le file (mirror
+    VSCode « workspace dirty » UX).
+  - **CommandPalette** :
+    - `Workspace: Save Workspace As… (.code-workspace)` →
+      serialize current roots, showSaveDialog, atomic write,
+      stamp `setWorkspaceFile`.
+    - `Workspace: Open Workspace From File…` → showOpenDialog,
+      parseCodeWorkspace, `setWorkspaceRoots(folders.map(p))` +
+      `setWorkspaceFile(path)`. Toast indique « N folders » et
+      mentionne explicitement que `settings` top-level n'est pas
+      encore appliqué (les `.vscode/settings.json` per-root le sont).
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V3.12 (déféré)** :
+  - Top-level `settings` block du `.code-workspace` non honoré —
+    seul le `folders` array est appliqué. Si on veut, on pourrait
+    appeler `setWorkspaceOverrides` avec le subset mappé des keys
+    VSCode reconnues.
+  - Drag-drop d'un `.code-workspace` sur la fenêtre pour le
+    charger automatiquement (actuellement ça ouvre comme un
+    fichier texte normal).
+  - StatusBar/TitleBar indicator du `workspaceFile` actif.
+  - Departure Mono ghost text (pas dispo sur fontsource).
 
 ### 2026-04-28 — V3.11.0 search across roots + git status agrégé
 - **Fait** :

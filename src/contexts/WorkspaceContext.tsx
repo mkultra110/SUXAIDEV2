@@ -48,6 +48,11 @@ interface WorkspaceState {
   /** v3.9 — multi-root list. Empty when no folder is open. The first
    *  entry is the « primary » root used by single-root call sites. */
   workspaceRoots: string[];
+  /** v3.12 — absolute path of the `.code-workspace` file the user
+   *  loaded (or saved). Null when the workspace exists only as
+   *  open folders without a backing file. Surface dans la TitleBar
+   *  comme « <name>.code-workspace » indicator. */
+  workspaceFile: string | null;
   openFiles: OpenFile[];
   activePath: string | null;
   selection: string;
@@ -122,6 +127,11 @@ interface WorkspaceValue extends WorkspaceState {
   addWorkspaceRoot: (root: string) => void;
   /** v3.9 — remove `root` from the workspaceRoots. */
   removeWorkspaceRoot: (root: string) => void;
+  /** v3.12 — set the active `.code-workspace` file path. Null
+   *  detaches the workspace from any backing file (folders stay
+   *  open). Called by the « Open Workspace From File » + « Save
+   *  Workspace As » palette commands. */
+  setWorkspaceFile: (file: string | null) => void;
   openFile: (file: OpenFile) => void;
   closeFile: (path: string) => void;
   closeOthers: (keepPath: string) => void;
@@ -238,6 +248,9 @@ interface PersistedWorkspace {
    *  mirrored into `workspaceRoot`. */
   workspaceRoot: string | null;
   workspaceRoots?: string[];
+  /** v3.12 — active .code-workspace file path so the next session
+   *  knows the backing file. Null when the user only opened folders. */
+  workspaceFile?: string | null;
   openPaths: string[];
   activePath: string | null;
 }
@@ -266,6 +279,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WorkspaceState>({
     workspaceRoot: null,
     workspaceRoots: [],
+    workspaceFile: null,
     openFiles: [],
     activePath: null,
     selection: '',
@@ -330,7 +344,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       ...s,
       workspaceRoots: normed,
       workspaceRoot: normed[0] ?? null,
+      // v3.12 — switching roots out from under a `.code-workspace`
+      // file detaches it. The user has to Save Workspace As again
+      // to re-anchor. Mirrors VSCode's « (Workspace) » dirty hint.
+      workspaceFile: normed.length === 0 ? null : s.workspaceFile,
     }));
+  }, []);
+
+  const setWorkspaceFile = useCallback((file: string | null) => {
+    setState((s) => ({ ...s, workspaceFile: file }));
   }, []);
 
   const setWorkspaceRoot = useCallback((root: string | null) => {
@@ -388,6 +410,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (restoredRoots.length > 0) {
           setWorkspaceRoots(restoredRoots);
         }
+        // v3.12 — restore the active .code-workspace file if any.
+        if (typeof persisted.workspaceFile === 'string' && persisted.workspaceFile.length > 0) {
+          setWorkspaceFile(persisted.workspaceFile);
+        }
         const files: OpenFile[] = [];
         for (const p of persisted.openPaths ?? []) {
           try {
@@ -428,9 +454,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     // v3.9 — fingerprint includes the full roots list so adding/removing
     // a folder triggers a savePersisted. The legacy `workspaceRoot` field
     // is mirrored from `roots[0]` so we don't double-count it.
+    // v3.12 — append the workspaceFile so changing the backing
+    // .code-workspace file also triggers a save.
     const rootsKey = state.workspaceRoots.join('|');
-    return `${rootsKey}||${paths.join('|')}||${state.activePath ?? ''}`;
-  }, [state.workspaceRoots, state.openFiles, state.activePath]);
+    return `${rootsKey}||${paths.join('|')}||${state.activePath ?? ''}||${state.workspaceFile ?? ''}`;
+  }, [state.workspaceRoots, state.openFiles, state.activePath, state.workspaceFile]);
 
   // v3.5 (A8) — sync openFiles[*].eol when StatusBar toggles via
   // fs:set-eol. The IPC has already updated the main-process record ;
@@ -452,7 +480,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!restored) return;
-    const [rootsKey = '', pathStr = '', active = ''] = persistedFingerprint.split('||');
+    const [rootsKey = '', pathStr = '', active = '', file = ''] = persistedFingerprint.split('||');
     const roots = rootsKey ? rootsKey.split('|').filter(Boolean) : [];
     savePersisted({
       // v3.9 — write both shapes : the new `workspaceRoots[]` is the
@@ -461,6 +489,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // still loads the user's main folder.
       workspaceRoot: roots[0] ?? null,
       workspaceRoots: roots,
+      workspaceFile: file || null,
       openPaths: pathStr ? pathStr.split('|') : [],
       activePath: active || null,
     });
@@ -984,6 +1013,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceRoots,
       addWorkspaceRoot,
       removeWorkspaceRoot,
+      setWorkspaceFile,
       openFile,
       closeFile,
       closeOthers,
@@ -1011,7 +1041,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }),
     [
       state, activeFile, hasUnsaved,
-      setWorkspaceRoot, setWorkspaceRoots, addWorkspaceRoot, removeWorkspaceRoot,
+      setWorkspaceRoot, setWorkspaceRoots, addWorkspaceRoot, removeWorkspaceRoot, setWorkspaceFile,
       openFile, closeFile,
       closeOthers, closeToTheRight, closeAll, setActive, rejectPendingDiffs,
       updateActiveContent, setSelection, saveActiveFile, saveAllDirty, reloadActiveFromDisk, newUntitled,

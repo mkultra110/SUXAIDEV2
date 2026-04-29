@@ -7,6 +7,11 @@ import { emitAiCommand } from '../../lib/commands';
 import { useTasks, runTask } from '../../lib/tasks';
 import { openGitLog } from '../Sidebar/GitLogModal';
 import { stashPush, stashPop, listStashes } from '../../lib/git';
+import {
+  parseCodeWorkspace,
+  serializeCodeWorkspace,
+  makeCodeWorkspace,
+} from '../../lib/code-workspace';
 import './CommandPalette.css';
 
 interface Command {
@@ -25,7 +30,9 @@ export function CommandPalette() {
 
   const {
     openFile, saveActiveFile, saveAllDirty, activeFile, workspaceRoot, workspaceRoots,
-    setWorkspaceRoot, addWorkspaceRoot, removeWorkspaceRoot,
+    workspaceFile,
+    setWorkspaceRoot, setWorkspaceRoots, addWorkspaceRoot, removeWorkspaceRoot,
+    setWorkspaceFile,
   } = useWorkspace();
   const { logout, user } = useAuth();
   const toast = useToast();
@@ -200,6 +207,61 @@ export function CommandPalette() {
           toast.success('Folder added', name);
         },
       },
+      {
+        id: 'workspace.save-as',
+        label: workspaceFile
+          ? 'Workspace: Save Workspace As…'
+          : 'Workspace: Save Workspace As… (.code-workspace)',
+        group: 'Workspace',
+        run: async () => {
+          if (workspaceRoots.length === 0) {
+            toast.info('Nothing to save', 'Open at least one folder first.');
+            return;
+          }
+          const ws = makeCodeWorkspace(workspaceRoots);
+          const content = serializeCodeWorkspace(ws);
+          const suggested =
+            workspaceRoots[0].split(/[\\/]/).filter(Boolean).pop() ?? 'workspace';
+          try {
+            const written = await window.suxai.fs.saveWorkspace(content, suggested);
+            if (!written) return;
+            setWorkspaceFile(written);
+            const name = written.split(/[\\/]/).pop() ?? written;
+            toast.success('Workspace saved', name);
+          } catch (err) {
+            toast.error('Save Workspace failed', (err as Error).message);
+          }
+        },
+      },
+      {
+        id: 'workspace.open-from-file',
+        label: 'Workspace: Open Workspace From File…',
+        group: 'Workspace',
+        run: async () => {
+          try {
+            const file = await window.suxai.fs.openWorkspace();
+            if (!file) return;
+            const ws = parseCodeWorkspace(file.content);
+            if (!ws) {
+              toast.error(
+                'Invalid .code-workspace',
+                'File could not be parsed as JSONC with a `folders` array.',
+              );
+              return;
+            }
+            setWorkspaceRoots(ws.folders.map((f) => f.path));
+            setWorkspaceFile(file.path);
+            const name = file.path.split(/[\\/]/).pop() ?? file.path;
+            const note =
+              ws.settings && Object.keys(ws.settings).length > 0
+                ? `${ws.folders.length} folders · top-level "settings" not yet honored`
+                : `${ws.folders.length} folders`;
+            toast.success(`Opened ${name}`, note);
+          } catch (err) {
+            toast.error('Open Workspace failed', (err as Error).message);
+          }
+        },
+      },
       ...(workspaceRoots.length > 1
         ? workspaceRoots.map((root) => {
             const name = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
@@ -339,7 +401,8 @@ export function CommandPalette() {
     }
     return list;
   }, [
-    openFile, setWorkspaceRoot, addWorkspaceRoot, removeWorkspaceRoot,
+    openFile, setWorkspaceRoot, setWorkspaceRoots, addWorkspaceRoot, removeWorkspaceRoot,
+    setWorkspaceFile, workspaceFile,
     saveActiveFile, saveAllDirty, activeFile, workspaceRoots, logout, user, toast,
     workspaceRoot, tasks,
   ]);

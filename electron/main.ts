@@ -275,7 +275,14 @@ function registerIpc() {
   ipcMain.handle('conv:read', async () => {
     let raw: string;
     try {
-      raw = await fs.readFile(CONVERSATIONS_FILE(), 'utf8');
+      // v3.16.2 — timeout 5s. conversations.json sur drive réseau /
+      // antivirus peut hanger : sans timeout, app freeze au boot
+      // (« Not Responding ») et user doit force-kill.
+      raw = await withIpcTimeout(
+        'conv:read',
+        fs.readFile(CONVERSATIONS_FILE(), 'utf8'),
+        5_000,
+      );
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.warn('[conv:read] could not read file:', err);
@@ -315,19 +322,29 @@ function registerIpc() {
     if (json.length > 16 * 1024 * 1024) {
       throw new Error('Conversations payload too large (>16 MB)');
     }
-    await fs.mkdir(USER_DATA(), { recursive: true });
+    await withIpcTimeout('conv:write:mkdir', fs.mkdir(USER_DATA(), { recursive: true }), 5_000);
     // Atomic write + fsync, same durability story as fs:write-file.
     // A crash mid-write would otherwise corrupt the file and trigger
     // the rename-as-corrupt path on next read.
+    // v3.16.2 — chaque syscall wrappé dans withIpcTimeout. Si l'un
+    // d'eux hang (drive réseau, antivirus), l'erreur descriptive
+    // permet de comprendre où ça bloque ; le tmp file orphelin
+    // sera nettoyé au prochain boot ou écrasé.
     const tmp = `${CONVERSATIONS_FILE()}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-    const fh = await fs.open(tmp, 'w', 0o600);
+    const fh = await withIpcTimeout('conv:write:open', fs.open(tmp, 'w', 0o600), 5_000);
     try {
-      await fh.writeFile(json);
-      await fh.sync();
+      await withIpcTimeout('conv:write:writeFile', fh.writeFile(json), 10_000);
+      await withIpcTimeout('conv:write:fsync', fh.sync(), 5_000);
     } finally {
-      await fh.close();
+      await withIpcTimeout('conv:write:close', fh.close(), 5_000).catch(() => {
+        /* close should never hang if writeFile/sync didn't */
+      });
     }
-    await fs.rename(tmp, CONVERSATIONS_FILE());
+    await withIpcTimeout(
+      'conv:write:rename',
+      fs.rename(tmp, CONVERSATIONS_FILE()),
+      5_000,
+    );
     return true;
   });
   ipcMain.handle('conv:clear', async () => {
@@ -362,8 +379,14 @@ function registerIpc() {
       catch { return []; }
       const dir = path.join(safeRoot, '.suxai', 'commands');
       let entries: string[];
-      try { entries = await fs.readdir(dir); }
-      catch { return []; /* directory just doesn't exist — fine */ }
+      // v3.16.2 — wrap readdir + per-file readFile dans withIpcTimeout.
+      // Sur drive réseau lent, l'enum + lecture peut hanger ; sans cap,
+      // les commands pop UI bloque au boot. Cap par-fichier court (3s)
+      // pour qu'un seul fichier corrompu ne bloque pas tout le set.
+      try {
+        entries = await withIpcTimeout('commands:list:readdir', fs.readdir(dir), 5_000);
+      }
+      catch { return []; /* directory just doesn't exist OR timeout — fine */ }
       const out: Array<{
         name: string;
         path: string;
@@ -376,7 +399,13 @@ function registerIpc() {
         const name = entry.slice(0, -3).toLowerCase();
         if (!/^[a-z0-9_-]+$/.test(name)) continue; // ignore weird filenames
         let raw: string;
-        try { raw = await fs.readFile(path.join(dir, entry), 'utf8'); }
+        try {
+          raw = await withIpcTimeout(
+            `commands:list:readFile(${entry})`,
+            fs.readFile(path.join(dir, entry), 'utf8'),
+            3_000,
+          );
+        }
         catch { continue; }
         // Optional YAML-like front-matter parser. Permissive: only
         // recognises `description:` and `mode:` keys; everything else
@@ -645,15 +674,11 @@ function registerIpc() {
     // en rond. Promise.race avec un timeout qui throw une erreur
     // explicite — le renderer reçoit l'erreur, marque le tool en
     // « error » et le model peut adapter sa stratégie.
-    const READDIR_TIMEOUT_MS = 8_000;
-    const readdirP = fs.readdir(safe, { withFileTypes: true });
-    const timeoutP = new Promise<never>((_, reject) =>
-      setTimeout(
-        () => reject(new Error(`fs:read-dir timed out after ${READDIR_TIMEOUT_MS}ms (${safe})`)),
-        READDIR_TIMEOUT_MS,
-      ).unref(),
+    // v3.16.2 — utilise le helper withIpcTimeout pour cohérence.
+    const entries = await withIpcTimeout(
+      `fs:read-dir(${safe})`,
+      fs.readdir(safe, { withFileTypes: true }),
     );
-    const entries = await Promise.race([readdirP, timeoutP]);
     return entries.map((e) => ({
       name: e.name,
       path: path.join(safe, String(e.name)),
@@ -672,6 +697,23 @@ function registerIpc() {
   // to system paths — the renderer is isolated but a malicious/rogue
   // extension shouldn't be able to trash /etc or escape via `..`.
   const FS_DENY = ['/etc', '/boot', '/sys', '/proc', '/dev', '/root/.ssh'];
+
+  // v3.16.2 — generic IPC timeout helper. Tout fs syscall (readFile,
+  // readdir, stat, rename) peut hanger sans throw sur Windows
+  // (antivirus, drive réseau, locked file). Sans cap, le renderer
+  // bloque indéfiniment, l'UI freeze, le user doit force-kill l'app.
+  // Promise.race contre un timeout qui throw une erreur descriptive.
+  function withIpcTimeout<T>(label: string, p: Promise<T>, ms = 8_000): Promise<T> {
+    return Promise.race([
+      p,
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error(`${label} timed out after ${ms}ms`)),
+          ms,
+        ).unref(),
+      ),
+    ]);
+  }
 
   function sanitizeFsPath(p: unknown, { mustExist = false } = {}): string {
     if (typeof p !== 'string' || p.length === 0) {
@@ -775,9 +817,18 @@ function registerIpc() {
 
   ipcMain.handle('fs:read-file', async (_e, filePath: string) => {
     const safe = sanitizeFsPath(filePath, { mustExist: true });
-    const stat = await fs.stat(safe);
+    // v3.16.2 — wrap stat + readFile dans des timeouts. Même
+    // raisonnement que fs:read-dir : un fichier sur drive réseau
+    // ou bloqué par antivirus peut hanger indéfiniment.
+    const stat = await withIpcTimeout(`fs:read-file:stat(${safe})`, fs.stat(safe));
     rememberMtime(safe, stat.mtimeMs);
-    const raw = await fs.readFile(safe);
+    const raw = await withIpcTimeout(
+      `fs:read-file(${safe})`,
+      fs.readFile(safe),
+      // 30s pour les gros fichiers (4 MB max). 8s par défaut serait
+      // serré sur un disque lent.
+      30_000,
+    );
     const quirks = detectQuirks(raw);
     lastSeenQuirks.set(safe, quirks);
     // Strip the BOM from the returned content (Monaco doesn't want

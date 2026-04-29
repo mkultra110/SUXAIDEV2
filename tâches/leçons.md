@@ -161,7 +161,31 @@ _(à remplir au fur et à mesure)_
   Mettre à jour à chaque commit. Permet `cat refactor-progress.md
   → continue` après reset propre.
 
-### V8 — Tool stuck en RUNNING quand l'IPC main hang silencieusement
+### V8 (étendue v3.16.2) — IPC timeouts comme pattern systémique
+- **Symptôme** : tool stuck en RUNNING (cf v3.16.1), mais aussi —
+  app freeze au boot (`conv:read` qui hang sur drive réseau),
+  `commands:list` qui ne retourne jamais à cause d'un fichier .md
+  corrompu, `fs:read-file` qui hang sur antivirus.
+- **Règle systémique** : tout IPC handler qui appelle un syscall
+  potentiellement bloquant (fs.readFile, fs.readdir, fs.stat,
+  fs.open, fs.rename, fh.writeFile, fh.sync, child_process.spawn)
+  DOIT être wrappé dans un `withIpcTimeout` avec timeout adapté à
+  l'usage. Defaults raisonnables :
+    - `stat`, `readdir`, `mkdir`, `rename`, `close` : 5–8 s
+    - `readFile` (text/config) : 5 s
+    - `readFile` (binaire jusqu'à plusieurs MB) : 30 s
+    - `writeFile` (atomic JSON) : 10 s
+    - subprocess long-running : timeout user-configurable
+  Helper canonique `withIpcTimeout(label, p, ms = 8_000)` défini
+  dans `electron/main.ts:registerIpc()`. Exporter le pattern à tous
+  les nouveaux handlers ajoutés.
+- **Lien V3.14** : drop assistant message si pending tools (V3.14)
+  est nécessaire pour le 400 prefill SI un tool reste pending en
+  fin de stream. Mais sans timeouts IPC, V3.14 transforme le hang
+  en boucle silencieuse — modèle re-emit indéfiniment. Les deux
+  fixes s'épaulent. Cf main.ts withIpcTimeout commit v3.16.2.
+
+### V8 (original) — Tool stuck en RUNNING quand l'IPC main hang silencieusement
 - **Symptôme** : agent emit 4 list_dir parallèles, tous restent
   `status: 'running'` indéfiniment. La conversation re-emit la même
   réponse (« Oui, je peux lire ton projet… » + 4 list_dir) en

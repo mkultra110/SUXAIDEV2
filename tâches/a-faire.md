@@ -12,8 +12,8 @@
 
 ## En cours
 
-_V3.16.1 hotfix livré (timeout IPC fs:read-dir + tool exec timeout
-5min). Cf leçon V8._
+_V3.16.2 livré (timeouts IPC généralisés via withIpcTimeout helper +
+loop detector threshold 5 au lieu de 3). Cf leçon V8 étendue._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +98,39 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.16.2 audit chat + IPC timeouts généralisés
+- **Audit** par sous-agent : 6 latents bugs surveillés. Trois HIGH /
+  MEDIUM exploitables → fix dans cette release.
+- **Fait** :
+  - **`withIpcTimeout(label, p, ms)`** : helper hoisted dans
+    `registerIpc()` qui wrap n'importe quel `Promise<T>` dans un
+    `Promise.race` contre un timeout (default 8 s) avec une erreur
+    descriptive si dépassement. Utilisé partout où un syscall fs
+    pourrait hanger (Windows + drive réseau + antivirus + locked file).
+  - **`fs:read-file`** : `fs.stat` (8 s) + `fs.readFile` (30 s pour
+    les gros fichiers jusqu'à 4 MB).
+  - **`fs:read-dir`** : refactor pour utiliser `withIpcTimeout`
+    (8 s, même comportement qu'en V3.16.1 mais plus concis).
+  - **`conv:read`** : `fs.readFile(conversations.json)` 5 s. Si le
+    user data folder est sur un drive réseau down, l'app ne hang
+    plus au boot (« Not Responding »).
+  - **`conv:write`** : `mkdir` + `open` + `writeFile` + `fsync` +
+    `close` + `rename` chacun avec timeout. Si un syscall hang,
+    erreur explicite à la console et le tmp file orphelin sera
+    nettoyé au reboot ou écrasé.
+  - **`commands:list`** : `readdir(.suxai/commands)` 5 s + per-file
+    `readFile` 3 s. Un seul fichier corrompu ne bloque plus la
+    palette de commands au boot.
+  - **Loop detector AIPanel.tsx** : threshold 3 → 5. Trop bas
+    crée des false-positives sur lectures légitimes répétées (« lis
+    foo.ts puis re-lis-le pour vérifier les modifs »). 5 reste
+    assez serré pour casser une vraie boucle agent rapidement.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Note testing chat** : impossible de simuler un session live
+  sans Electron + Quatarly key + display. Validation = audit code
+  + typecheck + build. Les patterns ajoutés sont défensifs : ils ne
+  peuvent QUE améliorer le comportement (pas pire qu'avant).
 
 ### 2026-04-28 — V3.16.1 hotfix tool RUNNING infini (timeout IPC + exec)
 - **Symptôme remonté par l'user** (screenshot) : agent loop sur

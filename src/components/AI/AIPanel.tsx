@@ -633,7 +633,11 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
       collectedTools.map(async (call): Promise<ExecOutcome> => {
         const key = repeatKey(call);
         const sameRunCount = recentKeys.filter((k) => k === key).length;
-        if (sameRunCount >= 3) {
+        // v3.16.2 — threshold 5 (était 3). Trop bas crée des
+        // false-positives sur usages légitimes (« lis foo.ts puis
+        // re-lis-le pour vérifier les modifs »). 5 reste assez bas
+        // pour casser une vraie boucle agent rapidement.
+        if (sameRunCount >= 5) {
           return {
             call,
             result: {

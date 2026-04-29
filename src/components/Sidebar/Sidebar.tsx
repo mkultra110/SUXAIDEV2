@@ -46,38 +46,31 @@ export interface SidebarProps {
 export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps = {}) {
   const {
     workspaceRoot, workspaceRoots,
-    setWorkspaceRoot, setWorkspaceRoots,
+    setWorkspaceRoot, addWorkspaceRoot,
     openFile, activePath, closeFile, renameFile,
   } = useWorkspace();
-  const gitStatus = useGitStatus(workspaceRoot);
+  // v3.10 — tous les RootTree consultent leur propre useGitStatus(root) ;
+  // ici on agrège le dirtyCount du primary pour le badge SC dans le header.
+  // Idéalement on sommerait toutes les roots ; déféré.
+  const primaryGitStatus = useGitStatus(workspaceRoot);
   const [internalView, setInternalView] = useState<'files' | 'changes'>('files');
   const view = viewProp ?? internalView;
   const setView = setViewProp ?? setInternalView;
-  const dirtyCount = Object.keys(gitStatus).length;
-  const [tree, setTree] = useState<TreeEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const dirtyCount = Object.keys(primaryGitStatus).length;
   const [menu, setMenu] = useState<{ x: number; y: number; entry: TreeEntry } | null>(null);
   const toast = useToast();
-
-  const loadRoot = useCallback(async (root: string) => {
-    setLoading(true);
-    try {
-      const entries = await window.suxai.fs.readDir(root);
-      setTree(entries.map((e) => ({ ...e, loaded: false, expanded: false })));
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (workspaceRoot) void loadRoot(workspaceRoot);
-  }, [workspaceRoot, loadRoot]);
 
   const onOpenFolder = async () => {
     const root = await window.suxai.fs.openFolder();
     if (root) setWorkspaceRoot(root);
+  };
+
+  const onAddFolder = async () => {
+    const root = await window.suxai.fs.openFolder();
+    if (!root) return;
+    addWorkspaceRoot(root);
+    const name = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+    toast.success('Folder added', name);
   };
 
   const onOpenFile = async () => {
@@ -89,9 +82,14 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
     if (parent) setWorkspaceRoot(parent);
   };
 
-  const refreshTree = useCallback(async () => {
-    if (workspaceRoot) await loadRoot(workspaceRoot);
-  }, [workspaceRoot, loadRoot]);
+  // v3.10 — refreshTree devient un broadcast d'event que chaque
+  // RootTree écoute et resync. Refresh all au lieu d'un seul root :
+  // après un rename / delete / new, on ne sait pas toujours quel root
+  // est affecté (les paths peuvent traverser), et le coût d'un fs.readDir
+  // par root est négligeable.
+  const refreshTree = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('suxai:tree-refresh'));
+  }, []);
 
   const handleNewFile = async (parentPath: string) => {
     const name = window.prompt('New file name:');
@@ -102,7 +100,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
         const r = await window.suxai.fs.readFile(created);
         openFile({ path: created, name, content: r.content });
         toast.success('Created', name);
-        await refreshTree();
+        refreshTree();
       }
     } catch (err) {
       toast.error('Could not create file', (err as Error).message);
@@ -115,7 +113,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
     try {
       await window.suxai.fs.createDir?.(parentPath, name);
       toast.success('Created', name);
-      await refreshTree();
+      refreshTree();
     } catch (err) {
       toast.error('Could not create folder', (err as Error).message);
     }
@@ -133,7 +131,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
       await window.suxai.fs.rename?.(entry.path, newPath);
       if (!entry.isDirectory) renameFile(entry.path, newPath);
       toast.success('Renamed', name);
-      await refreshTree();
+      refreshTree();
     } catch (err) {
       toast.error('Rename failed', (err as Error).message);
     }
@@ -146,7 +144,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
       await window.suxai.fs.remove?.(entry.path);
       closeFile(entry.path);
       toast.success('Deleted', entry.name);
-      await refreshTree();
+      refreshTree();
     } catch (err) {
       toast.error('Delete failed', (err as Error).message);
     }
@@ -228,32 +226,33 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
     ];
   };
 
-  const toggleDir = async (entry: TreeEntry) => {
-    if (!entry.isDirectory) {
+  // v3.10 — `toggleDir` lives inside each <RootTree> so each one
+  // owns its tree expansion state. The Sidebar parent only forwards
+  // the file-open callback (when a leaf is clicked) and the
+  // context-menu trigger (which lifts to the parent for portal
+  // positioning).
+  const onLeafOpen = useCallback(
+    async (entry: TreeEntry) => {
       try {
         const file = await window.suxai.fs.readFile(entry.path);
-        openFile({ path: file.path, name: entry.name, content: file.content, eol: file.eol, encoding: file.encoding });
+        openFile({
+          path: file.path,
+          name: entry.name,
+          content: file.content,
+          eol: file.eol,
+          encoding: file.encoding,
+        });
       } catch (err) {
         console.error(err);
       }
-      return;
-    }
-    setTree((prev) => toggleEntry(prev, entry.path));
-    if (!entry.loaded) {
-      try {
-        const children = await window.suxai.fs.readDir(entry.path);
-        setTree((prev) =>
-          setEntryChildren(
-            prev,
-            entry.path,
-            children.map((c) => ({ ...c, loaded: false, expanded: false })),
-          ),
-        );
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  };
+    },
+    [openFile],
+  );
+
+  const onContextMenu = useCallback((entry: TreeEntry, e: React.MouseEvent) => {
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY, entry });
+  }, []);
 
   return (
     <aside className="sidebar">
@@ -288,7 +287,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
         </div>
       </div>
 
-      {!workspaceRoot ? (
+      {workspaceRoots.length === 0 ? (
         <div className="sidebar__empty">
           <p>No folder opened</p>
           <Button variant="secondary" size="sm" onClick={onOpenFolder}>Open folder</Button>
@@ -299,50 +298,25 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
         <SourceControlPanel />
       ) : (
         <div className="sidebar__tree" role="tree">
-          <div
-            className="sidebar__root"
-            title={workspaceRoots.length > 1
-              ? workspaceRoots.join('\n')
-              : workspaceRoot}
-          >
-            <span className="sidebar__root-name">
-              {workspaceRoot.split(/[\\/]/).filter(Boolean).pop() ?? workspaceRoot}
-            </span>
-            {/* v3.9 — Multi-root indicator. Quand 2+ folders sont ouverts,
-                affiche un pill « +N » qui retire le folder primaire au
-                click (tour de rôle parmi les roots). Le tooltip liste
-                tous les paths. La V3.10 fera le tree section-per-root ;
-                pour l'instant le tree montre le root primaire. */}
-            {workspaceRoots.length > 1 && (
-              <button
-                type="button"
-                className="sidebar__root-extra"
-                title={`Cycle to next root (${workspaceRoots.length} folders open)`}
-                onClick={() => {
-                  // Rotate primary : move roots[0] to the end so the
-                  // user cycles through which folder's tree is shown.
-                  setWorkspaceRoots([...workspaceRoots.slice(1), workspaceRoots[0]]);
-                }}
-              >
-                +{workspaceRoots.length - 1}
-              </button>
-            )}
-          </div>
-          {loading ? (
-            <div className="sidebar__empty"><span>Loading…</span></div>
-          ) : (
-            <TreeList
-              entries={tree}
-              depth={0}
-              onToggle={toggleDir}
+          {workspaceRoots.map((root) => (
+            <RootTree
+              key={root}
+              root={root}
+              showHeader={workspaceRoots.length > 1}
               activePath={activePath}
-              gitStatus={gitStatus}
-              onContextMenu={(entry, e) => {
-                e.preventDefault();
-                setMenu({ x: e.clientX, y: e.clientY, entry });
-              }}
+              onLeafOpen={onLeafOpen}
+              onContextMenu={onContextMenu}
             />
-          )}
+          ))}
+          {/* v3.10 — utility row at the bottom, only shown when at
+              least one root is open. The « Add folder » CTA matches
+              VSCode's Explorer footer affordance. */}
+          <div className="sidebar__tree-footer">
+            <button type="button" className="sidebar__add-folder" onClick={onAddFolder}>
+              <AtelierIcon name="i-plus" size={11} />
+              Add folder to workspace
+            </button>
+          </div>
         </div>
       )}
 
@@ -355,6 +329,130 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
         />
       )}
     </aside>
+  );
+}
+
+/**
+ * v3.10 — Multi-root section. Each workspace root gets its own
+ * `<RootTree>` instance, with private tree state + git status + load
+ * lifecycle. The Sidebar parent maps workspaceRoots → RootTree and
+ * lifts the leaf-click + context-menu callbacks. A global event
+ * `suxai:tree-refresh` (no payload) tells every RootTree to reload —
+ * fired after newFile / rename / delete by the Sidebar handlers.
+ *
+ * `showHeader` toggles the collapsible folder header. When the
+ * workspace has a single root it stays on, since v3.9 always showed
+ * the root name as a static breadcrumb anyway. We get a free
+ * collapse/expand affordance with no visual regression.
+ */
+function RootTree({
+  root,
+  showHeader,
+  activePath,
+  onLeafOpen,
+  onContextMenu,
+}: {
+  root: string;
+  showHeader: boolean;
+  activePath: string | null;
+  onLeafOpen: (entry: TreeEntry) => void;
+  onContextMenu: (entry: TreeEntry, e: React.MouseEvent) => void;
+}) {
+  const [tree, setTree] = useState<TreeEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const gitStatus = useGitStatus(root);
+
+  const loadRoot = useCallback(async () => {
+    setLoading(true);
+    try {
+      const entries = await window.suxai.fs.readDir(root);
+      setTree(entries.map((e) => ({ ...e, loaded: false, expanded: false })));
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [root]);
+
+  useEffect(() => { void loadRoot(); }, [loadRoot]);
+
+  // Refresh on cross-tree event broadcast. No-payload event means
+  // every RootTree resyncs — coût négligeable (1 fs.readDir per root)
+  // et ça évite de devoir router l'event sur le bon root depuis les
+  // handlers Sidebar.
+  useEffect(() => {
+    const handler = () => { void loadRoot(); };
+    window.addEventListener('suxai:tree-refresh', handler);
+    return () => window.removeEventListener('suxai:tree-refresh', handler);
+  }, [loadRoot]);
+
+  const toggleDir = async (entry: TreeEntry) => {
+    if (!entry.isDirectory) {
+      onLeafOpen(entry);
+      return;
+    }
+    setTree((prev) => toggleEntry(prev, entry.path));
+    if (!entry.loaded) {
+      try {
+        const children = await window.suxai.fs.readDir(entry.path);
+        setTree((prev) =>
+          setEntryChildren(
+            prev,
+            entry.path,
+            children.map((c) => ({ ...c, loaded: false, expanded: false })),
+          ),
+        );
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const rootName = root.split(/[\\/]/).filter(Boolean).pop() ?? root;
+
+  return (
+    <div className="sidebar__root-section">
+      {showHeader ? (
+        <button
+          type="button"
+          className="sidebar__root sidebar__root--collapsible"
+          onClick={() => setCollapsed((c) => !c)}
+          title={root}
+        >
+          <span
+            className="sidebar__chev"
+            aria-hidden
+            style={{
+              display: 'inline-flex',
+              transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)',
+              transition: 'transform var(--dur-quick) var(--ease-out-expo)',
+            }}
+          >
+            <AtelierIcon name="i-chevron-right" size={10} />
+          </span>
+          <span className="sidebar__root-name">{rootName}</span>
+        </button>
+      ) : (
+        <div className="sidebar__root" title={root}>
+          <span className="sidebar__root-name">{rootName}</span>
+        </div>
+      )}
+      {!collapsed && (
+        loading ? (
+          <div className="sidebar__empty"><span>Loading…</span></div>
+        ) : (
+          <TreeList
+            entries={tree}
+            depth={0}
+            onToggle={toggleDir}
+            activePath={activePath}
+            gitStatus={gitStatus}
+            onContextMenu={onContextMenu}
+          />
+        )
+      )}
+    </div>
   );
 }
 

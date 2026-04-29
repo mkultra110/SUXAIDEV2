@@ -12,9 +12,9 @@
 
 ## En cours
 
-_V3.9.0 livrée (multi-root workspaces — premier cut) — voir Revue
-ci-dessous. Reste V3.10 le multi-tree-rendering visuel + Departure
-Mono ghost text._
+_V3.10.0 livrée (multi-tree visuel + Add folder CTA) — voir Revue
+ci-dessous. Restent : git status par-root, search across roots,
+`.code-workspace` save/load, Departure Mono ghost text._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +99,41 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.10.0 multi-tree visuel (RootTree autonome)
+- **Fait** :
+  - **`<RootTree root showHeader>`** : nouveau composant interne
+    dans `Sidebar.tsx` qui owns son tree state (TreeEntry[]),
+    son `loading`, son `useGitStatus(root)`, son `loadRoot` +
+    `toggleDir`. Subscribe à un event global `suxai:tree-refresh`
+    pour resync. La Sidebar parent map sur `workspaceRoots` et
+    instancie un RootTree par dossier.
+  - **Header collapsible per-root** : quand 2+ roots, chaque
+    section a son button-header avec chevron rotatif (90 deg si
+    expanded). Quand 1 root, header reste static (pas régression
+    visuelle vs V3.9). Le pill `+N` cliquable de V3.9 est retiré
+    (les roots sont visibles directement, plus de cycle nécessaire).
+  - **Tree-refresh global event** : les handlers `handleNewFile`,
+    `handleNewFolder`, `handleRename`, `handleDelete` dispatchent
+    `suxai:tree-refresh` (sans payload) après l'IPC succès. Chaque
+    RootTree écoute et reload son `fs.readDir` — coût : 1 readDir
+    par root, négligeable même à 5 folders ouverts.
+  - **« Add folder to workspace » CTA** : bouton dashed-border
+    discret au footer du tree (parité VSCode Explorer). Click
+    appelle `addWorkspaceRoot(root)` après `fs.openFolder()`.
+  - **Sidebar refactor** : les state/refs per-root (tree, loading,
+    loadRoot, toggleDir) sont retirés du parent. Reste : menu
+    contexte (lifted pour positionnement portal), handlers
+    new/rename/delete, gitStatus du primary pour le badge SC.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
+- **Hors scope V3.10 (déféré V3.11)** :
+  - **Search across roots** : SearchInFiles itère seulement le
+    primary root.
+  - **Git status par-root** : le badge SC dans le header somme
+    seulement le primary ; idéalement on agrégerait toutes les
+    roots.
+  - **`.code-workspace` save/load** : pas implémenté.
+  - **Departure Mono ghost text** : pas dispo sur fontsource.
 
 ### 2026-04-28 — V3.9.0 multi-root workspaces (premier cut)
 - **Fait** :

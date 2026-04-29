@@ -124,6 +124,14 @@
   scrollbar-gutter: stable;
 }
 
+.sidebar__root-section {
+  display: flex;
+  flex-direction: column;
+}
+.sidebar__root-section + .sidebar__root-section {
+  margin-top: 4px;
+  border-top: 1px solid var(--color-border-subtle);
+}
 .sidebar__root {
   display: flex;
   align-items: center;
@@ -135,31 +143,55 @@
   letter-spacing: 0.10em;
   color: var(--color-text-tertiary);
 }
+/* v3.10 — Collapsible header for each workspace root. Renders as a
+   button so it's keyboard-accessible. Same typographic shell as
+   `.sidebar__root` ; the chevron rotates on toggle. */
+.sidebar__root--collapsible {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  transition: background var(--dur-quick) var(--ease-standard);
+}
+.sidebar__root--collapsible:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+}
 .sidebar__root-name {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* v3.9 — pill cliquable « +N » qui apparaît quand plusieurs folders
-   sont ouverts. Click → cycle le root primaire vers le suivant. */
-.sidebar__root-extra {
-  flex-shrink: 0;
-  background: color-mix(in oklch, var(--color-accent) 16%, transparent);
-  border: 1px solid color-mix(in oklch, var(--color-accent) 32%, transparent);
-  color: var(--color-accent);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: var(--radius-full);
-  cursor: pointer;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  transition: background var(--dur-quick) var(--ease-standard);
+/* v3.10 — « Add folder to workspace » CTA in the explorer footer.
+   VSCode parity (their Explorer has the same affordance). Discreet
+   ghost button, accent on hover. */
+.sidebar__tree-footer {
+  padding: 6px 10px 10px;
+  margin-top: 4px;
 }
-.sidebar__root-extra:hover {
-  background: color-mix(in oklch, var(--color-accent) 26%, transparent);
+.sidebar__add-folder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 1px dashed var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-standard),
+              border-color var(--dur-quick) var(--ease-standard),
+              color var(--dur-quick) var(--ease-standard);
+}
+.sidebar__add-folder:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+  background: color-mix(in oklch, var(--color-accent) 6%, transparent);
 }
 
 .sidebar__list {

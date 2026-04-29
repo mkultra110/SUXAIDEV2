@@ -161,6 +161,30 @@ _(à remplir au fur et à mesure)_
   Mettre à jour à chaque commit. Permet `cat refactor-progress.md
   → continue` après reset propre.
 
+### V7 — Trailing assistant message → upstream 400 « assistant prefill »
+- **Symptôme** : pendant un tool call agent (ex. `read_file`) sur un
+  fichier lent ou avec une race avec un nouveau streamAi, l'upstream
+  Quatarly remontait un 400 « This model does not support assistant
+  message prefill. The conversation must end with a user message. »
+- **Cause** : `chatToAgentMessages` (AIPanel.tsx) filtrait les
+  tool_use pending dans un assistant message MAIS continuait à
+  émettre les blocks `text` du même message. Si le message avait
+  text + tool_use pending, le résultat était `{role:assistant,
+  content:[text]}` SANS le user/tool_result correspondant —
+  l'historique se terminait par un message assistant orphelin.
+  Anthropic rejette ce shape pour les modèles non-prefill.
+  Cas plus subtil aussi : si SOME tools complete et d'autres pending,
+  émettre un mix produit une asymétrie tool_use ↔ tool_result que
+  Anthropic 400 aussi.
+- **Règle** : quand un message assistant a des tool_use blocks et
+  qu'au moins un n'est pas dans `completed` (status pending/running
+  ou pas de `result`), **drop le message ENTIER** (continue le loop).
+  Le modèle ne « voit » pas avoir émis ces tool_uses vu qu'il est
+  stateless ; il re-stratégise au prochain tour. Émettre seulement
+  les complete-pairs est tentant mais casse l'invariant Anthropic
+  « assistant claims N tool_uses → user must close all N ». Voir
+  AIPanel.tsx commit v3.14.0 patch sur `chatToAgentMessages`.
+
 ### V6 — Refus prématuré sur URL « suspecte » fournie par l'user
 - **Symptôme** : l'utilisateur a envoyé une URL
   `https://api.anthropic.com/v1/design/h/<hash>` en demandant

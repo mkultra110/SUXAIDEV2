@@ -280,6 +280,22 @@ export function EditorPanel() {
       runAction('editor.action.quickOutline', () =>
         toast.info('Go to Symbol', 'Aucun symbole détecté dans ce fichier.'),
       );
+    // v3.14 — diagnostics navigation (parité VSCode F8 / Shift+F8) +
+    // quick fix (Cmd+. / Ctrl+.). Monaco gère les bindings clavier
+    // natifs quand l'éditeur a focus ; ces listeners servent le
+    // path palette / hors-focus.
+    const nextProblem = () =>
+      runAction('editor.action.marker.next', () =>
+        toast.info('Next Problem', 'Aucun problème dans ce fichier.'),
+      );
+    const prevProblem = () =>
+      runAction('editor.action.marker.prev', () =>
+        toast.info('Previous Problem', 'Aucun problème dans ce fichier.'),
+      );
+    const quickFix = () =>
+      runAction('editor.action.quickFix', () =>
+        toast.info('Quick Fix', 'Aucune action disponible à la position du curseur.'),
+      );
     window.addEventListener('suxai:format-document', fmt);
     window.addEventListener('suxai:indent-to-spaces', toSpaces);
     window.addEventListener('suxai:indent-to-tabs', toTabs);
@@ -288,6 +304,9 @@ export function EditorPanel() {
     window.addEventListener('suxai:go-to-references', goToRefs);
     window.addEventListener('suxai:rename-symbol', rename);
     window.addEventListener('suxai:quick-outline', quickOutline);
+    window.addEventListener('suxai:next-problem', nextProblem);
+    window.addEventListener('suxai:prev-problem', prevProblem);
+    window.addEventListener('suxai:quick-fix', quickFix);
     return () => {
       window.removeEventListener('suxai:format-document', fmt);
       window.removeEventListener('suxai:indent-to-spaces', toSpaces);
@@ -297,6 +316,9 @@ export function EditorPanel() {
       window.removeEventListener('suxai:go-to-references', goToRefs);
       window.removeEventListener('suxai:rename-symbol', rename);
       window.removeEventListener('suxai:quick-outline', quickOutline);
+      window.removeEventListener('suxai:next-problem', nextProblem);
+      window.removeEventListener('suxai:prev-problem', prevProblem);
+      window.removeEventListener('suxai:quick-fix', quickFix);
     };
   }, [toast]);
 
@@ -1069,7 +1091,7 @@ export function EditorPanel() {
                   //     classe englobante reste épinglée en haut de
                   //     l'éditeur quand tu scrolles dans son corps
                   bracketPairColorization: { enabled: true, independentColorPoolPerBracketType: true },
-                  stickyScroll: { enabled: true, maxLineCount: 5 },
+                  stickyScroll: { enabled: settings.stickyScroll, maxLineCount: 5 },
                   // Tab autocomplete (ghost text). Even when the toggle
                   // is off in settings, leaving this enabled is fine —
                   // the provider returns no items, so no ghost text shows.

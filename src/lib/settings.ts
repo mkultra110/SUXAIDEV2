@@ -43,6 +43,11 @@ export interface Settings {
    *  cursor with a 200 ms debounce. Skipped when the workspace
    *  isn't a git repo or the file is untracked. */
   gitBlame: boolean;
+  /** v3.14 — Monaco sticky scroll (parité VSCode). Pin la signature
+   *  du scope courant (function / class / block) en haut de la zone
+   *  de code pendant qu'on scrolle dans son corps — utile sur les
+   *  longs fichiers avec scope nesting profond. */
+  stickyScroll: boolean;
 }
 
 const KEY = 'suxai.settings.v1';
@@ -60,6 +65,7 @@ const DEFAULTS: Settings = {
   formatOnSave: false,
   trimTrailingWhitespaceOnSave: false,
   gitBlame: true,
+  stickyScroll: true,
 };
 
 function loadUser(): Settings {

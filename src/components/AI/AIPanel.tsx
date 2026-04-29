@@ -124,9 +124,22 @@ function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
     // the next turn is rejected by Anthropic ("400 tool_use_id ... has
     // no tool_result"). We drop those blocks entirely; the model will
     // re-issue them in the next iteration if it still wants them.
+    const totalToolCalls = m.toolCalls?.length ?? 0;
     const completed = (m.toolCalls ?? []).filter(
       (tc) => tc.result !== undefined && tc.status !== 'pending' && tc.status !== 'running',
     );
+    // v3.14 hotfix — si le message a des tool calls dont au moins un
+    // est encore pending/running (race condition : nouveau streamAi
+    // déclenché avant la fin d'exécution des tools, ou interruption
+    // partielle), drop le message ENTIER. Émettre seulement le texte
+    // produit un trailing assistant qui fait 400 « assistant prefill ».
+    // Émettre seulement les tools complétés produit une asymétrie
+    // tool_use ↔ tool_result que Anthropic rejette aussi. Drop est
+    // safe : le modèle re-stratégisera au prochain tour, vu qu'il ne
+    // « voit » plus avoir émis ces tool_uses.
+    if (totalToolCalls > 0 && completed.length < totalToolCalls) {
+      continue;
+    }
     const blocks: AgentContentBlock[] = [];
     // v0.12: thinking / redacted_thinking / server_tool_use blocks
     // come FIRST in the assistant message — this is required by

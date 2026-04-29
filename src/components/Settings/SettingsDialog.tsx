@@ -147,6 +147,12 @@ export function SettingsDialog() {
                 onChange={(v) => update({ gitBlame: v })}
               />
             </Row>
+            <Row label="Sticky scroll (pinned scope)">
+              <Toggle
+                value={settings.stickyScroll}
+                onChange={(v) => update({ stickyScroll: v })}
+              />
+            </Row>
           </Section>
 
           <Section title="AI">

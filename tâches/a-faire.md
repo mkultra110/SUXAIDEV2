@@ -12,9 +12,8 @@
 
 ## En cours
 
-_V3.13.0 livrée (top-level settings + drag-drop + TitleBar chip) —
-.code-workspace est intégralement vivant. Reste : Departure Mono
-ghost text (pas dispo sur fontsource)._
+_V3.14.0 livrée (raccourcis F8 + Cmd+. + stickyScroll setting +
+hotfix prefill 400) — voir Revue ci-dessous._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -99,6 +98,29 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.14.0 raccourcis VSCode + hotfix prefill 400
+- **Fait** :
+  - **F8 / Shift+F8** : Go to Next / Previous Problem. Listeners
+    `suxai:next-problem` / `suxai:prev-problem` dans EditorPanel
+    qui appellent `editor.action.marker.next/prev`. Monaco gère le
+    binding clavier nativement quand l'éditeur a focus ; les events
+    servent le path palette.
+  - **Cmd+. / Ctrl+.** : Quick Fix. Listener `suxai:quick-fix`
+    triggant `editor.action.quickFix`. Toast info si aucune action
+    disponible à la position du curseur.
+  - **Sticky scroll setting** : nouveau `settings.stickyScroll`
+    (default true) qui pilote `Monaco.editor.options.stickyScroll.enabled`.
+    Toggle dans SettingsDialog. Mapping `editor.stickyScroll.enabled`
+    dans `.vscode/settings.json` honoré.
+  - **CommandPalette** : 3 nouvelles entrées Editor (Go to Next/
+    Previous Problem, Quick Fix…).
+  - **Hotfix bug 400 « assistant prefill »** : `chatToAgentMessages`
+    drop désormais le message assistant ENTIER si un tool call est
+    pending/running (avant : émission text-only sans tool_result →
+    trailing assistant → upstream 400). Voir leçon V7 dans
+    `tâches/leçons.md`.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
 
 ### 2026-04-28 — V3.13.0 finitions .code-workspace (top-level settings + drag-drop + TitleBar)
 - **Fait** :

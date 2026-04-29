@@ -185,6 +185,33 @@ export function CommandPalette() {
         },
       },
       {
+        id: 'editor.next-problem',
+        label: 'Go to Next Problem',
+        hint: 'F8',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:next-problem'));
+        },
+      },
+      {
+        id: 'editor.prev-problem',
+        label: 'Go to Previous Problem',
+        hint: 'Shift+F8',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:prev-problem'));
+        },
+      },
+      {
+        id: 'editor.quick-fix',
+        label: 'Quick Fix…',
+        hint: 'Ctrl+.',
+        group: 'Editor',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:quick-fix'));
+        },
+      },
+      {
         id: 'workspace.close',
         label: workspaceRoots.length > 1
           ? 'Workspace: Close all folders'

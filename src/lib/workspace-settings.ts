@@ -145,6 +145,10 @@ function mapVscodeKeys(raw: Record<string, unknown>): Partial<Settings> {
   const blame = get('git.blame.enabled');
   if (typeof blame === 'boolean') out.gitBlame = blame;
 
+  // v3.14 — VSCode key for sticky scroll.
+  const sticky = get('editor.stickyScroll.enabled');
+  if (typeof sticky === 'boolean') out.stickyScroll = sticky;
+
   return out;
 }
 

@@ -8,10 +8,29 @@ import './TitleBar.css';
 
 export function TitleBar() {
   const { user, token, logout } = useAuth();
-  const { workspaceFile } = useWorkspace();
+  const { workspaceFile, openFile } = useWorkspace();
   const workspaceFileName = workspaceFile
     ? (workspaceFile.split(/[\\/]/).pop() ?? workspaceFile)
     : null;
+
+  // v3.15 — click sur le chip TitleBar = ouvre le .code-workspace
+  // dans l'éditeur (utile pour éditer la config workspace).
+  const onOpenWorkspaceFile = async () => {
+    if (!workspaceFile) return;
+    try {
+      const f = await window.suxai.fs.readFile(workspaceFile);
+      const name = workspaceFile.split(/[\\/]/).pop() ?? workspaceFile;
+      openFile({
+        path: f.path,
+        name,
+        content: f.content,
+        eol: f.eol,
+        encoding: f.encoding,
+      });
+    } catch {
+      /* file moved/deleted — fail silently */
+    }
+  };
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [version, setVersion] = useState<string>('');
 
@@ -58,13 +77,15 @@ export function TitleBar() {
               tooltip donne le full path. Click ouvre l'item dans
               l'éditeur (utile pour éditer la config du workspace). */}
           {workspaceFileName && (
-            <span
+            <button
+              type="button"
               className="titlebar__workspace-file"
-              title={workspaceFile ?? ''}
+              title={`${workspaceFile}\n\nClick to open in editor`}
+              onClick={onOpenWorkspaceFile}
             >
               <AtelierIcon name="i-package" size={11} />
               {workspaceFileName}
-            </span>
+            </button>
           )}
         </div>
       </div>

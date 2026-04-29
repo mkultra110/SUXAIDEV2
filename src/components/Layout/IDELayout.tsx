@@ -242,6 +242,27 @@ export function IDELayout() {
   useEffect(() => {
     persistLayout({ sidebarOpen, aiOpen, sidebarView });
   }, [sidebarOpen, aiOpen, sidebarView]);
+  // v3.15 — Ctrl/Cmd+Shift+E (Explorer) + Ctrl/Cmd+Shift+G (Source
+  // Control) parité VSCode. Bascule la sidebar view + force ouvert
+  // si elle est fermée. Pas de toggle-collapse comme dans VSCode :
+  // la 1re pression ouvre la view, la 2e laisse la view (pas de
+  // « cacher si déjà visible » — moins surprenant, plus simple).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey) return;
+      if (e.key === 'E' || e.key === 'e') {
+        e.preventDefault();
+        setSidebarView('files');
+        setSidebarOpen(true);
+      } else if (e.key === 'G' || e.key === 'g') {
+        e.preventDefault();
+        setSidebarView('changes');
+        setSidebarOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, []);
   const { workspaceRoot, workspaceRoots, workspaceFile } = useWorkspace();
   const gitStatus = useGitStatus(workspaceRoot);
   const dirtyCount = Object.keys(gitStatus).length;

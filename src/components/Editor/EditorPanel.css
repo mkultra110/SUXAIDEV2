@@ -524,3 +524,19 @@ kbd {
   opacity: 0.6;
   font-family: var(--font-mono);
 }
+
+/* v3.15 — Inline ghost-text styling. Monaco rend les inline
+   suggestions via la classe `.ghost-text-decoration` (preview
+   inline, pas le widget toolbar). On les passe en italic + couleur
+   muted + le font-stack `--font-ghost` (Departure Mono attendu,
+   fallback Monaspace Radon → Argon). Différencie visuellement le
+   texte produit par Tab autocomplete des chars que tu tapes. */
+.monaco-editor .ghost-text,
+.monaco-editor .ghost-text-decoration,
+.monaco-editor .ghost-text-decoration-preview,
+.monaco-editor .suggest-preview-text .ghost-text {
+  font-family: var(--font-ghost);
+  font-style: italic;
+  color: color-mix(in oklch, var(--color-text-muted) 88%, var(--color-accent-text)) !important;
+  opacity: 0.74;
+}

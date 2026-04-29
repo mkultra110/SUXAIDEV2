@@ -12,8 +12,8 @@
 
 ## En cours
 
-_V3.14.0 livrée (raccourcis F8 + Cmd+. + stickyScroll setting +
-hotfix prefill 400) — voir Revue ci-dessous._
+_V3.15.0 livrée (ghost text styling + TitleBar chip cliquable +
+Ctrl+Shift+E/G sidebar focus) — voir Revue ci-dessous._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -98,6 +98,28 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.15.0 polish UX (ghost text + TitleBar click + sidebar focus)
+- **Fait** :
+  - **Ghost text styling** : Monaco rend les inline suggestions
+    via `.ghost-text*` classes. Nouvelle CSS dans EditorPanel.css
+    qui les passe en `font-style: italic`, font-family
+    `var(--font-ghost)` (Departure Mono attendu, fallback
+    Monaspace Radon → Argon), couleur tinted vers honey + opacity
+    0.74. Différencie visuellement le texte produit par Tab
+    autocomplete des chars que l'utilisateur tape.
+  - **TitleBar chip cliquable** : le chip workspace file (introduit
+    en V3.13) devient un button — click ouvre le `.code-workspace`
+    dans l'éditeur via `openFile`. Tooltip mis à jour pour indiquer
+    « Click to open in editor ». Hover gagne un fond honey saturé
+    pour confirmer l'affordance.
+  - **Ctrl+Shift+E / Ctrl+Shift+G** (parité VSCode) : nouvel
+    useEffect dans IDELayout qui écoute ces deux hotkeys et bascule
+    `sidebarView` vers 'files' / 'changes' tout en forçant
+    `sidebarOpen=true`. Pas de toggle-collapse type VSCode (la
+    seconde pression ne cache pas la sidebar — choix : moins
+    surprenant, plus simple).
+- **Validation** : `npm run typecheck` + `npm run build` OK.
 
 ### 2026-04-28 — V3.14.0 raccourcis VSCode + hotfix prefill 400
 - **Fait** :

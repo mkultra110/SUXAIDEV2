@@ -276,3 +276,15 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* v3.15 — chip cliquable qui ouvre le .code-workspace dans l'éditeur. */
+.titlebar__workspace-file {
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background var(--dur-quick) var(--ease-standard),
+              border-color var(--dur-quick) var(--ease-standard);
+}
+.titlebar__workspace-file:hover {
+  background: color-mix(in oklch, var(--color-accent) 22%, transparent);
+  border-color: color-mix(in oklch, var(--color-accent) 50%, transparent);
+}

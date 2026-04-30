@@ -2649,6 +2649,58 @@ export function AIPanel() {
     return () => window.removeEventListener('suxai:add-to-chat', handler);
   }, []);
 
+  // v3.18 — Export the active conversation. Two formats : markdown
+  // (human-readable, GitHub-pasteable) and JSON (lossless,
+  // re-importable). Both go through fs.saveAs which prompts the user
+  // for a target path. Empty conversation → toast info instead of
+  // dumping a blank file.
+  useEffect(() => {
+    const exportMd = async () => {
+      if (!activeConv) {
+        toast.info('Export', 'No active conversation to export.');
+        return;
+      }
+      if (activeConv.messages.length === 0) {
+        toast.info('Export', 'Conversation is empty.');
+        return;
+      }
+      const { conversationToMarkdown, exportFilename } = await import('../../lib/conversation-export');
+      const md = conversationToMarkdown(activeConv);
+      try {
+        const written = await window.suxai.fs.saveAs(md, exportFilename(activeConv, 'md'));
+        if (written) {
+          const name = written.split(/[\\/]/).pop() ?? written;
+          toast.success('Exported', name);
+        }
+      } catch (err) {
+        toast.error('Export failed', (err as Error).message);
+      }
+    };
+    const exportJson = async () => {
+      if (!activeConv) {
+        toast.info('Export', 'No active conversation to export.');
+        return;
+      }
+      const { conversationToJson, exportFilename } = await import('../../lib/conversation-export');
+      const json = conversationToJson(activeConv);
+      try {
+        const written = await window.suxai.fs.saveAs(json, exportFilename(activeConv, 'json'));
+        if (written) {
+          const name = written.split(/[\\/]/).pop() ?? written;
+          toast.success('Exported', name);
+        }
+      } catch (err) {
+        toast.error('Export failed', (err as Error).message);
+      }
+    };
+    window.addEventListener('suxai:export-conversation-md', exportMd);
+    window.addEventListener('suxai:export-conversation-json', exportJson);
+    return () => {
+      window.removeEventListener('suxai:export-conversation-md', exportMd);
+      window.removeEventListener('suxai:export-conversation-json', exportJson);
+    };
+  }, [activeConv, toast]);
+
   const newConversation = useCallback(() => {
     abortRef.current?.();
     setStreaming(false);

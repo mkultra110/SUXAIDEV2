@@ -12,7 +12,8 @@
 
 ## En cours
 
-_V3.17.0 livré (Replace in Files Cmd+Shift+H, parité VSCode)._
+_V3.18.0 livré (palette MRU + conversation export markdown/json +
+reveal active file in sidebar)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)
 
@@ -97,6 +98,31 @@ attaque un, le déplacer dans **En cours** avec un sous-plan détaillé
 
 Chaque entrée résume : ce qui a été fait, ce qui a été appris, et
 les éventuels follow-ups identifiés en route.
+
+### 2026-04-28 — V3.18.0 polish bundle (palette MRU + export AI + reveal sidebar)
+- **Fait** :
+  - **CommandPalette MRU** : track des command IDs les plus récemment
+    utilisés dans `localStorage['suxai.palette.mru.v1']` (cap 12).
+    Quand le query est vide, les MRU remontent en tête de liste.
+    Recherches non-vides restent scorées par fuzzy match. Effet :
+    la 2e fois que tu ouvres pour `Format Document`, il est sur la
+    1ère ligne.
+  - **Conversation export** : nouveau `lib/conversation-export.ts`
+    avec `conversationToMarkdown(conv)` (head + role-tagged blocks
+    avec emoji + tool calls JSON-clipped 1500 chars + status icons)
+    et `conversationToJson(conv)` (lossless pretty-print). 2 entrées
+    palette : `AI: Export conversation as Markdown…` /
+    `AI: Export conversation as JSON…`. Listeners dans AIPanel qui
+    pull `activeConv`, sérialisent, passent à `fs.saveAs` (Save
+    dialog). Filename auto-slugifié + horodaté.
+  - **Reveal Active File in Sidebar** : nouvelle entrée palette
+    `View: Reveal Active File in Sidebar`. Dispatch event
+    `suxai:reveal-in-sidebar` avec le path. Chaque RootTree écoute
+    et, si le path tombe dans son root, walk segment-by-segment en
+    expanding+lazy-loading chaque dir, puis scroll-into-view + flash
+    1.6s sur l'entry. Selector `[data-tree-path]` ajouté sur les
+    buttons d'entry pour le DOM lookup post-walk.
+- **Validation** : `npm run typecheck` + `npm run build` OK.
 
 ### 2026-04-28 — V3.17.0 Replace in Files (Cmd+Shift+H, parité VSCode)
 - **Fait** :

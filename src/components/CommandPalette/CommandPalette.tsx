@@ -23,6 +23,35 @@ interface Command {
   run: () => void | Promise<void>;
 }
 
+// v3.18 — most-recently-used command tracking. Quand l'utilisateur
+// pick une commande, son id remonte en tête. Empty-query view
+// affiche les MRU en premier ; les recherches non-empty restent
+// scorées par fuzzy match. Cap à 12 entrées pour éviter un
+// localStorage qui balloon. Storage version : v1 (id list, last
+// used first).
+const MRU_KEY = 'suxai.palette.mru.v1';
+const MRU_CAP = 12;
+
+function loadMru(): string[] {
+  try {
+    const raw = localStorage.getItem(MRU_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((s): s is string => typeof s === 'string').slice(0, MRU_CAP);
+  } catch {
+    return [];
+  }
+}
+
+function pushMru(id: string): void {
+  try {
+    const cur = loadMru().filter((x) => x !== id);
+    cur.unshift(id);
+    localStorage.setItem(MRU_KEY, JSON.stringify(cur.slice(0, MRU_CAP)));
+  } catch { /* quota — silent */ }
+}
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -409,6 +438,35 @@ export function CommandPalette() {
         },
       },
       {
+        id: 'ai.export-md',
+        label: 'AI: Export conversation as Markdown…',
+        group: 'AI',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:export-conversation-md'));
+        },
+      },
+      {
+        id: 'ai.export-json',
+        label: 'AI: Export conversation as JSON…',
+        group: 'AI',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:export-conversation-json'));
+        },
+      },
+      {
+        id: 'view.reveal-active-file',
+        label: 'View: Reveal Active File in Sidebar',
+        group: 'Workspace',
+        run: () => {
+          if (!activeFile) return toast.info('No active file');
+          window.dispatchEvent(
+            new CustomEvent<{ path: string }>('suxai:reveal-in-sidebar', {
+              detail: { path: activeFile.path },
+            }),
+          );
+        },
+      },
+      {
         id: 'ai.explain',
         label: 'AI: Explain selection / active file',
         group: 'AI',
@@ -495,7 +553,23 @@ export function CommandPalette() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return commands;
+    if (!q) {
+      // v3.18 — empty query : MRU au top puis default order. Ça
+      // raccourcit énormément le « pour toi » : la 2e fois que tu
+      // ouvres pour Format Document, il est déjà sur la 1ère ligne.
+      const mru = loadMru();
+      if (mru.length === 0) return commands;
+      const byId = new Map(commands.map((c) => [c.id, c] as const));
+      const recent: Command[] = [];
+      for (const id of mru) {
+        const cmd = byId.get(id);
+        if (cmd) {
+          recent.push(cmd);
+          byId.delete(id);
+        }
+      }
+      return [...recent, ...byId.values()];
+    }
     // Subsequence fuzzy match + score by earliness.
     return commands
       .map((c) => {
@@ -526,6 +600,9 @@ export function CommandPalette() {
     (i: number) => {
       const cmd = filtered[i];
       if (!cmd) return;
+      // v3.18 — track MRU avant le close pour que la prochaine
+      // ouverture ait déjà l'item en tête.
+      pushMru(cmd.id);
       close();
       // defer so the palette unmounts before the command kicks in — avoids
       // double keystrokes leaking into the next focused element.

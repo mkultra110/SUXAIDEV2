@@ -388,6 +388,85 @@ function RootTree({
     return () => window.removeEventListener('suxai:tree-refresh', handler);
   }, [loadRoot]);
 
+  // v3.18 — Reveal-in-sidebar : walk depuis la root jusqu'à la
+  // target path, expand chaque dir intermédiaire (lazy-load via
+  // fs.readDir si pas encore chargé), puis scroll-into-view +
+  // flash-highlight le button de la target. Listener scopé à ce
+  // RootTree ; il filtre les events qui ne sont pas pour son root.
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const detail = (e as CustomEvent<{ path: string }>).detail;
+      if (!detail?.path) return;
+      const target = detail.path.replace(/\\/g, '/');
+      const rootNorm = root.replace(/\\/g, '/').replace(/\/+$/, '');
+      if (!target.startsWith(rootNorm + '/') && target !== rootNorm) return;
+      const rel = target.slice(rootNorm.length).replace(/^\/+/, '');
+      const segments = rel.split('/').filter(Boolean);
+      if (segments.length === 0) return;
+
+      // Walk down the tree, expanding+loading each directory until
+      // we reach the target. Re-fetch the tree state via setTree's
+      // updater pattern so each step sees the latest.
+      let cumulative = rootNorm;
+      for (let i = 0; i < segments.length - 1; i++) {
+        cumulative += '/' + segments[i];
+        // Load children if not yet
+        let needLoad = false;
+        await new Promise<void>((resolve) => {
+          setTree((prev) => {
+            // Find entry by recursively walking
+            const findEntry = (list: TreeEntry[], path: string): TreeEntry | null => {
+              for (const e of list) {
+                const eNorm = e.path.replace(/\\/g, '/');
+                if (eNorm === path) return e;
+                if (e.children) {
+                  const child = findEntry(e.children, path);
+                  if (child) return child;
+                }
+              }
+              return null;
+            };
+            const entry = findEntry(prev, cumulative);
+            if (entry && !entry.loaded) needLoad = true;
+            // Mark expanded regardless (will load below if needed)
+            if (entry && !entry.expanded) {
+              return toggleEntry(prev, entry.path);
+            }
+            return prev;
+          });
+          resolve();
+        });
+        if (needLoad) {
+          try {
+            const children = await window.suxai.fs.readDir(cumulative);
+            setTree((prev) =>
+              setEntryChildren(
+                prev,
+                cumulative,
+                children.map((c) => ({ ...c, loaded: false, expanded: false })),
+              ),
+            );
+          } catch { /* swallow */ }
+        }
+      }
+
+      // Scroll + flash the target button.
+      requestAnimationFrame(() => {
+        const escaped = target.replace(/"/g, '\\"');
+        const btn = document.querySelector<HTMLElement>(
+          `[data-tree-path="${escaped}"]`,
+        );
+        if (btn) {
+          btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          btn.classList.add('sidebar__entry--flash');
+          setTimeout(() => btn.classList.remove('sidebar__entry--flash'), 1600);
+        }
+      });
+    };
+    window.addEventListener('suxai:reveal-in-sidebar', handler);
+    return () => window.removeEventListener('suxai:reveal-in-sidebar', handler);
+  }, [root]);
+
   const toggleDir = async (entry: TreeEntry) => {
     if (!entry.isDirectory) {
       onLeafOpen(entry);
@@ -485,6 +564,7 @@ function TreeList({
             <button
               className={`sidebar__entry ${activePath === e.path ? 'sidebar__entry--active' : ''}`}
               style={{ paddingLeft: 4 + depth * 14 }}
+              data-tree-path={e.path.replace(/\\/g, '/')}
               onClick={() => onToggle(e)}
               onContextMenu={(ev) => onContextMenu(e, ev)}
               draggable={!e.isDirectory}

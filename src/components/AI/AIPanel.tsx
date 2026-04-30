@@ -138,6 +138,22 @@ function chatToAgentMessages(messages: ChatMessage[]): AgentMessage[] {
     // safe : le modèle re-stratégisera au prochain tour, vu qu'il ne
     // « voit » plus avoir émis ces tool_uses.
     if (totalToolCalls > 0 && completed.length < totalToolCalls) {
+      // v3.18.1 — log diagnostic. Si ce path fire en prod c'est
+      // probablement le bug « modification rate sur tool incomplet ».
+      // Permet de corréler avec un screenshot DevTools console.
+      console.warn(
+        '[chatToAgentMessages] dropping incomplete assistant message',
+        {
+          msgId: m.id,
+          totalToolCalls,
+          completedCount: completed.length,
+          statuses: m.toolCalls?.map((tc) => ({
+            name: tc.name,
+            status: tc.status,
+            hasResult: tc.result !== undefined,
+          })),
+        },
+      );
       continue;
     }
     const blocks: AgentContentBlock[] = [];
@@ -710,40 +726,52 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
               }
             }
           } else {
-            // v3.16.1 — timeout 5min hard cap par tool call. Backstop
-            // anti-hang : si l'IPC n'a pas son propre timeout (read-dir
-            // depuis 3.16.1 en a un de 8s, run_command a son propre
-            // timeout configurable), un tool malformé peut bloquer le
-            // Promise.all indéfiniment et la conversation tourne en
-            // rond. 5min couvre tous les usages légitimes (build long,
-            // commande shell utilisateur) ; au-delà c'est forcément
-            // pathologique.
+            // v3.16.1 → v3.18.1 — timeout 5min hard cap par tool call.
+            // Backstop anti-hang : si l'IPC n'a pas son propre timeout
+            // (read-dir depuis 3.16.1 en a un de 8s, run_command a son
+            // propre timeout configurable), un tool malformé peut
+            // bloquer le Promise.all indéfiniment et la conversation
+            // tourne en rond. 5min couvre tous les usages légitimes
+            // (build long, commande shell utilisateur) ; au-delà c'est
+            // forcément pathologique.
+            // v3.18.1 — clearTimeout dans le finally pour ne pas
+            // laisser un timer fantôme par tool call (memory leak
+            // léger sur les longues sessions, et risque d'unhandled
+            // rejection après que Promise.race a déjà résolu).
             const TOOL_TIMEOUT_MS = 300_000;
-            result = await Promise.race([
-              executeTool(call, {
-                approve: (c, preview) => args.requestApproval(c, preview),
-                workspaceRoot: args.workspaceRoot ?? null,
-                applyLazyEdit: args.applyLazyEdit,
-                pathLocks,
-                notifyEdit: ({ path, added, removed, partial }) => {
-                  const name = path.split(/[\\/]/).pop() ?? path;
-                  toast.info(
-                    `Edited ${name}`,
-                    `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
-                  );
-                },
-              }),
-              new Promise<{ tool_use_id: string; content: string; is_error?: boolean }>((_, reject) =>
-                setTimeout(
+            let timeoutId: ReturnType<typeof setTimeout> | null = null;
+            const timeoutP = new Promise<{ tool_use_id: string; content: string; is_error?: boolean }>(
+              (_, reject) => {
+                timeoutId = setTimeout(
                   () => reject(new Error(
                     `Tool ${call.name} timed out after ${TOOL_TIMEOUT_MS / 1000}s — ` +
                     `the underlying IPC or subprocess didn't respond. Likely a hung file ` +
                     `system call (network drive, antivirus) or a runaway command.`,
                   )),
                   TOOL_TIMEOUT_MS,
-                ),
-              ),
-            ]);
+                );
+              },
+            );
+            try {
+              result = await Promise.race([
+                executeTool(call, {
+                  approve: (c, preview) => args.requestApproval(c, preview),
+                  workspaceRoot: args.workspaceRoot ?? null,
+                  applyLazyEdit: args.applyLazyEdit,
+                  pathLocks,
+                  notifyEdit: ({ path, added, removed, partial }) => {
+                    const name = path.split(/[\\/]/).pop() ?? path;
+                    toast.info(
+                      `Edited ${name}`,
+                      `+${added} −${removed} lines${partial ? ' (partial)' : ''}`,
+                    );
+                  },
+                }),
+                timeoutP,
+              ]);
+            } finally {
+              if (timeoutId !== null) clearTimeout(timeoutId);
+            }
           }
           const status: ToolCallSnapshot['status'] = result.is_error
             ? 'error'

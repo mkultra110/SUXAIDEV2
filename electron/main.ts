@@ -61,7 +61,9 @@ function createWindow() {
     backgroundColor: BG_COLOR,
     roundedCorners: true,
     ...(isMac && {
-      trafficLightPosition: { x: 14, y: 11 },
+      // v4.2.1 — y=12 centre verticalement les traffic lights (12px de
+      // diamètre dans une titlebar de 36px → (36-12)/2 = 12).
+      trafficLightPosition: { x: 14, y: 12 },
       vibrancy: 'under-window',
       visualEffectState: 'active',
     } as const),

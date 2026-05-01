@@ -2,6 +2,7 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { statfs } from 'node:fs/promises';
 import { env, corsOrigins } from './config/env.js';
 import authRouter from './routes/auth.js';
 import aiRouter from './routes/ai.js';
@@ -59,7 +60,41 @@ app.use(
 // precise error.
 app.use(express.json({ limit: '64mb' }));
 
-app.get('/health', (_req, res) => res.json({ ok: true, version: env.UPDATE_VERSION }));
+// v4.3.0 — health endpoint enrichi : on remonte mémoire, uptime, et
+// surtout l'espace disque libre sur DATA_DIR (la cible des écritures
+// users.json + backups). Permet à un monitor externe de couper avant
+// que ENOSPC ne fige le serveur en restart-loop comme on l'a vu en
+// prod le 2026-05-01.
+app.get('/health', async (_req, res) => {
+  const mem = process.memoryUsage();
+  let disk: { totalMB: number; freeMB: number; usedPct: number } | null = null;
+  try {
+    const s = await statfs(env.DATA_DIR);
+    const total = s.blocks * s.bsize;
+    const free = s.bavail * s.bsize;
+    disk = {
+      totalMB: Math.round(total / (1024 * 1024)),
+      freeMB: Math.round(free / (1024 * 1024)),
+      usedPct: total > 0 ? Math.round(((total - free) / total) * 100) : 0,
+    };
+  } catch {
+    /* statfs indisponible — laisse disk=null */
+  }
+  // Considère la santé dégradée si <500MB libres OU >95% utilisé.
+  // Le client peut alors basculer en mode read-only / alerter.
+  const degraded = !!(disk && (disk.freeMB < 500 || disk.usedPct > 95));
+  res.status(degraded ? 503 : 200).json({
+    ok: !degraded,
+    version: env.UPDATE_VERSION,
+    uptimeSec: Math.round(process.uptime()),
+    memoryMB: {
+      rss: Math.round(mem.rss / (1024 * 1024)),
+      heapUsed: Math.round(mem.heapUsed / (1024 * 1024)),
+    },
+    disk,
+    ...(degraded ? { warning: 'Disk space critical — writes may fail' } : {}),
+  });
+});
 
 app.use('/auth', authRouter);
 app.use('/ai', aiRouter);

@@ -140,6 +140,32 @@ cp "$SERVER_SRC/deploy/suxai-server.service" "/etc/systemd/system/${SERVICE_NAME
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}.service"
 
+# ---- logrotate -------------------------------------------------------------
+# v4.3.0 — sans rotation, /opt/suxai/logs/server.log grossit jusqu'à
+# saturer le disque (incident prod 2026-05-01 : 100% full, restart-loop
+# infini parce que ENOSPC bloquait écriture users.json).
+if [[ -d /etc/logrotate.d ]]; then
+  echo "==> Installing logrotate config"
+  cp "$SERVER_SRC/deploy/logrotate.conf" "/etc/logrotate.d/${SERVICE_NAME}"
+  chmod 0644 "/etc/logrotate.d/${SERVICE_NAME}"
+  # Test the config so a typo doesn't silently break rotation forever.
+  logrotate -d "/etc/logrotate.d/${SERVICE_NAME}" >/dev/null 2>&1 || \
+    echo "!! logrotate -d failed — check /etc/logrotate.d/${SERVICE_NAME}" >&2
+fi
+
+# ---- journald cap ----------------------------------------------------------
+# Évite que /var/log/journal/ accumule plusieurs GB et participe au
+# disque-plein. Drop-in en /etc/systemd/journald.conf.d/ pour ne pas
+# toucher la config principale (réversible : rm le drop-in).
+if [[ -d /etc/systemd/journald.conf.d ]] || mkdir -p /etc/systemd/journald.conf.d; then
+  echo "==> Capping journald to 500MB max"
+  cp "$SERVER_SRC/deploy/journald.conf" "/etc/systemd/journald.conf.d/suxai-cap.conf"
+  chmod 0644 "/etc/systemd/journald.conf.d/suxai-cap.conf"
+  systemctl restart systemd-journald || true
+  # Vacuum tout de suite pour appliquer le nouveau cap aux archives existantes.
+  journalctl --vacuum-size=500M >/dev/null 2>&1 || true
+fi
+
 # ---- nginx site ------------------------------------------------------------
 if command -v nginx >/dev/null 2>&1; then
   echo "==> Installing nginx site"

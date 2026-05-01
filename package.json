@@ -1,7 +1,7 @@
 {
   "name": "suxai-dev",
   "productName": "SUXAI",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "SUXAI — a premium AI-powered desktop IDE",
   "private": true,
   "main": "dist-electron/main.js",

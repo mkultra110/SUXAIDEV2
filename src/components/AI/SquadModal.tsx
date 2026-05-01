@@ -7,7 +7,9 @@ import { useToast } from '../ui/Toast';
 import { AtelierIcon } from '../ui/AtelierIcon';
 import {
   runSquad,
+  runMaster,
   SQUAD_AGENTS,
+  SQUAD_MASTER,
   type SquadAgentSpec,
   type SquadAgentState,
 } from '../../lib/squad';
@@ -42,8 +44,21 @@ export function SquadModal() {
   const [prompt, setPrompt] = useState('');
   const [running, setRunning] = useState(false);
   const [states, setStates] = useState<Map<string, SquadAgentState>>(() => new Map());
+  // v4.1 — toggle individual agents on/off avant le run. Defaults
+  // = tous activés. Stocké dans un Set d'IDs pour dedup easy.
+  const [enabled, setEnabled] = useState<Set<string>>(
+    () => new Set(SQUAD_AGENTS.map((a) => a.id)),
+  );
+  // v4.1 — toggle master synthesis. Default true. Si on, fire
+  // automatiquement après que tous les role agents sont done.
+  const [withMaster, setWithMaster] = useState(true);
   const abortRef = useRef<(() => void) | null>(null);
+  const masterAbortRef = useRef<(() => void) | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  // v4.1 — keep the last user prompt around so the master synth
+  // (which fires AFTER the user has finished typing) can pass it
+  // along to the meta-agent.
+  const lastPromptRef = useRef('');
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -100,9 +115,15 @@ export function SquadModal() {
       toast.info('Empty prompt', 'Tell the Squad what to look at.');
       return;
     }
+    const activeAgents = SQUAD_AGENTS.filter((a) => enabled.has(a.id));
+    if (activeAgents.length === 0) {
+      toast.info('No agents enabled', 'Toggle at least one agent before running.');
+      return;
+    }
     // Clear previous states so the cards reset cleanly.
     setStates(new Map());
     setRunning(true);
+    lastPromptRef.current = prompt.trim();
     let doneCount = 0;
     abortRef.current = runSquad({
       token,
@@ -115,6 +136,7 @@ export function SquadModal() {
             fileContent: activeFile.content,
           }
         : undefined,
+      agents: activeAgents,
       onUpdate: (s) => {
         setStates((prev) => {
           const next = new Map(prev);
@@ -123,20 +145,91 @@ export function SquadModal() {
         });
         if (s.status === 'done' || s.status === 'error') {
           doneCount++;
-          if (doneCount >= SQUAD_AGENTS.length) {
-            setRunning(false);
+          if (doneCount >= activeAgents.length) {
             abortRef.current = null;
+            // v4.1 — auto-fire Master après que les role agents sont done.
+            // Récupère les content via un closure sur le state à ce
+            // moment — on lit via setStates pour avoir le snapshot le
+            // plus frais (le dernier setStates ci-dessus n'est pas
+            // encore commit à ce point dans React).
+            if (withMaster) {
+              setStates((prev) => {
+                const reports: Array<{ spec: SquadAgentSpec; content: string }> = [];
+                for (const a of activeAgents) {
+                  const st = prev.get(a.id);
+                  if (st && st.status === 'done' && st.content.trim()) {
+                    reports.push({ spec: a, content: st.content });
+                  }
+                }
+                if (reports.length === 0) {
+                  setRunning(false);
+                  return prev;
+                }
+                masterAbortRef.current = runMaster({
+                  token,
+                  modelId: settings.defaultModelId,
+                  userPrompt: lastPromptRef.current,
+                  reports,
+                  onUpdate: (ms) => {
+                    setStates((p) => {
+                      const next = new Map(p);
+                      next.set(ms.spec.id, ms);
+                      return next;
+                    });
+                    if (ms.status === 'done' || ms.status === 'error') {
+                      masterAbortRef.current = null;
+                      setRunning(false);
+                    }
+                  },
+                });
+                return prev;
+              });
+            } else {
+              setRunning(false);
+            }
           }
         }
       },
     });
-  }, [token, running, prompt, settings.defaultModelId, activeFile, toast]);
+  }, [token, running, prompt, settings.defaultModelId, activeFile, toast, enabled, withMaster]);
 
   const cancel = useCallback(() => {
     abortRef.current?.();
+    masterAbortRef.current?.();
     abortRef.current = null;
+    masterAbortRef.current = null;
     setRunning(false);
   }, []);
+
+  // v4.1 — toggle un agent on/off avant le run.
+  const toggleAgent = useCallback((id: string) => {
+    if (running) return;
+    setEnabled((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, [running]);
+
+  // v4.1 — envoie le report d'un agent dans le chat principal AI.
+  // Le report devient le prompt initial d'une nouvelle conversation,
+  // utile pour creuser un point précis avec follow-ups.
+  const sendToChat = useCallback((state: SquadAgentState) => {
+    if (!state.content.trim()) {
+      toast.info('Empty report', 'Nothing to send to chat.');
+      return;
+    }
+    const header = `From Squad ${state.spec.glyph} **${state.spec.label}**` +
+      (activeFile ? ` on \`${activeFile.name}\`` : '') + ' :\n\n';
+    window.dispatchEvent(
+      new CustomEvent<{ text: string }>('suxai:add-to-chat', {
+        detail: { text: header + state.content },
+      }),
+    );
+    toast.success('Sent to chat', `${state.spec.label}'s report queued in the AI panel composer.`);
+    setOpen(false);
+  }, [activeFile, toast]);
 
   const totalDone = useMemo(
     () => Array.from(states.values()).filter((s) => s.status === 'done' || s.status === 'error').length,
@@ -165,9 +258,39 @@ export function SquadModal() {
           <div className="squad__head-text">
             <div className="squad__title">Squad audit</div>
             <div className="squad__subtitle">
-              {SQUAD_AGENTS.length} agents en parallèle
+              {enabled.size} of {SQUAD_AGENTS.length} agents
+              {withMaster ? ' + master' : ''}
               {activeFile ? ` · scope : ${activeFile.name}` : ' · pas de fichier actif'}
             </div>
+          </div>
+          {/* v4.1 — toggles agents + master à droite du header. */}
+          <div className="squad__agent-toggles" role="group" aria-label="Enable agents">
+            {SQUAD_AGENTS.map((spec) => {
+              const on = enabled.has(spec.id);
+              return (
+                <button
+                  key={spec.id}
+                  type="button"
+                  className={`squad__agent-toggle squad__agent-toggle--${spec.accent} ${on ? 'is-on' : ''}`}
+                  onClick={() => toggleAgent(spec.id)}
+                  disabled={running}
+                  title={`${spec.label} — ${on ? 'click to disable' : 'click to enable'}`}
+                >
+                  <span aria-hidden>{spec.glyph}</span>
+                  <span className="squad__agent-toggle-label">{spec.label}</span>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className={`squad__agent-toggle squad__agent-toggle--bronze ${withMaster ? 'is-on' : ''}`}
+              onClick={() => !running && setWithMaster((v) => !v)}
+              disabled={running}
+              title={`Master synthesis — ${withMaster ? 'click to disable' : 'click to enable'}`}
+            >
+              <span aria-hidden>{SQUAD_MASTER.glyph}</span>
+              <span className="squad__agent-toggle-label">Master</span>
+            </button>
           </div>
           <button
             type="button"
@@ -224,10 +347,28 @@ export function SquadModal() {
         </div>
 
         <div className="squad__grid">
-          {SQUAD_AGENTS.map((spec) => (
-            <AgentColumn key={spec.id} spec={spec} state={states.get(spec.id)} />
+          {SQUAD_AGENTS.filter((a) => enabled.has(a.id)).map((spec) => (
+            <AgentColumn
+              key={spec.id}
+              spec={spec}
+              state={states.get(spec.id)}
+              onSendToChat={sendToChat}
+            />
           ))}
         </div>
+        {/* v4.1 — Master synthesis row, full-width sous le grid des
+            roles. Visible seulement si l'utilisateur a withMaster on
+            ET au moins une running/done state pour Master. */}
+        {withMaster && states.has(SQUAD_MASTER.id) && (
+          <div className="squad__master-row">
+            <AgentColumn
+              spec={SQUAD_MASTER}
+              state={states.get(SQUAD_MASTER.id)}
+              onSendToChat={sendToChat}
+              fullWidth
+            />
+          </div>
+        )}
 
         <footer className="squad__foot">
           <kbd>Ctrl+Enter</kbd> run · <kbd>Esc</kbd> cancel/close · scope = active file content
@@ -242,17 +383,27 @@ export function SquadModal() {
 function AgentColumn({
   spec,
   state,
+  onSendToChat,
+  fullWidth,
 }: {
   spec: SquadAgentSpec;
   state: SquadAgentState | undefined;
+  onSendToChat: (state: SquadAgentState) => void;
+  fullWidth?: boolean;
 }) {
   const status = state?.status ?? 'queued';
   const content = state?.content ?? '';
   const elapsed = state?.startedAt
     ? ((state.doneAt ?? Date.now()) - state.startedAt) / 1000
     : 0;
+  const canSend = status === 'done' && content.trim().length > 0;
   return (
-    <div className={`squad-col squad-col--${spec.accent} squad-col--${status}`}>
+    <div
+      className={
+        `squad-col squad-col--${spec.accent} squad-col--${status}` +
+        (fullWidth ? ' squad-col--fullwidth' : '')
+      }
+    >
       <header className="squad-col__head">
         <span className="squad-col__glyph" aria-hidden>{spec.glyph}</span>
         <span className="squad-col__label">{spec.label}</span>
@@ -262,6 +413,19 @@ function AgentColumn({
            status === 'done'      ? `done · ${elapsed.toFixed(1)}s` :
            status === 'error'     ? 'error' : status}
         </span>
+        {/* v4.1 — Send to chat (per-agent). Disabled tant que pas
+            done. Click → push le report dans le composer AIPanel. */}
+        {canSend && state && (
+          <button
+            type="button"
+            className="squad-col__send"
+            onClick={() => onSendToChat(state)}
+            title={`Send ${spec.label}'s report to the AI chat composer`}
+          >
+            <AtelierIcon name="i-arrow-up-right" size={11} />
+            Send
+          </button>
+        )}
       </header>
       <div className="squad-col__body">
         {status === 'queued' ? (

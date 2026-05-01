@@ -148,13 +148,13 @@
 .squad__grid {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* v4.1 — auto-fit pour gérer 1-5 colonnes selon enabled. minmax
+     280px évite les colonnes trop étroites où le diff hexa devient
+     illisible. */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 12px;
   padding: 14px 18px;
   overflow: auto;
-}
-@media (max-width: 900px) {
-  .squad__grid { grid-template-columns: 1fr; }
 }
 
 .squad__foot {
@@ -303,4 +303,80 @@
   color: var(--color-text-secondary);
   max-height: 160px;
   overflow: auto;
+}
+
+/* ============================================================
+   v4.1 — toggles agents + master + send-to-chat + master row
+   ============================================================ */
+
+.squad__agent-toggles {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-right: 6px;
+}
+.squad__agent-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--dur-quick), color var(--dur-quick), border-color var(--dur-quick);
+  font-variant-numeric: tabular-nums;
+}
+.squad__agent-toggle:disabled { opacity: 0.55; cursor: not-allowed; }
+.squad__agent-toggle:hover:not(:disabled) {
+  border-color: var(--color-border-default);
+  color: var(--color-text-secondary);
+}
+.squad__agent-toggle.is-on {
+  background: color-mix(in oklch, var(--col-accent, var(--color-accent)) 14%, transparent);
+  border-color: color-mix(in oklch, var(--col-accent, var(--color-accent)) 36%, transparent);
+  color: var(--col-accent, var(--color-accent));
+  font-weight: 600;
+}
+.squad__agent-toggle--bronze.is-on { --col-accent: var(--bronze-500); }
+.squad__agent-toggle--honey.is-on  { --col-accent: var(--honey-500); }
+.squad__agent-toggle--sage.is-on   { --col-accent: var(--sage-500); }
+.squad__agent-toggle--terra.is-on  { --col-accent: var(--terra-500); }
+.squad__agent-toggle--slate.is-on  { --col-accent: var(--slate-400); }
+.squad__agent-toggle-label {
+  font-family: var(--font-sans);
+}
+
+.squad-col__send {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 6px;
+  border-radius: var(--radius-full);
+  background: transparent;
+  border: 1px solid var(--col-accent);
+  color: var(--col-accent);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--dur-quick), color var(--dur-quick);
+}
+.squad-col__send:hover {
+  background: color-mix(in oklch, var(--col-accent) 22%, transparent);
+}
+
+.squad__master-row {
+  padding: 0 18px 14px;
+}
+.squad-col--fullwidth {
+  width: 100%;
+  min-height: 280px;
+  max-height: 50vh;
 }

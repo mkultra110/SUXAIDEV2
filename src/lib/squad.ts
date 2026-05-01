@@ -67,7 +67,59 @@ export const SQUAD_AGENTS: SquadAgentSpec[] = [
       `Format : ranked list of suggestions, highest-impact first. Each with « Win · Effort · Diff sketch (3-5 lines max) ». ` +
       `No prose preamble.`,
   },
+  {
+    id: 'performance',
+    label: 'Performance',
+    glyph: '🚀',
+    accent: 'sage',
+    promptSuffix:
+      `\n\n---\n\nYou are the **Performance** specialist of a code-review squad. Your role :\n` +
+      `- Identify hot paths and quantify their cost (Big-O, allocations per call, memory churn).\n` +
+      `- Flag wasteful patterns : N+1 queries, repeated parsing, unbounded loops, sync I/O on hot path.\n` +
+      `- Spot needless re-renders / re-computations (React useMemo missing, useCallback churn, prop drilling).\n` +
+      `- Suggest concrete optimisations with expected speedup (« 10ms → 0.5ms because we eliminate the parse »).\n\n` +
+      `Format : ranked findings, highest impact first. Each with « Hot path · Current cost · Optimised cost · Fix ». ` +
+      `If perf is fine, say so explicitly. No prose preamble.`,
+  },
+  {
+    id: 'security',
+    label: 'Security',
+    glyph: '🛡️',
+    accent: 'slate',
+    promptSuffix:
+      `\n\n---\n\nYou are the **Security** specialist of a code-review squad. Your role :\n` +
+      `- Hunt OWASP top 10 patterns : injection, broken auth, XSS, IDOR, SSRF, deserialisation, etc.\n` +
+      `- Flag secrets in code (keys, tokens, passwords, signing material).\n` +
+      `- Audit input validation at trust boundaries (HTTP, IPC, file uploads, env vars).\n` +
+      `- Check crypto usage : weak algos, hardcoded IVs, predictable randomness, missing constant-time compare.\n\n` +
+      `Format : findings table with « CVSS-est · CWE · Vector · Exploit scenario · Mitigation ». ` +
+      `If everything's clean, say so AND list what you specifically checked. No prose preamble.`,
+  },
 ];
+
+/**
+ * v4.1 — Master synthesis agent. Runs AFTER all the role agents
+ * have completed, takes their reports as input, produces a single
+ * prioritised action plan. Spec is separate from SQUAD_AGENTS
+ * because it's run sequentially, not in parallel with the others.
+ */
+export const SQUAD_MASTER: SquadAgentSpec = {
+  id: 'master',
+  label: 'Master',
+  glyph: '🎩',
+  accent: 'bronze',
+  promptSuffix:
+    `\n\n---\n\nYou are the **Master** synthesizer of a code-review squad. ` +
+    `You receive the reports from 5 specialist agents (Architect, Auditor, Improver, Performance, Security). ` +
+    `Your role :\n` +
+    `- De-duplicate findings (same issue mentioned by multiple agents).\n` +
+    `- Rank everything by IMPACT × EFFORT (high impact, low effort first).\n` +
+    `- Produce a single ordered action plan, max 8 items.\n` +
+    `- For each item : « Title · Why it matters · Effort (S/M/L) · Concrete next step ».\n\n` +
+    `If reports disagree, surface the disagreement and pick a side with reasoning. ` +
+    `If the code is in great shape, say so explicitly with what you'd watch for as it grows. ` +
+    `No prose preamble.`,
+};
 
 export interface SquadAgentState {
   spec: SquadAgentSpec;
@@ -91,6 +143,16 @@ export interface SquadRunArgs {
     selection?: string;
   };
   agents?: SquadAgentSpec[];
+  onUpdate: (state: SquadAgentState) => void;
+}
+
+export interface MasterSynthArgs {
+  token: string;
+  modelId: string;
+  /** Original user prompt that drove the squad. */
+  userPrompt: string;
+  /** All completed agent reports (ignore those still streaming/error). */
+  reports: Array<{ spec: SquadAgentSpec; content: string }>;
   onUpdate: (state: SquadAgentState) => void;
 }
 
@@ -148,4 +210,59 @@ export function runSquad(args: SquadRunArgs): () => void {
   }
 
   return () => aborts.forEach((c) => c());
+}
+
+/**
+ * v4.1 — Run the Master synthesis agent. Called AFTER all role
+ * agents have produced reports. Master gets the user's original
+ * prompt + each role's report concatenated as input, and produces
+ * a single prioritised action plan.
+ */
+export function runMaster(args: MasterSynthArgs): () => void {
+  const spec = SQUAD_MASTER;
+  let buf = '';
+  const startedAt = Date.now();
+  args.onUpdate({ spec, status: 'streaming', content: '', startedAt });
+
+  const reportsBlock = args.reports
+    .map((r) => `## ${r.spec.label} ${r.spec.glyph}\n\n${r.content}`)
+    .join('\n\n---\n\n');
+  const masterPrompt =
+    `Original user prompt :\n\n${args.userPrompt}\n\n` +
+    `===\n\nReports from the squad :\n\n${reportsBlock}` +
+    spec.promptSuffix;
+
+  return streamAi(
+    args.token,
+    {
+      modelId: args.modelId,
+      command: 'chat',
+      prompt: masterPrompt,
+    },
+    {
+      onToken: (chunk) => {
+        buf += chunk;
+        args.onUpdate({ spec, status: 'streaming', content: buf, startedAt });
+      },
+      onDone: () => {
+        args.onUpdate({
+          spec,
+          status: 'done',
+          content: buf,
+          startedAt,
+          doneAt: Date.now(),
+        });
+      },
+      onError: (err) => {
+        args.onUpdate({
+          spec,
+          status: 'error',
+          content: buf,
+          error: err.message,
+          startedAt,
+          doneAt: Date.now(),
+        });
+      },
+    },
+  );
 }

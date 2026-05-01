@@ -167,7 +167,15 @@ if [[ -d /etc/systemd/journald.conf.d ]] || mkdir -p /etc/systemd/journald.conf.
 fi
 
 # ---- nginx site ------------------------------------------------------------
-if command -v nginx >/dev/null 2>&1; then
+# v4.3.1 — ne touche plus nginx du tout quand un autre edge proxy
+# (Caddy, Traefik) tourne déjà sur :80/:443. Avant : le check
+# `command -v nginx` matchait dès que nginx était juste installé sur
+# disque (legacy d'une install antérieure), et `systemctl enable +
+# restart` échouait parce que les ports étaient déjà bindés par
+# Caddy. Maintenant : on saute proprement si EDGE_ON_80=true.
+if [[ "$EDGE_ON_80" == "true" ]]; then
+  echo "(another edge proxy on :80 — skipping nginx setup)"
+elif command -v nginx >/dev/null 2>&1; then
   echo "==> Installing nginx site"
   cp "$SERVER_SRC/deploy/nginx.conf.example" "/etc/nginx/sites-available/${NGINX_SITE}"
   ln -sf "/etc/nginx/sites-available/${NGINX_SITE}" "/etc/nginx/sites-enabled/${NGINX_SITE}"

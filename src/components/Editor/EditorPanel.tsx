@@ -892,6 +892,27 @@ export function EditorPanel() {
         {pendingDiff && activeFile?.path === pendingDiff.path && (
           <InlineDiff diff={pendingDiff} />
         )}
+        {/* v4.2.4 — bannière flottante quand un diff est pending mais
+            l'utilisateur a switché sur un autre onglet. Sans ça, le
+            user voit "1 pending" dans Files Modified mais ne voit rien
+            dans l'éditeur (path-mismatch gate au-dessus) et croit que
+            l'agent n'a rien fait. Click sur la bannière → switch sur
+            le bon onglet et l'InlineDiff réapparaît. */}
+        {pendingDiff && activeFile && activeFile.path !== pendingDiff.path && (
+          <button
+            type="button"
+            className="editor__diff-banner"
+            onClick={() => setActive(pendingDiff.path)}
+            title="Click to switch to the file with the pending edit"
+          >
+            <span className="editor__diff-banner-dot" aria-hidden />
+            <span className="editor__diff-banner-text">
+              Pending edit on{' '}
+              <strong>{pendingDiff.path.split(/[\\/]/).pop()}</strong>
+              {' '}— click to review
+            </span>
+          </button>
+        )}
         {inlineEdit && activeFile && !pendingDiff && (
           <InlineEdit
             top={inlineEdit.top}

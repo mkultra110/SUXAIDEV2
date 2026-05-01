@@ -175,7 +175,7 @@ export function EditedFilesPanel({ message }: Props) {
             disabled={stats.pending === 0 || busyAccept}
             title="Apply every pending edit to disk"
           >
-            {busyAccept ? 'Applying…' : <>Accept all <kbd>Ctrl+↵</kbd></>}
+            {busyAccept ? 'Applying…' : 'Accept all'}
           </button>
         </div>
       </div>

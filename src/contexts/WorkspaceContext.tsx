@@ -179,6 +179,14 @@ interface WorkspaceValue extends WorkspaceState {
    *  whose path matches `predicate`. Each one's `onResolve(false)`
    *  fires so the agent loop resolves their promises. */
   rejectPendingDiffs: (predicate?: (d: PendingDiff) => boolean) => void;
+  /** v4.2.3 — accept the active diff AND every queued diff matching
+   *  the predicate. For each : write the proposed content to disk +
+   *  fire onResolve(true, proposed) so the agent loop's promises
+   *  settle. The user trusts the agent and bulk-applies everything
+   *  without reviewing each hunk individually. */
+  acceptPendingDiffs: (
+    predicate?: (d: PendingDiff) => boolean,
+  ) => Promise<{ accepted: number; failed: Array<{ path: string; error: string }> }>;
   activeFile: OpenFile | null;
   /** Rich editor context — used by the AI panel. Never null; empty
    *  by default. Updated by `useEditorContextTracker(editor)`. */
@@ -959,6 +967,87 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // approve() promises settle and the tool_use snapshots flip from
   // 'pending' → 'rejected'. Without a predicate, drains everything
   // (active + queue).
+  // v4.2.3 — bulk-accept toutes les diffs (active + queue) qui matchent
+  // le predicate. Pour chaque : écrit le proposed sur disque, met à
+  // jour openFiles, fire onResolve(true, proposed). Les diffs untitled
+  // n'écrivent pas sur disque (pas de path réel), juste le buffer.
+  const acceptPendingDiffs = useCallback(
+    async (
+      predicate?: (d: PendingDiff) => boolean,
+    ): Promise<{ accepted: number; failed: Array<{ path: string; error: string }> }> => {
+      const match = predicate ?? (() => true);
+      const snap = stateRef.current;
+      const all: PendingDiff[] = [];
+      if (snap.pendingDiff) all.push(snap.pendingDiff);
+      all.push(...snap.pendingDiffQueue);
+      const targets = all.filter(match);
+      const accepted: PendingDiff[] = [];
+      const failed: Array<{ path: string; error: string }> = [];
+
+      for (const d of targets) {
+        const isUntitled = d.path.startsWith('untitled://');
+        try {
+          if (!isUntitled) {
+            await window.suxai.fs.writeFile(d.path, d.proposed);
+          }
+          accepted.push(d);
+        } catch (err) {
+          failed.push({ path: d.path, error: (err as Error).message ?? 'write failed' });
+        }
+      }
+
+      // Promise resolution must run after the writes have settled so
+      // the agent loop's edit_file branch sees written=true and skips
+      // its own writeFile fallback.
+      for (const d of accepted) {
+        try { d.onResolve?.(true, d.proposed); } catch { /* */ }
+      }
+      // Failed writes are reported back to the agent as rejections so
+      // the loop doesn't hang waiting forever.
+      for (const f of failed) {
+        const d = targets.find((t) => t.path === f.path);
+        try { d?.onResolve?.(false); } catch { /* */ }
+      }
+
+      const acceptedSet = new Set(accepted);
+      const failedSet = new Set(failed.map((f) => f.path));
+      setState((s) => {
+        const stillActive =
+          s.pendingDiff && !acceptedSet.has(s.pendingDiff) && !failedSet.has(s.pendingDiff.path)
+            ? s.pendingDiff
+            : null;
+        const keptQueue = s.pendingDiffQueue.filter(
+          (d) => !acceptedSet.has(d) && !failedSet.has(d.path),
+        );
+        const nextOpenFiles = s.openFiles.map((f) => {
+          const acc = accepted.find((a) => a.path === f.path);
+          return acc ? { ...f, content: acc.proposed, dirty: false } : f;
+        });
+        if (stillActive) {
+          return {
+            ...s,
+            openFiles: nextOpenFiles,
+            pendingDiffQueue: keptQueue,
+          };
+        }
+        const [nextActive, ...restQueue] = keptQueue;
+        return {
+          ...s,
+          openFiles: nextOpenFiles,
+          pendingDiff: nextActive ?? null,
+          pendingDiffQueue: restQueue,
+          activePath: nextActive ? nextActive.path : s.activePath,
+        };
+      });
+
+      const ws = stateRef.current.workspaceRoot;
+      if (ws && accepted.length > 0) invalidateGitStatus(ws);
+
+      return { accepted: accepted.length, failed };
+    },
+    [],
+  );
+
   const rejectPendingDiffs = useCallback(
     (predicate?: (d: PendingDiff) => boolean) => {
       const match = predicate ?? (() => true);
@@ -1035,6 +1124,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       acceptDiff,
       pendingDiffCount: state.pendingDiffQueue.length + (state.pendingDiff ? 1 : 0),
       rejectPendingDiffs,
+      acceptPendingDiffs,
       editorContext,
       updateEditorContext,
       recordEdit,
@@ -1047,6 +1137,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       updateActiveContent, setSelection, saveActiveFile, saveAllDirty, reloadActiveFromDisk, newUntitled,
       reopenLastClosed, reorderTab,
       togglePin, renameFile, openDiff, closeDiff, acceptDiff,
+      acceptPendingDiffs,
       editorContext, updateEditorContext, recordEdit,
     ],
   );

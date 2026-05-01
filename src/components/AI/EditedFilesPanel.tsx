@@ -36,9 +36,10 @@ interface Props {
 export function EditedFilesPanel({ message }: Props) {
   const files = useMemo(() => extractEditedFiles(message.toolCalls), [message.toolCalls]);
   const stats = useMemo(() => totalStats(files), [files]);
-  const { openFile, setActive, openFiles, rejectPendingDiffs } = useWorkspace();
+  const { openFile, setActive, openFiles, rejectPendingDiffs, acceptPendingDiffs } = useWorkspace();
   const toast = useToast();
   const [activeIdx, setActiveIdx] = useState(0);
+  const [busyAccept, setBusyAccept] = useState(false);
 
   const goTo = useCallback(
     async (idx: number) => {
@@ -76,6 +77,33 @@ export function EditedFilesPanel({ message }: Props) {
     rejectPendingDiffs((d) => targets.has(d.path));
     toast.info('All pending edits rejected');
   }, [files, rejectPendingDiffs, toast]);
+
+  // v4.2.3 — bulk-accept tous les pending diffs de ce message en un
+  // clic. Avant : « Accept Changes » ne faisait que goTo() (ouvrir le
+  // fichier) ; le user devait ensuite re-cliquer Accept dans
+  // l'overlay InlineDiff. Avec 5 edit_file en queue ça faisait 5
+  // clicks. Maintenant un seul click écrit tous les fichiers et
+  // résout toutes les promesses du loop agent.
+  const onAcceptAll = useCallback(async () => {
+    if (busyAccept) return;
+    const targets = new Set(files.map((f) => f.path));
+    setBusyAccept(true);
+    try {
+      const res = await acceptPendingDiffs((d) => targets.has(d.path));
+      if (res.accepted > 0) {
+        toast.success(
+          'Changes applied',
+          `${res.accepted} file${res.accepted > 1 ? 's' : ''} written to disk` +
+            (res.failed.length > 0 ? ` (${res.failed.length} failed)` : ''),
+        );
+      }
+      for (const f of res.failed) {
+        toast.error(`Could not write ${f.path.split(/[\\/]/).pop()}`, f.error);
+      }
+    } finally {
+      setBusyAccept(false);
+    }
+  }, [busyAccept, files, acceptPendingDiffs, toast]);
 
   if (files.length === 0) return null;
 
@@ -143,11 +171,11 @@ export function EditedFilesPanel({ message }: Props) {
           <button
             type="button"
             className="edfiles__master edfiles__master--accept"
-            onClick={() => void goTo(activeIdx)}
-            disabled={stats.pending === 0}
-            title="Open the next pending file to accept its hunks"
+            onClick={() => void onAcceptAll()}
+            disabled={stats.pending === 0 || busyAccept}
+            title="Apply every pending edit to disk"
           >
-            Accept Changes <kbd>Ctrl+↵</kbd>
+            {busyAccept ? 'Applying…' : <>Accept all <kbd>Ctrl+↵</kbd></>}
           </button>
         </div>
       </div>

@@ -142,6 +142,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  /* v4.2.3 — flex-wrap pour que la nav et les master buttons
+     descendent sur une 2e ligne si l'AIPanel est trop étroit, au
+     lieu de clipper / overflow. */
+  flex-wrap: wrap;
   padding-top: 9px;
   border-top: 1px solid var(--color-border-subtle);
 }
@@ -188,8 +192,14 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  height: 26px;
-  padding: 0 11px;
+  /* v4.2.3 — height 28 (était 26) + white-space nowrap pour empêcher
+     le texte de wrap quand l'AIPanel est étroit. Avant, "Reject all"
+     et "Accept Changes Ctrl+↵" tombaient sur 2 lignes et le bouton
+     devenait illisible. */
+  height: 28px;
+  padding: 0 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
   border-radius: var(--radius-xs);
   border: 1px solid var(--color-border-subtle);
   background: transparent;

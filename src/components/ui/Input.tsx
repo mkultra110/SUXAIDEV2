@@ -21,7 +21,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {label}
         </label>
       )}
-      <div className="sx-field__wrap">
+      <label className="sx-field__wrap" htmlFor={autoId}>
         {leftIcon && <span className="sx-field__icon">{leftIcon}</span>}
         <input
           ref={ref}
@@ -31,7 +31,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
           {...rest}
         />
         {rightSlot && <span className="sx-field__right">{rightSlot}</span>}
-      </div>
+      </label>
       {error && <span className="sx-field__error">{error}</span>}
     </div>
   );

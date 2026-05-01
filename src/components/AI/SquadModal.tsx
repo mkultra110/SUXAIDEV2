@@ -59,6 +59,15 @@ export function SquadModal() {
   // (which fires AFTER the user has finished typing) can pass it
   // along to the meta-agent.
   const lastPromptRef = useRef('');
+  // v4.2 — synchronous bookkeeping for the squad run. Refs avoid
+  // (a) closure staleness when `start` is recreated mid-stream and
+  // (b) the side-effect-inside-state-updater pitfall (React may
+  // invoke a setState updater twice in StrictMode, which would
+  // double-fire runMaster). The ref-based map gives us an instant
+  // snapshot of every agent's terminal content so we can build the
+  // master prompt without racing React's commit cycle.
+  const doneCountRef = useRef(0);
+  const finalContentRef = useRef<Map<string, SquadAgentState>>(new Map());
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -124,7 +133,9 @@ export function SquadModal() {
     setStates(new Map());
     setRunning(true);
     lastPromptRef.current = prompt.trim();
-    let doneCount = 0;
+    // v4.2 — reset the synchronous bookkeeping for this run.
+    doneCountRef.current = 0;
+    finalContentRef.current = new Map();
     abortRef.current = runSquad({
       token,
       modelId: settings.defaultModelId,
@@ -144,45 +155,42 @@ export function SquadModal() {
           return next;
         });
         if (s.status === 'done' || s.status === 'error') {
-          doneCount++;
-          if (doneCount >= activeAgents.length) {
+          // v4.2 — track terminal state synchronously via refs so
+          // (a) the counter survives StrictMode re-renders and
+          // (b) we can build the master prompt without reading React
+          // state mid-update.
+          finalContentRef.current.set(s.spec.id, s);
+          doneCountRef.current += 1;
+          if (doneCountRef.current >= activeAgents.length) {
             abortRef.current = null;
-            // v4.1 — auto-fire Master après que les role agents sont done.
-            // Récupère les content via un closure sur le state à ce
-            // moment — on lit via setStates pour avoir le snapshot le
-            // plus frais (le dernier setStates ci-dessus n'est pas
-            // encore commit à ce point dans React).
             if (withMaster) {
-              setStates((prev) => {
-                const reports: Array<{ spec: SquadAgentSpec; content: string }> = [];
-                for (const a of activeAgents) {
-                  const st = prev.get(a.id);
-                  if (st && st.status === 'done' && st.content.trim()) {
-                    reports.push({ spec: a, content: st.content });
+              const reports: Array<{ spec: SquadAgentSpec; content: string }> = [];
+              for (const a of activeAgents) {
+                const st = finalContentRef.current.get(a.id);
+                if (st && st.status === 'done' && st.content.trim()) {
+                  reports.push({ spec: a, content: st.content });
+                }
+              }
+              if (reports.length === 0) {
+                setRunning(false);
+                return;
+              }
+              masterAbortRef.current = runMaster({
+                token,
+                modelId: settings.defaultModelId,
+                userPrompt: lastPromptRef.current,
+                reports,
+                onUpdate: (ms) => {
+                  setStates((p) => {
+                    const next = new Map(p);
+                    next.set(ms.spec.id, ms);
+                    return next;
+                  });
+                  if (ms.status === 'done' || ms.status === 'error') {
+                    masterAbortRef.current = null;
+                    setRunning(false);
                   }
-                }
-                if (reports.length === 0) {
-                  setRunning(false);
-                  return prev;
-                }
-                masterAbortRef.current = runMaster({
-                  token,
-                  modelId: settings.defaultModelId,
-                  userPrompt: lastPromptRef.current,
-                  reports,
-                  onUpdate: (ms) => {
-                    setStates((p) => {
-                      const next = new Map(p);
-                      next.set(ms.spec.id, ms);
-                      return next;
-                    });
-                    if (ms.status === 'done' || ms.status === 'error') {
-                      masterAbortRef.current = null;
-                      setRunning(false);
-                    }
-                  },
-                });
-                return prev;
+                },
               });
             } else {
               setRunning(false);
@@ -330,7 +338,7 @@ export function SquadModal() {
               onClick={cancel}
               title="Cancel all in-flight streams (Esc)"
             >
-              Cancel ({totalDone}/{SQUAD_AGENTS.length})
+              Cancel ({totalDone}/{enabled.size + (withMaster ? 1 : 0)})
             </button>
           ) : (
             <button

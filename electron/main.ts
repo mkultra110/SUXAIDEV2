@@ -348,10 +348,13 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('conv:clear', async () => {
+    // v4.2 — wrap fs.unlink dans withIpcTimeout. Sur drive lent ou
+    // antivirus actif, unlink peut hanger ; sans timeout l'IPC bloque
+    // l'event loop renderer pendant le « Clear conversations » action.
     try {
-      await fs.unlink(CONVERSATIONS_FILE());
+      await withIpcTimeout('conv:clear:unlink', fs.unlink(CONVERSATIONS_FILE()), 5_000);
     } catch {
-      /* noop */
+      /* file may not exist OR timed out — both acceptable, swallow */
     }
     return true;
   });
@@ -454,19 +457,23 @@ function registerIpc() {
       // Sandbox: refuse anything that escapes the workspace root.
       const safeRoot = sanitizeFsPath(workspaceRoot, { mustExist: true });
       const plansDir = path.join(safeRoot, '.suxai', 'plans');
-      await fs.mkdir(plansDir, { recursive: true });
+      // v4.2 — wrap each fs syscall dans withIpcTimeout. Atomic write
+      // pipeline 5-step (mkdir + open + writeFile + sync + rename) ;
+      // chacun avec son timeout pour qu'un seul syscall hung ne
+      // bloque pas le renderer indéfiniment.
+      await withIpcTimeout('plan:write:mkdir', fs.mkdir(plansDir, { recursive: true }), 5_000);
       const target = path.join(plansDir, `${slug}.md`);
-      // Atomic write + fsync, same as fs:write-file.
       const tmp = `${target}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-      // v0.15.10 (audit-2 #9) — explicit 0o600 mode (see atomicWrite).
-      const fh = await fs.open(tmp, 'w', 0o600);
+      const fh = await withIpcTimeout('plan:write:open', fs.open(tmp, 'w', 0o600), 5_000);
       try {
-        await fh.writeFile(content, 'utf8');
-        await fh.sync();
+        await withIpcTimeout('plan:write:writeFile', fh.writeFile(content, 'utf8'), 10_000);
+        await withIpcTimeout('plan:write:fsync', fh.sync(), 5_000);
       } finally {
-        await fh.close();
+        await withIpcTimeout('plan:write:close', fh.close(), 5_000).catch(() => {
+          /* close should never hang if the write/sync succeeded */
+        });
       }
-      await fs.rename(tmp, target);
+      await withIpcTimeout('plan:write:rename', fs.rename(tmp, target), 5_000);
       return { path: target };
     },
   );
@@ -648,7 +655,13 @@ function registerIpc() {
     });
     if (result.canceled || result.filePaths.length === 0) return null;
     const filePath = result.filePaths[0];
-    const content = await fs.readFile(filePath, 'utf8');
+    // v4.2 — wrap dans withIpcTimeout (30s pour les gros fichiers).
+    // Sans ça, picker ouvert sur un network share lent → app freeze.
+    const content = await withIpcTimeout(
+      `fs:open-file:read(${filePath})`,
+      fs.readFile(filePath, 'utf8'),
+      30_000,
+    );
     return { path: filePath, content };
   });
 
@@ -1080,7 +1093,8 @@ function registerIpc() {
       throw new Error('Invalid filename');
     }
     try {
-      await fs.writeFile(full, '', { flag: 'wx' });
+      // v4.2 — wrap dans withIpcTimeout (5s suffit pour create vide).
+      await withIpcTimeout(`fs:create-file(${full})`, fs.writeFile(full, '', { flag: 'wx' }), 5_000);
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
         throw new Error(`"${name}" already exists`);
@@ -1099,24 +1113,25 @@ function registerIpc() {
     if (!full.startsWith(safeParent + path.sep) && full !== safeParent) {
       throw new Error('Invalid folder name');
     }
-    await fs.mkdir(full, { recursive: false });
+    await withIpcTimeout(`fs:create-dir(${full})`, fs.mkdir(full, { recursive: false }), 5_000);
     return full;
   });
 
   ipcMain.handle('fs:rename', async (_e, oldPath: string, newPath: string) => {
     const safeOld = sanitizeFsPath(oldPath, { mustExist: true });
     const safeNew = sanitizeFsPath(newPath);
-    await fs.rename(safeOld, safeNew);
+    await withIpcTimeout(`fs:rename(${safeOld}→${safeNew})`, fs.rename(safeOld, safeNew), 5_000);
     return true;
   });
 
   ipcMain.handle('fs:remove', async (_e, target: string) => {
     const safe = sanitizeFsPath(target, { mustExist: true });
-    const stat = await fs.lstat(safe);
+    const stat = await withIpcTimeout(`fs:remove:lstat(${safe})`, fs.lstat(safe), 5_000);
     if (stat.isDirectory()) {
-      await fs.rm(safe, { recursive: true, force: true });
+      // Directories can be deep ; 30s pour les gros trees.
+      await withIpcTimeout(`fs:remove:rm(${safe})`, fs.rm(safe, { recursive: true, force: true }), 30_000);
     } else {
-      await fs.unlink(safe);
+      await withIpcTimeout(`fs:remove:unlink(${safe})`, fs.unlink(safe), 5_000);
     }
     return true;
   });
@@ -2491,6 +2506,16 @@ function registerIpc() {
     } catch (err) {
       c.status = 'error';
       c.errorMsg = (err as Error).message;
+      // v4.2 — clear pending request timers + reject all in-flight
+      // mcpRequest promises avant de kill le child. Sans ça, les
+      // setTimeout dans c.pending continuent de fire pendant N ms
+      // après le kill, et les Promises restent unhandled (memory
+      // leak + console.warn pollution).
+      for (const [, pending] of c.pending) {
+        try { clearTimeout(pending.timer); } catch { /* */ }
+        try { pending.reject(new Error(`MCP server killed during init: ${c.errorMsg}`)); } catch { /* */ }
+      }
+      c.pending.clear();
       try { c.child.kill(); } catch { /* */ }
     }
     return c;

@@ -2657,7 +2657,7 @@ export function AIPanel() {
       abortRef.current = cancel;
     },
     // attachments dropped from deps — we read it via attachmentsRef above.
-    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast, requestApproval, workspaceRoot],
+    [token, input, selection, activeFile, modelId, extractMentions, messages, activeConv?.agentMode, setMessages, toast, requestApproval, workspaceRoot, editorContext, openFiles],
   );
 
   const stop = () => {

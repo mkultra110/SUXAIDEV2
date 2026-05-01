@@ -186,7 +186,7 @@
   font-size: var(--text-xs);
 }
 .indiff__plus  { color: var(--color-success); font-weight: 600; }
-.indiff__minus { color: var(--terra-9); font-weight: 600; }
+.indiff__minus { color: var(--color-danger); font-weight: 600; }
 .indiff__nochg { color: var(--color-text-tertiary); font-style: italic; }
 .indiff__progress {
   font-size: var(--text-2xs);

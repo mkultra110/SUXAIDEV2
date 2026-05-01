@@ -46,8 +46,6 @@ function createWindow() {
   // (close/minimize/etc on Win/Linux ; macOS keeps its traffic lights).
   const isMac = process.platform === 'darwin';
   const isWin = process.platform === 'win32';
-  const TITLEBAR_HEIGHT = 36;
-  const SYMBOL_COLOR = '#B5AC9D';      // neutral-11 from theme.css
   const BG_COLOR = '#0F0E0D';          // neutral-2 (editor bg)
 
   mainWindow = new BrowserWindow({
@@ -67,13 +65,12 @@ function createWindow() {
       vibrancy: 'under-window',
       visualEffectState: 'active',
     } as const),
-    ...(!isMac && {
-      titleBarOverlay: {
-        color: '#00000000',
-        symbolColor: SYMBOL_COLOR,
-        height: TITLEBAR_HEIGHT,
-      },
-    } as const),
+    // v4.2.2 — titleBarOverlay retiré sur Win/Linux : les boutons
+    // natifs ne s'alignaient pas pixel-perfect avec la titlebar
+    // custom (hauteur du hover-region différente, padding interne
+    // OS-dépendant). On dessine maintenant nos propres boutons React
+    // dans la TitleBar, IPC vers window:minimize/maximize/close. Mac
+    // garde ses traffic lights (zone gauche, pas de conflit).
     ...(isWin && {
       backgroundMaterial: 'mica',
     } as const),
@@ -137,6 +134,15 @@ function createWindow() {
     clearTimeout(forceShowTimer);
     mainWindow = null;
   });
+
+  // v4.2.2 — push l'état maximized vers le renderer pour que la
+  // TitleBar React bascule l'icône restore/maximize.
+  const sendMaxState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('window:maximized-changed', mainWindow.isMaximized());
+  };
+  mainWindow.on('maximize', sendMaxState);
+  mainWindow.on('unmaximize', sendMaxState);
 
   // Renderer owns the unsaved-changes state; intercept close and ask it.
   let confirmedClose = false;
@@ -641,6 +647,12 @@ function registerIpc() {
     else mainWindow.maximize();
   });
   ipcMain.handle('window:close', () => mainWindow?.close());
+  // v4.2.2 — état maximized exposé pour que la TitleBar React puisse
+  // basculer l'icône restore/maximize. Le push de l'état initial +
+  // les events maximize/unmaximize sont câblés dans createWindow()
+  // (registerIpc tourne avant createWindow, mainWindow est encore
+  // null ici).
+  ipcMain.handle('window:is-maximized', () => mainWindow?.isMaximized() ?? false);
   ipcMain.handle('window:set-title', (_e, title: string) => {
     if (typeof title === 'string') mainWindow?.setTitle(title);
   });

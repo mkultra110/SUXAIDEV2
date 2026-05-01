@@ -6,12 +6,38 @@ import { SuxaiLogo } from '../ui/SuxaiLogo';
 import { AtelierIcon } from '../ui/AtelierIcon';
 import './TitleBar.css';
 
+// v4.2.2 — boutons natifs supprimés (titleBarOverlay retiré côté
+// Electron) ; on rend nos propres contrôles ici. macOS garde ses
+// traffic lights natifs sur la gauche, donc on n'affiche les boutons
+// custom QUE sur Win/Linux pour éviter le doublon.
+const isMacRenderer =
+  typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform);
+
 export function TitleBar() {
   const { user, token, logout } = useAuth();
   const { workspaceFile, openFile } = useWorkspace();
   const workspaceFileName = workspaceFile
     ? (workspaceFile.split(/[\\/]/).pop() ?? workspaceFile)
     : null;
+  const [maximized, setMaximized] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    let off: (() => void) | undefined;
+    (async () => {
+      try {
+        const initial = await window.suxai?.window?.isMaximized?.();
+        if (alive && typeof initial === 'boolean') setMaximized(initial);
+      } catch { /* preload sans isMaximized — ignore */ }
+      if (window.suxai?.window?.onMaximizedChange) {
+        off = window.suxai.window.onMaximizedChange((m) => setMaximized(m));
+      }
+    })();
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, []);
 
   // v3.15 — click sur le chip TitleBar = ouvre le .code-workspace
   // dans l'éditeur (utile pour éditer la config workspace).
@@ -125,15 +151,60 @@ export function TitleBar() {
         )}
       </div>
 
-      {/* v2.0.4 — window controls (─ □ ✕) are drawn by the OS via
-          Electron's titleBarOverlay (Win/Linux) or trafficLightPosition
-          (Mac). The custom .titlebar__controls block was rendering
-          BEHIND the native overlay → user saw double buttons stacked
-          on the same pixels (the native ones are always on top).
-          Right zone is now an empty spacer; the OS reserves ~138 px
-          here on Win/Linux for its own buttons, and Mac uses the
-          left side anyway. */}
-      <div className="titlebar__zone titlebar__zone--right" />
+      {/* v4.2.2 — boutons custom React (Win/Linux). titleBarOverlay
+          a été retiré côté Electron parce que les boutons natifs
+          n'étaient pas pixel-aligned avec la titlebar custom (hauteur
+          du hover-region différente, padding interne OS-dépendant).
+          Mac garde ses traffic lights natifs (zone gauche), donc on
+          n'affiche pas les boutons custom là-bas pour éviter le
+          doublon — la zone reste un spacer drag pour permettre le
+          déplacement de la fenêtre depuis la droite. */}
+      <div className="titlebar__zone titlebar__zone--right">
+        {!isMacRenderer && (
+          <div className="titlebar__controls" role="group" aria-label="Window controls">
+            <button
+              type="button"
+              className="titlebar__ctrl titlebar__ctrl--min"
+              onClick={() => window.suxai?.window?.minimize()}
+              aria-label="Minimize"
+              title="Minimize"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                <path d="M1.5 5h7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="titlebar__ctrl titlebar__ctrl--max"
+              onClick={() => window.suxai?.window?.maximizeToggle()}
+              aria-label={maximized ? 'Restore' : 'Maximize'}
+              title={maximized ? 'Restore' : 'Maximize'}
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                {maximized ? (
+                  <>
+                    <rect x="2.6" y="1.4" width="6" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.1" />
+                    <rect x="1.4" y="2.6" width="6" height="6" rx="1" fill="var(--color-bg-surface)" stroke="currentColor" strokeWidth="1.1" />
+                  </>
+                ) : (
+                  <rect x="1.6" y="1.6" width="6.8" height="6.8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.1" />
+                )}
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="titlebar__ctrl titlebar__ctrl--close"
+              onClick={() => window.suxai?.window?.close()}
+              aria-label="Close"
+              title="Close"
+            >
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
+                <path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
 
       <UpgradeDialog
         token={token}

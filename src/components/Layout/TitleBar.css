@@ -23,13 +23,11 @@
 }
 .titlebar__zone--left   { padding-left: 14px; justify-content: flex-start; }
 .titlebar__zone--center { justify-content: center; padding: 0 14px; }
-/* v4.2.1 — la zone droite est draggable (au lieu de no-drag). L'OS
-   réserve déjà ~138px à l'extrême-droite pour les contrôles natifs
-   (close/min/max via titleBarOverlay) et intercepte ses propres
-   clicks. Mettre toute la zone en no-drag rendait toute la moitié
-   droite de la titlebar inerte → impossible de bouger la fenêtre
-   depuis la droite. */
-.titlebar__zone--right  { justify-content: flex-end; padding-right: 6px; -webkit-app-region: drag; }
+/* v4.2.2 — la zone droite est draggable (sauf au-dessus des boutons
+   custom qui sont eux-mêmes en no-drag). Les boutons s'étendent
+   flush au bord droit (pas de padding) pour atteindre le coin de
+   la fenêtre, comme les standards Windows 11 / GNOME. */
+.titlebar__zone--right  { justify-content: flex-end; padding-right: 0; -webkit-app-region: drag; }
 
 .titlebar__drag {
   -webkit-app-region: drag;
@@ -159,36 +157,45 @@
   background: var(--color-bg-hover);
 }
 
-/* Window controls clustered in soft pill so the 3 icons feel like
-   a single coherent unit. */
+/* v4.2.2 — boutons custom Win/Linux. Pas de pill autour : chaque
+   bouton occupe toute la hauteur de la titlebar (36px) pour matcher
+   les codes Windows 11 / GNOME où les contrôles s'étendent jusqu'au
+   bord supérieur de la fenêtre. Largeur 46px ≈ standard Win11
+   (chrome.titlebar). */
 .titlebar__controls {
   display: flex;
-  align-items: center;
-  gap: 1px;
-  padding: 2px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
+  align-items: stretch;
+  height: 100%;
+  -webkit-app-region: no-drag;
 }
 
-.titlebar__btn {
-  width: 28px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  color: var(--color-text-tertiary);
-  border-radius: var(--radius-xs);
+.titlebar__ctrl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
   transition:
     background var(--dur-quick) var(--ease-standard),
     color var(--dur-quick) var(--ease-standard);
 }
-.titlebar__btn:hover {
-  background: var(--color-bg-hover);
-  color: var(--color-text-primary);
+.titlebar__ctrl:hover { background: var(--color-bg-hover); color: var(--color-text-primary); }
+.titlebar__ctrl:active { background: var(--color-bg-pressed, var(--color-bg-hover)); }
+.titlebar__ctrl:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -3px;
 }
-.titlebar__btn--close:hover {
+.titlebar__ctrl--close:hover {
   background: var(--color-danger);
-  color: var(--color-text-on-accent);
+  color: var(--color-text-on-accent, white);
+}
+.titlebar__ctrl--close:active {
+  background: color-mix(in oklch, var(--color-danger) 80%, black);
 }
 
 /* Tier pill — FREE / PRO. */

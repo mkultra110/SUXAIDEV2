@@ -49,6 +49,14 @@ const api = {
     minimize: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
     maximizeToggle: (): Promise<void> => ipcRenderer.invoke('window:maximize-toggle'),
     close: (): Promise<void> => ipcRenderer.invoke('window:close'),
+    /** v4.2.2 — état maximized initial (sync via invoke) + listener
+     *  push pour que la TitleBar React bascule l'icône restore/max. */
+    isMaximized: (): Promise<boolean> => ipcRenderer.invoke('window:is-maximized'),
+    onMaximizedChange: (cb: (max: boolean) => void) => {
+      const listener = (_e: unknown, max: boolean) => cb(max);
+      ipcRenderer.on('window:maximized-changed', listener);
+      return () => ipcRenderer.removeListener('window:maximized-changed', listener);
+    },
     setTitle: (title: string): Promise<void> =>
       ipcRenderer.invoke('window:set-title', title),
     setDirty: (dirty: boolean): Promise<void> =>

@@ -974,9 +974,36 @@ export function AIPanel() {
             label: call.name === 'edit_file' ? 'edit · agent' : 'write · agent',
             // InlineDiff calls onResolve(true, finalText) on Accept
             // (after writing to disk itself) or (false) on Reject.
+            // v3.19 — capture diff preview AVANT de settle pour que
+            // le ToolCall card affiche les hunks colorisés dans le
+            // chat (Cursor-style). On stamp diffPreview sur le tool
+            // call snapshot via setMessages.
             onResolve: (accepted, finalContent) => {
-              if (accepted) settle(true, true, finalContent ?? preview.proposed);
-              else settle(false, false);
+              if (accepted) {
+                const finalText = finalContent ?? preview.proposed;
+                setMessages((msgs) =>
+                  msgs.map((m) => {
+                    if (!m.toolCalls?.some((tc) => tc.id === call.id)) return m;
+                    return {
+                      ...m,
+                      toolCalls: m.toolCalls.map((tc) =>
+                        tc.id === call.id
+                          ? {
+                              ...tc,
+                              diffPreview: {
+                                original: preview.original,
+                                proposed: finalText,
+                              },
+                            }
+                          : tc,
+                      ),
+                    };
+                  }),
+                );
+                settle(true, true, finalText);
+              } else {
+                settle(false, false);
+              }
             },
           });
           return;

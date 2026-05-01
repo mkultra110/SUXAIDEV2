@@ -13,6 +13,14 @@ export interface ToolCallSnapshot {
   status: 'pending' | 'running' | 'done' | 'error' | 'rejected';
   /** Stringified result (or error message) once the tool has run. */
   result?: string;
+  /** v3.19 — diff preview for `edit_file` / `write_file`. Captured
+   *  at approval time (requestApproval onResolve in AIPanel) so the
+   *  ToolCall card can render colorized hunks inline in the chat,
+   *  Cursor-style. Both fields are full file content (pre/post). */
+  diffPreview?: {
+    original: string;
+    proposed: string;
+  };
 }
 
 export interface ChatMessage {

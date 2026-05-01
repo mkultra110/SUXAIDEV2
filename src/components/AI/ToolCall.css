@@ -148,3 +148,118 @@
   max-height: 240px;
   overflow-y: auto;
 }
+
+/* ============================================================
+   v3.19 — Cursor-style inline diff dans le ToolCall card
+   ============================================================ */
+
+.toolcall--withdiff {
+  border-color: color-mix(in oklch, var(--color-accent) 36%, transparent);
+}
+
+.toolcall__diffstats {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.toolcall__diffstats-add {
+  color: var(--color-success);
+  font-weight: 600;
+}
+.toolcall__diffstats-del {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.toolcall__diff {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.toolcall__diff-path {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background var(--dur-quick) var(--ease-standard),
+              color var(--dur-quick) var(--ease-standard),
+              border-color var(--dur-quick) var(--ease-standard);
+}
+.toolcall__diff-path:hover {
+  background: color-mix(in oklch, var(--color-accent) 12%, transparent);
+  color: var(--color-accent-text);
+  border-color: color-mix(in oklch, var(--color-accent) 36%, transparent);
+}
+
+.toolcall__diff-body {
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  line-height: 1.55;
+  max-height: 320px;
+  overflow: auto;
+  padding: 4px 0;
+}
+.toolcall__diff-line {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  align-items: start;
+  padding: 0 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.toolcall__diff-marker {
+  text-align: center;
+  color: var(--color-text-tertiary);
+  user-select: none;
+  font-weight: 600;
+}
+.toolcall__diff-text {
+  color: var(--color-text-primary);
+}
+.toolcall__diff-line--add {
+  background: color-mix(in oklch, var(--color-success) 14%, transparent);
+}
+.toolcall__diff-line--add .toolcall__diff-marker {
+  color: var(--color-success);
+}
+.toolcall__diff-line--add .toolcall__diff-text {
+  color: color-mix(in oklch, var(--color-success) 70%, var(--color-text-primary));
+}
+.toolcall__diff-line--del {
+  background: color-mix(in oklch, var(--color-danger) 12%, transparent);
+}
+.toolcall__diff-line--del .toolcall__diff-marker {
+  color: var(--color-danger);
+}
+.toolcall__diff-line--del .toolcall__diff-text {
+  color: color-mix(in oklch, var(--color-danger) 70%, var(--color-text-primary));
+  text-decoration-color: color-mix(in oklch, var(--color-danger) 60%, transparent);
+}
+.toolcall__diff-line--ctx {
+  color: var(--color-text-secondary);
+  opacity: 0.8;
+}
+.toolcall__diff-omit {
+  padding: 4px 12px;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-style: italic;
+  border-top: 1px dashed var(--color-border-subtle);
+  border-bottom: 1px dashed var(--color-border-subtle);
+  background: color-mix(in oklch, var(--color-bg-elevated) 50%, transparent);
+}

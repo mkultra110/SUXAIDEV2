@@ -123,12 +123,29 @@ async function rawRequest<T>(pathname: string, opts: RequestOptions): Promise<T>
   } catch (err) {
     if (err instanceof ApiError) throw err;
     if ((err as { name?: string }).name === 'AbortError') {
-      throw new ApiError('Request timed out', 0, 'TIMEOUT');
+      // v4.2.5 — message diagnostique : « Request timed out » seul
+      // ne dit pas au user où chercher. Surface l'host + le path
+      // pour que le user puisse vérifier que le VPS répond.
+      const host = safeHost(API_BASE_URL);
+      throw new ApiError(
+        `Pas de réponse du serveur (${host}) après ${Math.round(timeoutMs / 1000)}s. ` +
+          `Vérifie ta connexion internet et que le serveur SUXAI est en ligne.`,
+        0,
+        'TIMEOUT',
+      );
     }
-    throw new ApiError((err as Error).message || 'Network error', 0, 'NETWORK');
+    // Erreur réseau pure : DNS, TLS, refusé, etc. Inclut l'host pour
+    // que l'utilisateur sache vers quoi le client a tapé.
+    const msg = (err as Error).message || 'Network error';
+    const host = safeHost(API_BASE_URL);
+    throw new ApiError(`${msg} (${host})`, 0, 'NETWORK');
   } finally {
     clearTimeout(timer);
   }
+}
+
+function safeHost(url: string): string {
+  try { return new URL(url).host; } catch { return url; }
 }
 
 async function request<T = unknown>(pathname: string, opts: RequestOptions = {}): Promise<T> {
@@ -185,12 +202,21 @@ export interface MeResponse extends AuthUser {
 
 export const authApi = {
   login: (username: string, password: string) =>
-    request<AuthResponse>('/auth/login', { method: 'POST', body: { username, password } }),
+    // v4.2.5 — auth endpoints utilisent un timeout 30s (au lieu du
+    // 15s par défaut). Login fait bcrypt rounds=12 côté VPS, ce qui
+    // peut prendre ~1-2s sur petite VM ; ajoute DNS + TLS handshake
+    // sur cold connection et 15s ne laisse pas de marge.
+    request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: { username, password },
+      timeoutMs: 30_000,
+    }),
 
   register: (username: string, password: string) =>
     request<AuthResponse>('/auth/register', {
       method: 'POST',
       body: { username, password },
+      timeoutMs: 30_000,
     }),
 
   me: (token: string) => request<MeResponse>('/auth/me', { method: 'GET', token }),

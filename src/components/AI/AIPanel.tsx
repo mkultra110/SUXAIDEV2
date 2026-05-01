@@ -2729,6 +2729,28 @@ export function AIPanel() {
     };
   }, [activeConv, toast]);
 
+  // v3.18.2 — toast quand saveConversations failed. Sans ça, un
+  // timeout I/O ou permission denied côté userdata file passe
+  // silencieusement (juste un console.warn dans lib/conversations.ts)
+  // et l'utilisateur perd ses conversations sans signal. Throttle
+  // à 1 toast par 30 s pour ne pas spam si le save échoue à chaque
+  // debounce de 400 ms.
+  const lastConvSaveErrorAt = useRef(0);
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const now = Date.now();
+      if (now - lastConvSaveErrorAt.current < 30_000) return;
+      lastConvSaveErrorAt.current = now;
+      const detail = (e as CustomEvent<{ message: string }>).detail;
+      toast.error(
+        'Conversations not saved',
+        detail?.message ?? 'IPC error — open DevTools console for details.',
+      );
+    };
+    window.addEventListener('suxai:conv-save-failed', handler);
+    return () => window.removeEventListener('suxai:conv-save-failed', handler);
+  }, [toast]);
+
   const newConversation = useCallback(() => {
     abortRef.current?.();
     setStreaming(false);

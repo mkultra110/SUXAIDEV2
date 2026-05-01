@@ -161,6 +161,35 @@ _(à remplir au fur et à mesure)_
   Mettre à jour à chaque commit. Permet `cat refactor-progress.md
   → continue` après reset propre.
 
+### V9 — Agent dit « modifie » mais le fichier ne change pas (InlineDiff onResolve sans write)
+- **Symptôme** (remonté par user) : « tu lui demandes de modifier
+  un fichier déjà ouvert, l'agent dit dans la conversation qu'il
+  l'a modifié, mais en fait rien ne change ni à l'écran ni sur
+  disque ».
+- **Cause** : contrat brisé entre `InlineDiff.acceptCurrentDecisions`
+  (composant) et `requestApproval` (AIPanel).
+  - InlineDiff branche : si `diff.onResolve` est wired, appelle
+    juste `onResolve(true, finalText)` SANS écrire au disk ni
+    sync le buffer (pensait que le caller s'en chargerait).
+  - requestApproval (côté AIPanel) répondait `{ok:true, written:TRUE}`
+    au caller dès que onResolve résolvait avec accepted=true.
+  - `edit_file` (lib/agent.ts) : `if (!approval.written) writeFile(...)`
+    — voit `written:true`, **skip** son propre `fs.writeFile`.
+  - Résultat : NI InlineDiff NI edit_file n'écrit. Le finalText
+    se perd. Le model croit avoir réussi (status=done, content
+    « Edit applied ») et le compte rendu va dans la conversation,
+    mais le fichier disque est intact ET le buffer Monaco montre
+    toujours l'ancien contenu.
+- **Règle** : pour les contrats où une UI delegate « écris-moi
+  ça » à un caller asynchrone, il faut UN SEUL acteur qui
+  persiste, et le shape de retour doit refléter exactement ce qui
+  a été persisté. Si UI répond `written:true`, UI doit avoir écrit ;
+  si UI répond `written:false`, le caller écrit. Mentir → l'écriture
+  disparaît dans la zone grise. Cf InlineDiff.tsx commit v3.18.2 :
+  TOUJOURS appeler `writeProposal(finalText)` (qui fait disk write
+  + buffer sync) AVANT d'appeler `onResolve(true, finalText)`. Le
+  caller voit alors `written:true` à juste titre et skip son write.
+
 ### V8 (étendue v3.16.2) — IPC timeouts comme pattern systémique
 - **Symptôme** : tool stuck en RUNNING (cf v3.16.1), mais aussi —
   app freeze au boot (`conv:read` qui hang sur drive réseau),

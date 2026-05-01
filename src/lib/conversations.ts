@@ -164,5 +164,17 @@ export async function saveConversations(state: PersistedV2): Promise<void> {
     await window.suxai.conversations.write(sanitizeForPersist(state));
   } catch (err) {
     console.warn('[conv] save failed:', err);
+    // v3.18.2 — surface l'échec via un event window que AIPanel peut
+    // toast-er. Sans ça, un timeout ou un permission denied silencieux
+    // perd les conversations sans signal côté UX. L'event est
+    // throttled au niveau AIPanel (pas de spam si le save fail à
+    // chaque debounce de 400 ms).
+    try {
+      window.dispatchEvent(
+        new CustomEvent<{ message: string }>('suxai:conv-save-failed', {
+          detail: { message: (err as Error).message ?? 'unknown error' },
+        }),
+      );
+    } catch { /* dispatch should never throw, but be defensive */ }
   }
 }

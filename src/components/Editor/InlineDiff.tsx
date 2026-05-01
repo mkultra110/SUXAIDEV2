@@ -473,14 +473,21 @@ export function InlineDiff({ diff }: { diff: PendingDiff }) {
         }),
       };
       const finalText = materialize(finalView);
-      // If a caller wired up onResolve (e.g. the agent loop), let it
-      // own persistence — otherwise fall back to the default
-      // "write to disk + sync the open buffer" path.
-      if (diff.onResolve) {
-        diff.onResolve(true, finalText);
-      } else {
-        await writeProposal(finalText);
-      }
+      // v3.18.3 FIX — TOUJOURS appeler writeProposal (disk + buffer
+      // sync), même quand onResolve est wiré. L'ancien code shippé
+      // n'écrivait pas quand onResolve existait, partant du principe
+      // que le caller (agent edit_file) gérait la persistance. Mais
+      // requestApproval (AIPanel) répondait written=true au caller,
+      // qui croyait alors que le write avait déjà eu lieu et skipait
+      // son propre fs.writeFile. Résultat : « l'agent dit qu'il
+      // modifie mais le fichier ne change pas ».
+      // Le bon contrat : InlineDiff persiste les décisions hunk-par-
+      // hunk (qu'il connaît seul, le caller a juste l'intent global),
+      // puis notifie le caller via onResolve avec le finalText. Le
+      // caller voit written=true et skip son write — correct
+      // maintenant que InlineDiff a vraiment écrit.
+      await writeProposal(finalText);
+      diff.onResolve?.(true, finalText);
       closeDiff();
       toast.success('Changes applied', `+${stats.added} / −${stats.removed} lines`);
     } catch (err) {

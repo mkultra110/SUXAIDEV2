@@ -126,6 +126,20 @@ jobs:
           sed -i "s|^UPDATE_SIZE=.*|UPDATE_SIZE=${SIZE}|"          "\$ENV_FILE"
           chown suxai:suxai "/opt/suxai/releases/${NAME}"
           chmod 0644        "/opt/suxai/releases/${NAME}"
+          # v4.3.1 — auto-prune des vieilles versions Windows. Garde
+          # les 3 plus récentes (par mtime) + la version « current »
+          # pointée par UPDATE_URL, supprime le reste. Sans ça,
+          # /opt/suxai/releases/ explose à 16GB après ~30 builds (vu
+          # en prod 2026-05-01 → disk full → restart-loop).
+          KEEP=3
+          CURRENT_NAME=$(grep '^UPDATE_URL=' "\$ENV_FILE" | sed 's|.*/||')
+          cd /opt/suxai/releases
+          ls -1t SUXAI-Setup-*-x64.exe 2>/dev/null | tail -n +\$((KEEP+1)) | while read f; do
+            if [ "\$f" != "\$CURRENT_NAME" ]; then
+              rm -f "\$f"
+              echo "pruned old release: \$f"
+            fi
+          done
           systemctl restart suxai-server
           echo "Deployed ${VERSION}"
           EOF

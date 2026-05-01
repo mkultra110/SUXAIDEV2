@@ -18,7 +18,16 @@
     var(--sidebar-width)
     minmax(0, 1fr)
     var(--ai-panel-width);
-  height: calc(100% - var(--titlebar-height));
+  /* v4.3.1 — flex:1 au lieu de `height: calc(100% - titlebar)`. Le
+     calc retirait UNIQUEMENT la titlebar, mais .ide est un flex-column
+     qui contient aussi TerminalPanel/Problems/Output/StatusBar en
+     dessous → ide__body débordait sous la StatusBar et masquait le
+     bas du composer AIPanel + le bouton d'attachement. flex:1 fait
+     que le body prend EXACTEMENT l'espace restant. min-height:0 est
+     obligatoire pour que les enfants grid (Sidebar, Editor, AIPanel)
+     puissent eux-mêmes scroller sans pousser le parent. */
+  flex: 1 1 0;
+  min-height: 0;
   /* 1 px column gap rendered via grid background = crisp panel
      separators without per-component borders. */
   gap: 0;

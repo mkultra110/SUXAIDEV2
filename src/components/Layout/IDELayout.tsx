@@ -226,6 +226,12 @@ export function IDELayout() {
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'U' || e.key === 'u')) {
         e.preventDefault();
         setOutputOpen((o) => !o);
+        return;
+      }
+      // v4.0 — Cmd/Ctrl+Shift+A : open Squad multi-agent audit modal.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('suxai:open-squad'));
       }
     };
     window.addEventListener('keydown', onKey, true);

@@ -12,7 +12,14 @@
 
 ## En cours
 
-_V3.18.0 livré (palette MRU + conversation export markdown/json +
+_V4.0.0 livré — Squad multi-agent (Cmd+Shift+A), 3 agents en
+parallèle (Architect, Auditor, Improver). Pas de web search dans
+cette V (déféré V4.1)._
+
+_V3.19.0 — Cursor-style inline diff dans le chat pour edit_file/
+write_file._
+
+_V3.18.x — palette MRU + conversation export markdown/json +
 reveal active file in sidebar)._
 
 ### V2.1 — parité VSCode (LIVRÉE — voir Revue 2026-04-28)

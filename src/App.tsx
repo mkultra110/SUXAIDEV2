@@ -12,6 +12,7 @@ import { SearchInFiles } from './components/SearchInFiles/SearchInFiles';
 import { CompareDialog } from './components/Editor/CompareDialog';
 import { BranchPickerHost } from './components/Sidebar/BranchPicker';
 import { GitLogHost } from './components/Sidebar/GitLogModal';
+import { SquadModal } from './components/AI/SquadModal';
 import { Spinner } from './components/ui/Spinner';
 import { AtelierIconSprite } from './components/ui/AtelierIcon';
 
@@ -58,6 +59,7 @@ function Root() {
       <CompareDialog />
       <BranchPickerHost />
       <GitLogHost />
+      <SquadModal />
       <StorageWarningBridge />
     </>
   );

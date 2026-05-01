@@ -6,6 +6,7 @@ import { useToast } from '../ui/Toast';
 import { emitAiCommand } from '../../lib/commands';
 import { useTasks, runTask } from '../../lib/tasks';
 import { openGitLog } from '../Sidebar/GitLogModal';
+import { openSquad } from '../AI/SquadModal';
 import { stashPush, stashPop, listStashes } from '../../lib/git';
 import {
   parseCodeWorkspace,
@@ -436,6 +437,13 @@ export function CommandPalette() {
           if (err) toast.error('Pop failed', err);
           else toast.success('Stash applied', stashes[0].subject);
         },
+      },
+      {
+        id: 'ai.squad-audit',
+        label: 'AI: Run Squad Audit…',
+        hint: 'Ctrl+Shift+A',
+        group: 'AI',
+        run: () => openSquad(),
       },
       {
         id: 'ai.export-md',

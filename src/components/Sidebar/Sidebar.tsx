@@ -269,6 +269,7 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
             className={`sidebar__iconbtn ${view === 'changes' ? 'sidebar__iconbtn--active' : ''}`}
             onClick={() => setView(view === 'files' ? 'changes' : 'files')}
             title={view === 'files' ? 'Source Control' : 'File explorer'}
+            aria-label={view === 'files' ? 'Source Control' : 'File explorer'}
           >
             {view === 'files' ? (
               <AtelierIcon name="i-git-branch" size={14} />
@@ -279,10 +280,10 @@ export function Sidebar({ view: viewProp, setView: setViewProp }: SidebarProps =
               <span className="sidebar__iconbtn-badge">{dirtyCount}</span>
             )}
           </button>
-          <button className="sidebar__iconbtn" onClick={onOpenFile} title="Open file">
+          <button className="sidebar__iconbtn" onClick={onOpenFile} title="Open file" aria-label="Open file">
             <AtelierIcon name="i-file" size={14} />
           </button>
-          <button className="sidebar__iconbtn" onClick={onOpenFolder} title="Open folder">
+          <button className="sidebar__iconbtn" onClick={onOpenFolder} title="Open folder" aria-label="Open folder">
             <AtelierIcon name="i-folder" size={14} />
           </button>
         </div>

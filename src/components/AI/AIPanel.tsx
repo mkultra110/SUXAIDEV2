@@ -819,8 +819,14 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
               ...msg,
               toolCalls: msg.toolCalls?.map((tc) => {
                 const out = outcomes.find((o) => o.call.id === tc.id);
+                // v4.3.4 — fallback safe sur tc.result si out.result
+                // est undefined. Peut arriver si executeTool a thrown
+                // de manière non-canonical (ex. tool MCP qui retourne
+                // un objet malformé) — sans guard, le ?.content se
+                // résout à undefined et crash plus loin quand on lit
+                // .length / .slice etc. sur la propriété.
                 return out
-                  ? { ...tc, status: out.status, result: out.result.content }
+                  ? { ...tc, status: out.status, result: out.result?.content ?? tc.result }
                   : tc;
               }),
             }

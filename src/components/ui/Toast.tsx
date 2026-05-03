@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import './Toast.css';
@@ -54,12 +54,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const api: ToastContextValue = {
+  // v4.3.3 — memoize l'API pour stabiliser l'identité de
+  // l'objet toast retourné par useToast(). Avant : `api` était
+  // recréé à chaque render du provider → tous les composants
+  // useToast() recevaient un nouvel objet → tous les useCallback
+  // qui ont `toast` dans leurs deps (par ex. sendCommand,
+  // onApplyCode dans AIPanel) étaient invalidés à chaque toast,
+  // provoquant des re-renders inutiles. Avec [push], l'objet
+  // change SEULEMENT si push change (jamais en pratique).
+  const api = useMemo<ToastContextValue>(() => ({
     push,
     success: (title, description) => push({ kind: 'success', title, description }),
     error: (title, description) => push({ kind: 'error', title, description }),
     info: (title, description) => push({ kind: 'info', title, description }),
-  };
+  }), [push]);
 
   return (
     <ToastContext.Provider value={api}>

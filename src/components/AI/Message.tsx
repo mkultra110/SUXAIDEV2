@@ -65,6 +65,12 @@ export interface ChatMessage {
    *  file back to its pre-turn content via window.suxai.checkpoint.restore.
    */
   checkpointId?: string;
+  /** v4.3.1 — round agent en cours (live-updated pendant le stream).
+   *  Affiché à côté du spinner pour que le user voit que le model
+   *  enchaîne plusieurs rounds tool_use plutôt que de croire qu'il
+   *  est planté ou qu'il « relance des modifs sans qu'on demande ».
+   *  Disparaît au end_turn (streaming → false). */
+  agentIteration?: { current: number; max: number };
 }
 
 interface Props {
@@ -200,6 +206,15 @@ export function Message({
           <span className="msg__role">Assistant</span>
           {message.modelId && <span className="msg__model">{message.modelId}</span>}
           {message.streaming && <Spinner size={10} />}
+          {/* v4.3.1 — round agent en cours. Visible uniquement pendant
+              le stream et seulement si le model a chaîné au moins 2
+              rounds (round 1 silencieux pour éviter le bruit visuel
+              sur les requêtes simples qui terminent en un seul round). */}
+          {message.streaming && message.agentIteration && message.agentIteration.current > 1 && (
+            <span className="msg__iter" title={`Agent round ${message.agentIteration.current} of max ${message.agentIteration.max}`}>
+              round {message.agentIteration.current}/{message.agentIteration.max}
+            </span>
+          )}
           <div className="msg__actions">
             <button
               type="button"

@@ -81,7 +81,13 @@ function modelProviderForId(id: string): 'anthropic' | 'openai' | undefined {
   return AI_MODELS.find((m) => m.id === id)?.provider;
 }
 
-const MAX_AGENT_ITERATIONS = 10;
+// v4.3.1 — abaissé de 10 à 8. Avec 5 outils par round en moyenne, 8
+// rounds = 40 tool calls ; au-delà c'est presque toujours une boucle
+// pathologique (le user a l'impression que l'agent « relance des
+// modifs sans qu'on demande »). 8 reste assez pour les workflows
+// légitimes : read → edit → re-read pour vérifier → edit follow-up
+// → run_command → dernier round textuel.
+const MAX_AGENT_ITERATIONS = 8;
 
 /**
  * JSON.stringify with sorted keys — used to compute a stable signature
@@ -309,6 +315,11 @@ interface AgentLoopArgs {
    *  of parallelism but useful for paranoid debugging or first runs
    *  on a sensitive codebase). */
   getApprovalMode?: () => 'auto' | 'step' | 'yolo';
+  /** v4.3.1 — fired at the START of each agent iteration so the
+   *  AIPanel can stamp the assistant message with the current round
+   *  number. Lets the user see "round 3/8" in the UI when the
+   *  model chains several tool_use rounds. */
+  onIterationStart?: (iter: number, max: number) => void;
 }
 
 async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
@@ -332,6 +343,13 @@ async function runAgentLoop(args: AgentLoopArgs): Promise<void> {
   catch { /* MCP not available — agent runs without those tools */ }
 
   for (let iter = 0; iter < MAX_AGENT_ITERATIONS; iter++) {
+    // v4.3.1 — notifie l'UI du round en cours. Lobby pour la pill
+    // « round N/M » dans la bulle assistant pendant que le stream
+    // arrive. Permet au user de voir « round 3/8 » plutôt que de
+    // croire que le model est planté ou qu'il s'auto-relance sans
+    // raison.
+    args.onIterationStart?.(iter + 1, MAX_AGENT_ITERATIONS);
+
     // The streaming assistant message is the one we don't want to send
     // back as part of the prompt — we exclude it from the agent
     // messages we forward to the model.
@@ -2528,6 +2546,17 @@ export function AIPanel() {
           requestApproval,
           applyLazyEdit: applyLazyEditBridge,
           getApprovalMode: () => approvalModeRef.current,
+          // v4.3.1 — stamp le round courant sur le message assistant
+          // streaming pour que la bulle affiche « round N/M ».
+          onIterationStart: (current, max) => {
+            setMessages((m) =>
+              m.map((msg) =>
+                msg.id === assistantMsg.id
+                  ? { ...msg, agentIteration: { current, max } }
+                  : msg,
+              ),
+            );
+          },
         })
           .then(() => {
             // v0.13.4 — auto-extract memories at end of a meaningful

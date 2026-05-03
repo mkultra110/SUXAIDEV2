@@ -26,6 +26,11 @@ export interface Conversation {
    *  unset for back-compat with conversations persisted before this
    *  field existed. */
   mode?: ConversationMode;
+  /** v5.0 — pinned conversations stay at the top of the switcher,
+   *  separately from the recency-sorted ones below. Sticky reference
+   *  for important threads (« the bug we keep fighting », « the
+   *  architecture discussion »). Persisted to disk like the rest. */
+  pinned?: boolean;
 }
 
 interface PersistedV2 {

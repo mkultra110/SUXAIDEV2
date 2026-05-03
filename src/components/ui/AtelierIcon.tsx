@@ -23,7 +23,7 @@ import sprite from '../../assets/atelier-icons.svg?raw';
 export type AtelierIconName =
   | 'i-chevron-right' | 'i-chevron-left' | 'i-chevron-down' | 'i-chevron-up'
   | 'i-arrow-up-right' | 'i-arrow-right'
-  | 'i-close' | 'i-menu' | 'i-ellipsis' | 'i-plus' | 'i-check'
+  | 'i-close' | 'i-menu' | 'i-ellipsis' | 'i-plus' | 'i-pin' | 'i-check'
   | 'i-search'
   | 'i-file' | 'i-file-code' | 'i-file-md'
   | 'i-folder' | 'i-folder-open'

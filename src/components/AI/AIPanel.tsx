@@ -2887,6 +2887,15 @@ export function AIPanel() {
     );
   }, []);
 
+  // v5.0 — toggle pinned. Pinned conversations float at the top of
+  // the switcher. Pas de updatedAt change pour ne pas perturber le
+  // tri intra-groupe.
+  const togglePinConversation = useCallback((id: string) => {
+    setConversations((list) =>
+      list.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c)),
+    );
+  }, []);
+
   const onApplyCode = useCallback(
     async (code: string) => {
       if (!activeFile) return;
@@ -3006,6 +3015,7 @@ export function AIPanel() {
             onConfirmDelete={confirmDelete}
             pendingDeleteId={pendingDelete}
             onRename={renameConversation}
+            onTogglePin={togglePinConversation}
           />
           <ModelSelector value={modelId} onChange={setModelId} />
         </div>

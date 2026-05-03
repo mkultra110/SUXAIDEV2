@@ -129,15 +129,59 @@ Common VPS tasks Claude Code should be able to do:
 - Edit `/opt/suxai/.env` (requires sudo — file is owned by `suxai`, mode 0600)
 - Upload new installer to `/opt/suxai/releases/` and bump `UPDATE_*` env vars
 
-## Current state / what works
+## Current state / what works (v5.0.0)
 
-- ✅ Client scaffold: Login UI, IDE layout (sidebar / editor / AI panel), Monaco
-  with custom theme, premium dark UI with glassmorphism, model selector,
-  drag-and-drop file open, multi-tab editor, update dialog.
-- ✅ Server scaffold: `/auth/register` `/auth/login` `/auth/refresh` `/auth/me`,
-  `/ai/models` `/ai/chat` (SSE), `/update/manifest`, hardened Express setup.
-- ✅ VPS one-shot install under `/opt/suxai/` with systemd + nginx.
+### Client (Electron + React)
+- ✅ Login UI, IDE layout (ActivityBar / Sidebar / Editor / AIPanel / StatusBar),
+  Monaco editor with custom Atelier Dark theme, premium glassmorphism,
+  drag-and-drop file open, multi-tab editor with pin/reorder, update dialog.
+- ✅ Custom title-bar with our own close/min/max controls (pixel-aligned),
+  bordered drag region (Win/Linux), traffic lights centered (macOS).
+- ✅ Command palette (Cmd+Shift+P), Quick Open (Cmd+P), Search in files
+  (Cmd+Shift+F), Settings dialog, Welcome screen with mascot + recent files.
+
+### AI Panel
+- ✅ Streaming chat with full Anthropic agent loop (tool_use / tool_result,
+  prompt-caching, AGENTS.md / CLAUDE.md preamble, repo-map auto-context).
+- ✅ Inline diff overlay with hunk-level Accept/Reject (Cursor-style).
+- ✅ « Files Modified » card under each assistant turn with bulk Accept/Reject.
+- ✅ « Round N/M » pill visible during multi-round agent runs (max 8 rounds).
+- ✅ **Squad audit (v5)** : 5 specialists (Architect, Auditor, Improver,
+  Performance, Security) streamed in parallel + Master synthesis. Cmd+Shift+A.
+- ✅ **Pin conversations (v5)** : pinned threads float at the top of the
+  conversation switcher, separated from recency-sorted ones by a divider.
+- ✅ Plan mode (read-only + create_plan), Step mode, YOLO mode.
+- ✅ MCP tool integration (servers configured in Settings).
+- ✅ Conversation persistence (userData JSON, atomic writes, no data loss
+  on crash). Auto-titling from first user message.
+
+### Editor
+- ✅ Inline AI edits (Cmd+K on selection), Inline diff (red/green hunks),
+  diff banner when a pending diff is on another tab.
+- ✅ Source Control panel (git status / diff / commit / branch picker /
+  stash / log).
+- ✅ Problems panel, Output panel, Terminal panel.
+
+### Server (Node + Express)
+- ✅ `/auth/{register,login,refresh,me,redeem-license}`, `/ai/{models,chat,apply}`,
+  `/update/manifest`. Helmet + CORS + rate-limit + zod schemas + bcrypt 12.
+- ✅ **Hardened (v5)** : `/health` reports disk + memory + uptime, returns
+  503 if disk <500MB free or >95% used. Logrotate configured for
+  `/opt/suxai/logs/*.log` (daily, 14 archives, 50MB cap). systemd-journald
+  capped to 500MB. GitHub Actions workflow auto-prunes old `/opt/suxai/releases/`
+  installers (keeps 3 + current).
+- ✅ Server health pill in StatusBar — appears only when degraded/down.
+
+### Deployment
+- ✅ One-shot `sudo ./server/deploy/install.sh` under `/opt/suxai/`. Idempotent.
+  Skips nginx setup when Caddy (or another edge proxy) is already on :80.
+- ✅ GitHub Actions builds Windows installer + uploads to VPS + bumps `.env` +
+  prunes old binaries on every push to dev branch.
 - ✅ Auto-update checker + download + install flow (retries, SHA-256 verify).
+
+### What's New dialog
+- ✅ One-time announcement on major version bump. Shows v5 highlights at first
+  launch; subsequent launches stay silent until the next major.
 
 ## Roadmap / what's NOT done yet
 

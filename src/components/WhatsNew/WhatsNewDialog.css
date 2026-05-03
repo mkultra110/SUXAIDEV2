@@ -1,0 +1,163 @@
+/* ============================================================
+   WhatsNewDialog — one-time announcement on major upgrade
+   v5.0
+   ============================================================ */
+
+.whatsnew__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vh 4vw;
+  background: color-mix(in oklch, black 56%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  animation: suxai-fade-in-soft var(--dur-base) var(--ease-out-expo);
+}
+
+.whatsnew {
+  width: min(640px, 100%);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  animation: whatsnew-in var(--dur-base) var(--ease-out-expo);
+}
+@keyframes whatsnew-in {
+  from { opacity: 0; transform: translateY(-8px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+.whatsnew__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.whatsnew__badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklch, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
+  border: 1px solid color-mix(in oklch, var(--color-accent) 36%, transparent);
+  flex-shrink: 0;
+}
+.whatsnew__title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text-primary);
+  line-height: var(--leading-snug);
+}
+.whatsnew__close {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
+}
+.whatsnew__close:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.whatsnew__list {
+  list-style: none;
+  margin: 0;
+  padding: 14px 22px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.whatsnew__item {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-subtle);
+  transition: border-color var(--dur-quick) var(--ease-standard);
+}
+.whatsnew__item:hover {
+  border-color: color-mix(in oklch, var(--color-accent) 30%, transparent);
+}
+
+.whatsnew__emoji {
+  font-size: 20px;
+  flex-shrink: 0;
+  line-height: 1.2;
+}
+
+.whatsnew__body {
+  flex: 1;
+  min-width: 0;
+}
+.whatsnew__body h3 {
+  margin: 0 0 4px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  letter-spacing: var(--tracking-tight);
+}
+.whatsnew__body p {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: var(--leading-relax);
+  color: var(--color-text-secondary);
+}
+
+.whatsnew__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 22px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.whatsnew__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  border: 1px solid var(--color-accent);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-quick) var(--ease-standard);
+}
+.whatsnew__cta:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-accent-glow);
+}

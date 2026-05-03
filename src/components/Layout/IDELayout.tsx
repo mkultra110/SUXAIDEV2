@@ -13,6 +13,7 @@ import { AIPanel } from '../AI/AIPanel';
 import { TerminalPanel } from '../Terminal/TerminalPanel';
 import { ProblemsPanel } from '../ProblemsPanel/ProblemsPanel';
 import { OutputPanel } from '../OutputPanel/OutputPanel';
+import { WhatsNewDialog } from '../WhatsNew/WhatsNewDialog';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
@@ -359,6 +360,10 @@ export function IDELayout() {
         onToggleOutput={() => setOutputOpen((o) => !o)}
         outputOpen={outputOpen}
       />
+      {/* v5.0 — What's new dialog. Affiché une fois par major bump
+          (5.x → 6.x), ou au tout premier lancement après upgrade.
+          Stamp localStorage à la fermeture pour ne pas re-spammer. */}
+      <WhatsNewDialog />
     </div>
   );
 }

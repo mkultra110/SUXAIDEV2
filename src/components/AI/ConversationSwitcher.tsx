@@ -16,6 +16,9 @@ interface Props {
   /** Id currently armed for deletion (shown in confirmation state). */
   pendingDeleteId: string | null;
   onRename: (id: string, title: string) => void;
+  /** v5.0 — toggle pinned. Pinned conversations float at the top of
+   *  the list, separated from the recency-sorted ones by a divider. */
+  onTogglePin?: (id: string) => void;
 }
 
 export function ConversationSwitcher({
@@ -27,6 +30,7 @@ export function ConversationSwitcher({
   onConfirmDelete,
   pendingDeleteId,
   onRename,
+  onTogglePin,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -35,8 +39,16 @@ export function ConversationSwitcher({
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const active = conversations.find((c) => c.id === activeId);
-  // Most-recently-updated first.
-  const sorted = [...conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  // v5.0 — pinned d'abord (les + récents en premier dans le groupe pinné),
+  // puis les non-pinnés sortés par recency. Le séparateur est rendu
+  // entre les deux groupes via le flag .cswitch__divider plus bas.
+  const pinned = conversations
+    .filter((c) => c.pinned)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const unpinned = conversations
+    .filter((c) => !c.pinned)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const sorted = [...pinned, ...unpinned];
 
   const position = () => {
     const r = triggerRef.current?.getBoundingClientRect();
@@ -116,10 +128,17 @@ export function ConversationSwitcher({
               {sorted.length === 0 && (
                 <div className="cswitch__empty">No conversations yet</div>
               )}
-              {sorted.map((c) => (
+              {sorted.map((c, i) => (
+                <div key={c.id}>
+                  {/* v5.0 — divider entre le groupe pinned (en haut)
+                      et le groupe recency. Affiché uniquement quand
+                      les deux groupes existent ET juste avant le
+                      premier non-pinned. */}
+                  {pinned.length > 0 && i === pinned.length && unpinned.length > 0 && (
+                    <div className="cswitch__divider" aria-hidden />
+                  )}
                 <div
-                  key={c.id}
-                  className={`cswitch__item ${c.id === activeId ? 'cswitch__item--active' : ''}`}
+                  className={`cswitch__item ${c.id === activeId ? 'cswitch__item--active' : ''}${c.pinned ? ' cswitch__item--pinned' : ''}`}
                 >
                   {editingId === c.id ? (
                     <input
@@ -157,6 +176,23 @@ export function ConversationSwitcher({
                       </span>
                     </button>
                   )}
+                  {/* v5.0 — bouton pin. Click toggle le flag pinned.
+                      Visible en permanence ; couleur pleine si déjà
+                      pinned, contour seulement sinon. */}
+                  {onTogglePin && (
+                    <button
+                      type="button"
+                      className={`cswitch__pin${c.pinned ? ' cswitch__pin--on' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTogglePin(c.id);
+                      }}
+                      title={c.pinned ? 'Unpin' : 'Pin to top'}
+                      aria-label={c.pinned ? `Unpin ${c.title}` : `Pin ${c.title}`}
+                    >
+                      <AtelierIcon name="i-pin" size={11} />
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`cswitch__del${pendingDeleteId === c.id ? ' cswitch__del--armed' : ''}`}
@@ -182,6 +218,7 @@ export function ConversationSwitcher({
                       <AtelierIcon name="i-close" size={12} />
                     )}
                   </button>
+                </div>
                 </div>
               ))}
             </div>

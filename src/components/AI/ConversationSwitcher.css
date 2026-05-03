@@ -163,6 +163,59 @@
   border: 1px solid color-mix(in oklch, var(--color-danger) 45%, transparent);
 }
 
+/* v5.0 — pin button. Caché par défaut, visible au hover de l'item
+   (comme le delete) ; toujours visible si la conv est déjà pinnée
+   pour signaler son statut. */
+.cswitch__pin {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-tertiary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    background var(--dur-quick) var(--ease-standard);
+}
+.cswitch__item:hover .cswitch__pin { opacity: 1; }
+.cswitch__pin:hover {
+  color: var(--color-accent);
+  background: color-mix(in oklch, var(--color-accent) 12%, transparent);
+}
+.cswitch__pin--on {
+  opacity: 1 !important;
+  color: var(--color-accent);
+  background: color-mix(in oklch, var(--color-accent) 14%, transparent);
+}
+
+.cswitch__divider {
+  height: 1px;
+  margin: 4px 8px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-border-subtle),
+    transparent
+  );
+}
+
+.cswitch__item--pinned .cswitch__title::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 8px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  vertical-align: middle;
+  opacity: 0.7;
+}
+
 .cswitch__rename {
   flex: 1;
   height: 28px;

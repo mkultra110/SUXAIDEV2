@@ -3,6 +3,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext';
 import { useSettings } from '../../lib/settings';
 import { useGitBranchState } from '../../lib/git';
 import { useAllDiagnostics, diagnosticsCounts } from '../../lib/all-diagnostics';
+import { useServerHealth } from '../../lib/server-health';
 import { openBranchPicker } from '../Sidebar/BranchPicker';
 import { AtelierIcon } from '../ui/AtelierIcon';
 import './StatusBar.css';
@@ -38,6 +39,11 @@ export function StatusBar({
   const branchState = useGitBranchState(workspaceRoot);
   const diagnostics = useAllDiagnostics();
   const diagCounts = useMemo(() => diagnosticsCounts(diagnostics), [diagnostics]);
+  // v4.3.5 — server health pill. Silencieux quand 'ok'/'unknown',
+  // visible quand 'degraded' ou 'down'. Permet au user de voir
+  // immédiatement « c'est pas mon réseau, c'est le serveur » avant
+  // que /auth/login timeout (cf. incident 2026-05-01).
+  const health = useServerHealth();
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -51,6 +57,31 @@ export function StatusBar({
   return (
     <footer className="statusbar">
       <div className="statusbar__group">
+        {/* v4.3.5 — server-health pill. Visible UNIQUEMENT en
+            'degraded' ou 'down' pour rester silencieux quand tout
+            va bien. Click → ne fait rien (passif), le tooltip
+            donne les détails (free MB, used %, version). */}
+        {(health.status === 'degraded' || health.status === 'down') && (
+          <span
+            className={`statusbar__health statusbar__health--${health.status}`}
+            title={
+              health.status === 'down'
+                ? 'Server unreachable — check connection or VPS status'
+                : `Server degraded${
+                    typeof health.diskUsedPct === 'number'
+                      ? ` — disk ${health.diskUsedPct}% used`
+                      : ''
+                  }${
+                    typeof health.diskFreeMB === 'number'
+                      ? ` (${health.diskFreeMB}MB free)`
+                      : ''
+                  }`
+            }
+          >
+            <span className="statusbar__health-dot" aria-hidden />
+            {health.status === 'down' ? 'Server offline' : 'Server degraded'}
+          </span>
+        )}
         {onToggleTerminal && (
           <button
             type="button"

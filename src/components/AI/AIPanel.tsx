@@ -2902,7 +2902,12 @@ export function AIPanel() {
       //
       // Si /ai/apply échoue (network, 502, marker leakage, truncation),
       // on surface une vraie erreur au lieu d'ouvrir un diff dangereux.
+      // v4.3.2 — AbortController pour interrompre la fusion si le user
+      // ferme l'AIPanel ou switche de fichier mid-call. Sans ça : la
+      // promesse résolvait après unmount → openDiff sur état stale →
+      // diff potentiellement ouvert sur le mauvais fichier.
       toast.info('Application en cours…', 'Fusion du snippet dans le fichier via Haiku 4.5');
+      const ac = new AbortController();
       try {
         const { API_BASE_URL } = await import('../../config');
         const { tryRefreshToken } = await import('../../api/client');
@@ -2919,6 +2924,7 @@ export function AIPanel() {
               instruction: 'Apply this code snippet from the chat to the active file. Preserve all unchanged lines verbatim.',
               path: activeFile.path,
             }),
+            signal: ac.signal,
           });
         let res = await doFetch(token);
         if (res.status === 401) {
@@ -2945,6 +2951,9 @@ export function AIPanel() {
           );
           return;
         }
+        // Si l'utilisateur a switché de fichier pendant le merge, on
+        // abandonne plutôt que d'ouvrir un diff sur un mauvais path.
+        if (ac.signal.aborted) return;
         openDiff({
           path: activeFile.path,
           original: activeFile.content,
@@ -2952,6 +2961,7 @@ export function AIPanel() {
           label: `apply · haiku-4-5`,
         });
       } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
         toast.error('Apply failed', (err as Error).message);
       }
     },

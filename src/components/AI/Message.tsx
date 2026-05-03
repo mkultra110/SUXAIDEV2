@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Spinner } from '../ui/Spinner';
 import { CodeBlock } from './CodeBlock';
 import { ToolCall } from './ToolCall';
@@ -133,12 +133,23 @@ export function Message({
 }: Props) {
   const parts = useMemo(() => parseMarkdown(message.content), [message.content]);
   const [copied, setCopied] = useState(false);
+  // v4.3.2 — track le timeout pour pouvoir le clear si le composant
+  // unmount avant les 1200ms (sinon setState sur composant mort →
+  // warning React + petit memory leak qui s'accumule sur les longues
+  // sessions de chat).
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const copyAll = async () => {
     try {
       await navigator.clipboard.writeText(message.content);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1200);
       onCopy?.(message);
     } catch {
       /* ignore */

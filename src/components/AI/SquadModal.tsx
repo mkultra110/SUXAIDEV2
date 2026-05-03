@@ -68,6 +68,11 @@ export function SquadModal() {
   // master prompt without racing React's commit cycle.
   const doneCountRef = useRef(0);
   const finalContentRef = useRef<Map<string, SquadAgentState>>(new Map());
+  // v4.3.2 — generation counter incremented à chaque master run.
+  // Les onUpdate de la génération précédente vérifient cet id et
+  // bail s'il a changé, évitant que des callbacks tardifs
+  // viennent réécrire le state d'une nouvelle exécution.
+  const masterGenRef = useRef(0);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -175,12 +180,20 @@ export function SquadModal() {
                 setRunning(false);
                 return;
               }
+              // v4.3.2 — capture une « génération » id pour ignorer
+              // les callbacks tardifs si le user a cancel/relancé
+              // pendant que le master streamait. Sans ça, un onUpdate
+              // qui revenait après cancel() écrivait du contenu stale
+              // dans states et flippait setRunning(false) à un mauvais
+              // moment.
+              const masterGen = ++masterGenRef.current;
               masterAbortRef.current = runMaster({
                 token,
                 modelId: settings.defaultModelId,
                 userPrompt: lastPromptRef.current,
                 reports,
                 onUpdate: (ms) => {
+                  if (masterGen !== masterGenRef.current) return;
                   setStates((p) => {
                     const next = new Map(p);
                     next.set(ms.spec.id, ms);
@@ -206,6 +219,9 @@ export function SquadModal() {
     masterAbortRef.current?.();
     abortRef.current = null;
     masterAbortRef.current = null;
+    // v4.3.2 — bump la génération master pour invalider les
+    // callbacks de la run en cours (cf. masterGenRef plus haut).
+    masterGenRef.current++;
     setRunning(false);
   }, []);
 

@@ -271,6 +271,11 @@
   font-size: var(--text-sm);
   line-height: var(--leading-relax);
   max-width: 320px;
+  /* v4.3.2 — overflow-wrap pour casser les mots/paths trop longs
+     (chemins absolus Windows par ex.) au lieu de déborder le
+     container et péter le centrage. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .ai__empty-chips {
   display: flex;

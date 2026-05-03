@@ -118,8 +118,14 @@
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
-  min-width: 560px;
+  /* v4.3.2 — min-width passe à min(560px, 90vw) pour autoriser le
+     shrink sous 560px (écrans étroits, AIPanel large). Avant, sur
+     un écran <560 le bar débordait sa colonne et clippait les
+     boutons Accept/Reject sur le bord droit. */
+  min-width: min(560px, 90vw);
   max-width: min(880px, 96%);
+  flex-wrap: wrap;
+  row-gap: 6px;
   border-radius: var(--radius-lg);
   background: var(--color-bg-overlay);
   backdrop-filter: blur(22px) saturate(160%);

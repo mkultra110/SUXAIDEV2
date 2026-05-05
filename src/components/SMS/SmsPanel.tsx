@@ -172,6 +172,10 @@ export function SmsPanel() {
 
   const checkOrder = async (id: string) => {
     if (!token) return;
+    if (!id) {
+      toast.error('Check failed', 'Order ID missing — try refresh');
+      return;
+    }
     try {
       const detail = await smsApi.check(token, id);
       setOrders((list) => list.map((o) => (o.orderId === id ? mergeOrder(o, detail) : o)));
@@ -350,13 +354,28 @@ export function SmsPanel() {
 function normaliseOrders(payload: unknown): ActiveOrder[] {
   // The 1001SMS API may wrap the list in { orders: [...] } or return
   // the array directly. We accept both.
-  if (Array.isArray(payload)) return payload as ActiveOrder[];
-  if (payload && typeof payload === 'object') {
+  let arr: unknown[] = [];
+  if (Array.isArray(payload)) arr = payload;
+  else if (payload && typeof payload === 'object') {
     const obj = payload as { orders?: unknown; list?: unknown; data?: unknown };
     const candidate = obj.orders ?? obj.list ?? obj.data;
-    if (Array.isArray(candidate)) return candidate as ActiveOrder[];
+    if (Array.isArray(candidate)) arr = candidate;
   }
-  return [];
+  // v5.2.3 — l'upstream peut retourner l'ID sous plusieurs noms
+  // (`orderId`, `id`, `order_id`, `_id`). On normalise pour que le
+  // reste du code n'ait à connaître que `orderId`. Sans ça les
+  // boutons Check / Cancel envoyaient `{ orderId: undefined }` et
+  // l'upstream répondait HTTP 400.
+  return arr.map((raw) => {
+    const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const id =
+      (typeof o.orderId === 'string' || typeof o.orderId === 'number') ? String(o.orderId) :
+      (typeof o.id === 'string' || typeof o.id === 'number')           ? String(o.id) :
+      (typeof o.order_id === 'string' || typeof o.order_id === 'number') ? String(o.order_id) :
+      (typeof o._id === 'string')                                       ? String(o._id) :
+      '';
+    return { ...o, orderId: id } as ActiveOrder;
+  });
 }
 
 function mergeOrder(prev: ActiveOrder, detail: unknown): ActiveOrder {

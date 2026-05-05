@@ -68,7 +68,17 @@ async function request<T>(
     let parsed: Envelope<T> | null = null;
     try { parsed = text ? (JSON.parse(text) as Envelope<T>) : null; } catch { /* */ }
     if (!res.ok) {
-      const msg = parsed?.error || `Upstream ${res.status}`;
+      // v5.2.3 — l'upstream renvoie l'erreur sous plusieurs noms selon
+      // l'endpoint (`error`, `message`, `details`, `error_description`).
+      // Sans ça l'utilisateur voyait juste « HTTP 400 » sans aucune
+      // explication de pourquoi.
+      const obj = (parsed ?? {}) as Record<string, unknown>;
+      const msg =
+        (typeof obj.error === 'string' && obj.error) ||
+        (typeof obj.message === 'string' && obj.message) ||
+        (typeof (obj as { details?: unknown }).details === 'string' && (obj as { details: string }).details) ||
+        (typeof (obj as { error_description?: unknown }).error_description === 'string' && (obj as { error_description: string }).error_description) ||
+        `HTTP ${res.status}${text ? ` — ${text.slice(0, 200)}` : ''}`;
       throw new SmsUpstreamError(msg, res.status);
     }
     if (parsed && parsed.success === false) {
@@ -107,7 +117,12 @@ export const sms1001 = {
   // Activations
   order: (body: { country: string; service: string; provider: string; purchaseType: string }) =>
     request<SmsOrder>('POST', '/activations/order', body),
-  check: (orderId: string) => request<unknown>('POST', '/activations/check', { orderId }),
+  // v5.2.3 — send orderId under multiple field names so we're tolerant
+  // of upstream variations (some endpoints expect order_id snake_case).
+  // The upstream picks whichever field it knows ; the others are
+  // ignored.
+  check: (orderId: string) =>
+    request<unknown>('POST', '/activations/check', { orderId, order_id: orderId, id: orderId }),
   details: (orderId: string) => request<unknown>('GET', `/activations/${encodeURIComponent(orderId)}`),
   active: (q: { page?: number; limit?: number }) => {
     const params = new URLSearchParams();
@@ -126,7 +141,8 @@ export const sms1001 = {
     const qs = params.toString();
     return request<unknown>('GET', `/activations/history${qs ? `?${qs}` : ''}`);
   },
-  cancel: (orderId: string) => request<unknown>('POST', '/activations/cancel', { orderId }),
+  cancel: (orderId: string) =>
+    request<unknown>('POST', '/activations/cancel', { orderId, order_id: orderId, id: orderId }),
   cancelAll: () => request<unknown>('POST', '/activations/cancel-all'),
   archiveAll: () => request<unknown>('GET', '/activations/archive-all'),
 };

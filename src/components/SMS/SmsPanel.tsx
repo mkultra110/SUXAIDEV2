@@ -192,10 +192,10 @@ export function SmsPanel() {
             <AtelierIcon name="i-comment" size={16} />
           </span>
           <div className="smsp__head-text">
-            <div className="smsp__title">SMS — temporary phone numbers</div>
+            <div className="smsp__title">SUXAVOIP — temporary phone numbers</div>
             <div className="smsp__sub">
               {configured === null ? '…' :
-                configured ? `1001sms · balance ${balance ?? '—'}` :
+                configured ? `SUXAVOIP · balance ${balance ?? '—'}` :
                 'API key not configured on the server'}
             </div>
           </div>
@@ -222,10 +222,10 @@ export function SmsPanel() {
         {configured === false && (
           <div className="smsp__notice">
             <p>
-              Le serveur n'a pas <code>SMS1001_API_KEY</code> configuré.
+              Le serveur n'a pas <code>SUXAVOIP_API_KEY</code> configuré.
               SSH sur le VPS, édite <code>/opt/suxai/.env</code> et ajoute :
             </p>
-            <pre>SMS1001_API_KEY=ta_clé_1001sms</pre>
+            <pre>SUXAVOIP_API_KEY=ta_clé</pre>
             <p>Puis <code>sudo systemctl restart suxai-server</code>.</p>
           </div>
         )}

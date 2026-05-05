@@ -2,7 +2,7 @@
  * v5.2 — 1001SMS upstream wrapper.
  *
  * Wraps https://www.1001sms.com/api/v1/* with typed methods. The API
- * key (env.SMS1001_API_KEY) is sent as `Authorization: Bearer <key>`
+ * key (getApiKey()) is sent as `Authorization: Bearer <key>`
  * and never leaks to clients — `/sms/*` routes proxy through this
  * service.
  *
@@ -11,6 +11,15 @@
  * timeout failures bubble as plain Error.
  */
 import { env } from '../config/env.js';
+
+// v5.2.1 — accept SUXAVOIP_API_KEY first, fall back to legacy
+// SMS1001_API_KEY for VPS deployed before the rebrand.
+function getApiKey(): string {
+  return env.SUXAVOIP_API_KEY || env.SMS1001_API_KEY || '';
+}
+function getBaseUrl(): string {
+  return env.SUXAVOIP_BASE_URL || env.SMS1001_BASE_URL;
+}
 
 export class SmsUpstreamError extends Error {
   constructor(message: string, public status: number, public code?: string) {
@@ -33,14 +42,14 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  if (!env.SMS1001_API_KEY) {
+  if (!getApiKey()) {
     throw new SmsUpstreamError(
-      'SMS1001_API_KEY not configured on the server',
+      'SUXAVOIP_API_KEY not configured on the server',
       503,
       'NOT_CONFIGURED',
     );
   }
-  const url = `${env.SMS1001_BASE_URL.replace(/\/$/, '')}${path}`;
+  const url = `${getBaseUrl().replace(/\/$/, '')}${path}`;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
@@ -49,7 +58,7 @@ async function request<T>(
       headers: {
         'content-type': 'application/json',
         accept: 'application/json',
-        authorization: `Bearer ${env.SMS1001_API_KEY}`,
+        authorization: `Bearer ${getApiKey()}`,
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: ac.signal,
@@ -81,7 +90,7 @@ async function request<T>(
 }
 
 export const sms1001 = {
-  configured: () => Boolean(env.SMS1001_API_KEY),
+  configured: () => Boolean(getApiKey()),
 
   // Lookups
   services: () => request<SmsService[]>('GET', '/informative/services'),

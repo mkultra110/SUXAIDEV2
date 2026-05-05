@@ -18,9 +18,14 @@ const schema = z.object({
   QUATARLY_API_KEY: z.string().default(''),
   QUATARLY_BASE_URL: z.string().url().default('https://api.quatarly.cloud'),
 
-  // v5.2 — 1001SMS integration. Optional ; quand vide, /sms/* renvoie
-  // 503 et le panel client affiche un message « configure SMS1001_API_KEY
-  // dans /opt/suxai/.env ». Récupère la clé sur le dashboard 1001sms.com.
+  // v5.2.1 — SUXAVOIP integration (proxy au-dessus du provider SMS
+  // upstream). Optional ; quand vide, /sms/* renvoie 503 et le panel
+  // client affiche un message « configure SUXAVOIP_API_KEY dans
+  // /opt/suxai/.env ». L'env var hérite (alias) de SMS1001_API_KEY si
+  // SUXAVOIP_API_KEY n'est pas défini, pour qu'un VPS configuré avant
+  // le rebrand n'ait pas besoin d'être édité.
+  SUXAVOIP_API_KEY: z.string().default(''),
+  SUXAVOIP_BASE_URL: z.string().url().default('https://www.1001sms.com/api/v1'),
   SMS1001_API_KEY: z.string().default(''),
   SMS1001_BASE_URL: z.string().url().default('https://www.1001sms.com/api/v1'),
 

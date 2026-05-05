@@ -445,10 +445,10 @@ export function CommandPalette() {
         group: 'AI',
         run: () => openSquad(),
       },
-      // v5.2 — SMS panel (1001SMS proxy).
+      // v5.2 — SUXAVOIP panel.
       {
         id: 'sms.panel',
-        label: 'SMS: Phone numbers (1001SMS)…',
+        label: 'SUXAVOIP: Phone numbers…',
         hint: 'Ctrl+Shift+N',
         group: 'AI',
         run: () => {

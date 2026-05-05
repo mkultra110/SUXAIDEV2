@@ -30,6 +30,41 @@ import { AtelierIcon } from '../ui/AtelierIcon';
 import './AIPanel.css';
 
 const STORAGE_MODEL_KEY = 'suxai.model';
+// v5.1.4 — drafts persistés en localStorage. Plafonné à 64 entries
+// + 100KB par draft (safe contre les pastes énormes qui rempliraient
+// le 5MB localStorage). Si on dépasse, on évince les drafts les plus
+// vieux (par insertion order, Map garde l'ordre naturellement).
+const STORAGE_DRAFTS_KEY = 'suxai.drafts';
+const DRAFTS_MAX_ENTRIES = 64;
+const DRAFTS_MAX_LEN_PER = 100 * 1024;
+
+function loadDrafts(): Map<string, string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_DRAFTS_KEY);
+    if (!raw) return new Map();
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    if (!parsed || typeof parsed !== 'object') return new Map();
+    const m = new Map<string, string>();
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'string' && v.length > 0) m.set(k, v.slice(0, DRAFTS_MAX_LEN_PER));
+    }
+    return m;
+  } catch {
+    return new Map();
+  }
+}
+
+function saveDrafts(m: Map<string, string>): void {
+  try {
+    // Garde les N + récents (insertion order = recency).
+    const entries = [...m.entries()].slice(-DRAFTS_MAX_ENTRIES);
+    const obj: Record<string, string> = {};
+    for (const [k, v] of entries) obj[k] = v.slice(0, DRAFTS_MAX_LEN_PER);
+    localStorage.setItem(STORAGE_DRAFTS_KEY, JSON.stringify(obj));
+  } catch {
+    /* quota etc. — ignore */
+  }
+}
 const MAX_PERSISTED_MESSAGES = 200;
 
 /** Pull the first fenced code block out of a streamed response. */
@@ -915,14 +950,22 @@ export function AIPanel() {
   const [input, setInput] = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
-  // v5.1.3 — per-conversation draft persistence (in-memory). Quand le
-  // user tape dans la convA puis switche sur convB, son draft de A
-  // doit être restauré quand il revient. Sans ça, switch d'onglet =
-  // perte du message en cours d'écriture (perte UX très douloureuse
-  // sur les longs prompts). Le Map vit le temps de la session ;
-  // pas persisté à disque pour ne pas faire grossir conversations.json
-  // de drafts éphémères.
-  const draftsRef = useRef<Map<string, string>>(new Map());
+  // v5.1.3 — per-conversation draft persistence.
+  // v5.1.4 — étendu pour survivre aux app restarts via localStorage
+  // (plafonné à 64 entries × 100KB chacune, eviction par recency).
+  // Le Map vit en mémoire pour la perf (lecture sync sans parse), et
+  // saveDrafts() flush à localStorage à chaque switch + à chaque
+  // unmount. Pas de debounce sur les keystrokes pour rester O(switch),
+  // pas O(char).
+  const draftsRef = useRef<Map<string, string>>(loadDrafts());
+  // v5.1.4 — flush drafts to localStorage on unmount (page reload,
+  // window close, hard quit). Le switch en flush déjà ; l'unmount
+  // capture le cas où le user ferme l'app avant de switcher.
+  useEffect(() => {
+    return () => {
+      saveDrafts(draftsRef.current);
+    };
+  }, []);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
@@ -1219,9 +1262,14 @@ export function AIPanel() {
         const fresh = emptyConversation();
         setConversations([fresh]);
         setActiveConvId(fresh.id);
+        // v5.1.4 — restore le draft de la conv active depuis localStorage.
+        // (Pour fresh, drafts.get sera undefined → input reste à ''.)
+        setInput(draftsRef.current.get(fresh.id) ?? '');
       } else {
         setConversations(cleaned);
-        setActiveConvId(loaded.active ?? cleaned[0].id);
+        const activeId = loaded.active ?? cleaned[0].id;
+        setActiveConvId(activeId);
+        setInput(draftsRef.current.get(activeId) ?? '');
       }
       setHistoryLoaded(true);
     })();
@@ -2844,6 +2892,8 @@ export function AIPanel() {
       if (activeConvId) {
         if (input.trim()) draftsRef.current.set(activeConvId, input);
         else draftsRef.current.delete(activeConvId);
+        // v5.1.4 — flush localStorage à chaque switch (peu fréquent).
+        saveDrafts(draftsRef.current);
       }
       setActiveConvId(id);
       setInput(draftsRef.current.get(id) ?? '');

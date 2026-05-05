@@ -327,7 +327,26 @@ export function Message({
             </div>
           </>
         )}
-        {message.error && <div className="msg__error">⚠ {message.error}</div>}
+        {message.error && (
+          <div className="msg__error">
+            <span className="msg__error-icon" aria-hidden>⚠</span>
+            <span className="msg__error-text">{message.error}</span>
+            {/* v5.1.2 — Retry inline. onRegenerate déjà câblé (drop
+                la dernière paire user/assistant et resend) — on
+                expose juste le call-to-action ici plutôt que de
+                forcer le user à scroll jusqu'au menu d'actions. */}
+            {onRegenerate && (
+              <button
+                type="button"
+                className="msg__error-retry"
+                onClick={() => onRegenerate(message)}
+                title="Re-send the prompt that produced this error"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

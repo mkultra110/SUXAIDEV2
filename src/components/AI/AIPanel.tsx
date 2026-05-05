@@ -915,6 +915,14 @@ export function AIPanel() {
   const [input, setInput] = useState('');
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  // v5.1.3 — per-conversation draft persistence (in-memory). Quand le
+  // user tape dans la convA puis switche sur convB, son draft de A
+  // doit être restauré quand il revient. Sans ça, switch d'onglet =
+  // perte du message en cours d'écriture (perte UX très douloureuse
+  // sur les longs prompts). Le Map vit le temps de la session ;
+  // pas persisté à disque pour ne pas faire grossir conversations.json
+  // de drafts éphémères.
+  const draftsRef = useRef<Map<string, string>>(new Map());
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [attachments, setAttachments] = useState<{ path: string; content: string; name: string }[]>([]);
@@ -2361,6 +2369,9 @@ export function AIPanel() {
       };
       setMessages((m) => [...m, userMsg, assistantMsg]);
       setInput('');
+      // v5.1.3 — clear le draft persisté pour cette conv (le user
+      // vient de l'envoyer, pas de raison de le garder).
+      if (activeConvId) draftsRef.current.delete(activeConvId);
       setAttachments([]);
       setStreaming(true);
 
@@ -2828,11 +2839,17 @@ export function AIPanel() {
       if (id === activeConvId) return;
       abortRef.current?.();
       setStreaming(false);
+      // v5.1.3 — sauve le draft courant avant de switcher, restaure
+      // celui de la nouvelle conv (vide si jamais commencé).
+      if (activeConvId) {
+        if (input.trim()) draftsRef.current.set(activeConvId, input);
+        else draftsRef.current.delete(activeConvId);
+      }
       setActiveConvId(id);
-      setInput('');
+      setInput(draftsRef.current.get(id) ?? '');
       setAttachments([]);
     },
-    [activeConvId],
+    [activeConvId, input],
   );
 
   const deleteConversation = useCallback(

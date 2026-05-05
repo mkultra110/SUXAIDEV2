@@ -330,3 +330,13 @@
   margin: 0 2px;
 }
 
+
+.cswitch__hl {
+  background: color-mix(in oklch, var(--color-accent) 30%, transparent);
+  color: var(--color-text-primary);
+  border-radius: 2px;
+  padding: 0 2px;
+  margin: 0 -2px;
+  font-weight: 600;
+}
+

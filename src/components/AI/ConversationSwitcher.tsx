@@ -1,8 +1,29 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { Conversation } from '../../lib/conversations';
 import { AtelierIcon } from '../ui/AtelierIcon';
 import './ConversationSwitcher.css';
+
+/**
+ * v5.1 — Highlight a substring match inside a title for the search box.
+ * Returns the original text untouched when query is empty or no match.
+ * Uses case-insensitive matching but preserves original casing.
+ */
+function highlightMatch(text: string, query: string): ReactNode {
+  if (!query.trim()) return text;
+  const lower = text.toLowerCase();
+  const q = query.toLowerCase();
+  const idx = lower.indexOf(q);
+  if (idx === -1) return text;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark className="cswitch__hl">{text.slice(idx, idx + query.length)}</mark>
+      {text.slice(idx + query.length)}
+    </>
+  );
+}
 
 interface Props {
   conversations: Conversation[];
@@ -285,7 +306,9 @@ export function ConversationSwitcher({
                       onDoubleClick={() => setEditingId(c.id)}
                       title="Click to switch · double-click to rename"
                     >
-                      <span className="cswitch__title">{c.title}</span>
+                      <span className="cswitch__title">
+                        {highlightMatch(c.title, query)}
+                      </span>
                       <span className="cswitch__meta">
                         {c.messages.length} msg
                       </span>

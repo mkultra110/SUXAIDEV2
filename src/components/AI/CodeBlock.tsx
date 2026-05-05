@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './CodeBlock.css';
 
 interface Props {
@@ -13,12 +13,22 @@ interface Props {
 
 export function CodeBlock({ code, language, onApply, onDiff, streaming }: Props) {
   const [copied, setCopied] = useState(false);
+  // v5.1.1 — track le timer pour pouvoir le clear si le composant
+  // unmount avant les 1200ms (sinon setState sur composant mort).
+  // Même fix que Message.tsx en v4.3.2.
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+    };
+  }, []);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = setTimeout(() => setCopied(false), 1200);
     } catch {
       /* noop */
     }

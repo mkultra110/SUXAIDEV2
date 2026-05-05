@@ -17,19 +17,19 @@
 .toolcall--running {
   border-color: color-mix(in oklch, var(--color-accent) 40%, transparent);
 }
+/* v5.1.1 — animation switched de background-position vers opacity.
+   background-position sur un gradient déclenche un repaint du fill
+   à chaque frame (~16ms × infiniment) — visible en jank sur les
+   GPU/CPU faibles, surtout quand plusieurs toolcalls tournent en
+   même temps (squad audit). opacity est compositée par le GPU et
+   ne déclenche que un re-composite, pas un repaint. */
 .toolcall--running .toolcall__head {
-  background: linear-gradient(
-    90deg,
-    color-mix(in oklch, var(--color-accent) 04%, transparent),
-    color-mix(in oklch, var(--color-accent) 14%, transparent),
-    color-mix(in oklch, var(--color-accent) 04%, transparent)
-  );
-  background-size: 200% 100%;
-  animation: toolcall-shimmer 1.6s linear infinite;
+  background: color-mix(in oklch, var(--color-accent) 12%, transparent);
+  animation: toolcall-pulse 1.6s ease-in-out infinite;
 }
-@keyframes toolcall-shimmer {
-  from { background-position: 0% 50%; }
-  to   { background-position: -200% 50%; }
+@keyframes toolcall-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.65; }
 }
 
 .toolcall--done    { border-color: color-mix(in oklch, var(--color-success) 30%, transparent); }

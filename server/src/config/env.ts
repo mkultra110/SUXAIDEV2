@@ -18,6 +18,12 @@ const schema = z.object({
   QUATARLY_API_KEY: z.string().default(''),
   QUATARLY_BASE_URL: z.string().url().default('https://api.quatarly.cloud'),
 
+  // v5.2 — 1001SMS integration. Optional ; quand vide, /sms/* renvoie
+  // 503 et le panel client affiche un message « configure SMS1001_API_KEY
+  // dans /opt/suxai/.env ». Récupère la clé sur le dashboard 1001sms.com.
+  SMS1001_API_KEY: z.string().default(''),
+  SMS1001_BASE_URL: z.string().url().default('https://www.1001sms.com/api/v1'),
+
   // Free tier cap — milliseconds of cumulative AI streaming time per
   // UTC day. Default 30 min.
   FREE_DAILY_LIMIT_MS: z.coerce.number().int().nonnegative().default(30 * 60 * 1000),

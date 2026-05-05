@@ -7,6 +7,7 @@ import { env, corsOrigins } from './config/env.js';
 import authRouter from './routes/auth.js';
 import aiRouter from './routes/ai.js';
 import updateRouter from './routes/update.js';
+import smsRouter from './routes/sms.js';
 import { errorHandler, notFound } from './middleware/error.js';
 
 const app = express();
@@ -99,6 +100,7 @@ app.get('/health', async (_req, res) => {
 app.use('/auth', authRouter);
 app.use('/ai', aiRouter);
 app.use('/update', updateRouter);
+app.use('/sms', smsRouter);
 
 app.use(notFound);
 app.use(errorHandler);

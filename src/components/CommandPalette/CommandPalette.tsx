@@ -445,6 +445,16 @@ export function CommandPalette() {
         group: 'AI',
         run: () => openSquad(),
       },
+      // v5.2 — SMS panel (1001SMS proxy).
+      {
+        id: 'sms.panel',
+        label: 'SMS: Phone numbers (1001SMS)…',
+        hint: 'Ctrl+Shift+N',
+        group: 'AI',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:open-sms'));
+        },
+      },
       {
         id: 'ai.export-md',
         label: 'AI: Export conversation as Markdown…',

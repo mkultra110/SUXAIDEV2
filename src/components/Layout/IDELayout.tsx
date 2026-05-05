@@ -14,6 +14,7 @@ import { TerminalPanel } from '../Terminal/TerminalPanel';
 import { ProblemsPanel } from '../ProblemsPanel/ProblemsPanel';
 import { OutputPanel } from '../OutputPanel/OutputPanel';
 import { WhatsNewDialog } from '../WhatsNew/WhatsNewDialog';
+import { SmsPanel } from '../SMS/SmsPanel';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
@@ -234,6 +235,12 @@ export function IDELayout() {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('suxai:open-squad'));
       }
+      // v5.2 — Cmd/Ctrl+Shift+N : open SMS panel (« N » comme Number).
+      // Pas Shift+S parce que collide avec le « Save As » familier.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'N' || e.key === 'n')) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('suxai:open-sms'));
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -364,6 +371,10 @@ export function IDELayout() {
           (5.x → 6.x), ou au tout premier lancement après upgrade.
           Stamp localStorage à la fermeture pour ne pas re-spammer. */}
       <WhatsNewDialog />
+      {/* v5.2 — SMS panel modal. Ouvert via Cmd+Shift+S ou la
+          command palette. Reste invisible tant que l'event
+          suxai:open-sms n'a pas été dispatché. */}
+      <SmsPanel />
     </div>
   );
 }

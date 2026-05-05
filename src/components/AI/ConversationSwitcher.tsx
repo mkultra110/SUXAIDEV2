@@ -35,8 +35,12 @@ export function ConversationSwitcher({
   const [open, setOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // v5.1 — search query + keyboard nav cursor.
+  const [query, setQuery] = useState('');
+  const [hoverIdx, setHoverIdx] = useState<number>(-1);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   const active = conversations.find((c) => c.id === activeId);
   // v5.0 — pinned d'abord (les + récents en premier dans le groupe pinné),
@@ -48,7 +52,20 @@ export function ConversationSwitcher({
   const unpinned = conversations
     .filter((c) => !c.pinned)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const sorted = [...pinned, ...unpinned];
+  // v5.1 — filtre par query : matche le titre OU le premier message
+  // user (case-insensitive). Les pinned restent en haut DANS leur
+  // groupe filtré.
+  const matches = (c: Conversation): boolean => {
+    if (!query.trim()) return true;
+    const q = query.toLowerCase();
+    if (c.title.toLowerCase().includes(q)) return true;
+    const firstUser = c.messages.find((m) => m.role === 'user');
+    if (firstUser?.content.toLowerCase().includes(q)) return true;
+    return false;
+  };
+  const filteredPinned = pinned.filter(matches);
+  const filteredUnpinned = unpinned.filter(matches);
+  const sorted = [...filteredPinned, ...filteredUnpinned];
 
   const position = () => {
     const r = triggerRef.current?.getBoundingClientRect();
@@ -84,14 +101,57 @@ export function ConversationSwitcher({
     return () => document.removeEventListener('mousedown', handler);
   }, [open]);
 
+  // v5.1 — focus search input on open + reset state.
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      setHoverIdx(-1);
+      return;
+    }
+    const t = setTimeout(() => searchRef.current?.focus(), 30);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  // v5.1 — global key handler : Esc close, Up/Down navigate, Enter select.
+  // Utilise sortedRef pour éviter de re-binder à chaque char tapé dans
+  // la search input (sortedRef est mis à jour à chaque render mais ne
+  // déclenche pas de cleanup/re-add du listener).
+  const sortedRef = useRef(sorted);
+  sortedRef.current = sorted;
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
+      const list = sortedRef.current;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHoverIdx((i) => (list.length === 0 ? -1 : (i + 1) % list.length));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHoverIdx((i) => (list.length === 0 ? -1 : (i - 1 + list.length) % list.length));
+        return;
+      }
+      if (e.key === 'Enter') {
+        const target = hoverIdxRef.current;
+        if (target >= 0 && target < list.length) {
+          e.preventDefault();
+          onSwitch(list[target].id);
+          setOpen(false);
+        }
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, onSwitch]);
+  // hoverIdx in a ref so the keydown handler reads fresh values without
+  // re-subscribing on every keystroke.
+  const hoverIdxRef = useRef(hoverIdx);
+  hoverIdxRef.current = hoverIdx;
 
   return (
     <div className="cswitch">
@@ -124,9 +184,48 @@ export function ConversationSwitcher({
             role="listbox"
             style={{ top: coords.top, left: coords.left, minWidth: coords.width }}
           >
+            {/* v5.1 — search box. Visible dès qu'il y a 4+ conversations
+                (sinon overkill). Tape pour filtrer titre + premier
+                message ; ↑/↓ pour naviguer ; ↵ pour ouvrir. */}
+            {conversations.length >= 4 && (
+              <div className="cswitch__search">
+                <AtelierIcon name="i-search" size={11} className="cswitch__search-icon" />
+                <input
+                  ref={searchRef}
+                  type="text"
+                  className="cswitch__search-input"
+                  value={query}
+                  placeholder={`Search ${conversations.length} conversations…`}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setHoverIdx(e.target.value ? 0 : -1);
+                  }}
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                {query && (
+                  <button
+                    type="button"
+                    className="cswitch__search-clear"
+                    onClick={() => {
+                      setQuery('');
+                      setHoverIdx(-1);
+                      searchRef.current?.focus();
+                    }}
+                    title="Clear search"
+                    aria-label="Clear search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
             <div className="cswitch__list">
-              {sorted.length === 0 && (
+              {sorted.length === 0 && conversations.length === 0 && (
                 <div className="cswitch__empty">No conversations yet</div>
+              )}
+              {sorted.length === 0 && conversations.length > 0 && query && (
+                <div className="cswitch__empty">No match for « {query} »</div>
               )}
               {sorted.map((c, i) => (
                 <div key={c.id}>
@@ -134,11 +233,27 @@ export function ConversationSwitcher({
                       et le groupe recency. Affiché uniquement quand
                       les deux groupes existent ET juste avant le
                       premier non-pinned. */}
-                  {pinned.length > 0 && i === pinned.length && unpinned.length > 0 && (
+                  {filteredPinned.length > 0 && i === filteredPinned.length && filteredUnpinned.length > 0 && (
                     <div className="cswitch__divider" aria-hidden />
                   )}
                 <div
-                  className={`cswitch__item ${c.id === activeId ? 'cswitch__item--active' : ''}${c.pinned ? ' cswitch__item--pinned' : ''}`}
+                  className={
+                    'cswitch__item' +
+                    (c.id === activeId ? ' cswitch__item--active' : '') +
+                    (c.pinned ? ' cswitch__item--pinned' : '') +
+                    (i === hoverIdx ? ' cswitch__item--hover' : '')
+                  }
+                  onMouseEnter={() => setHoverIdx(i)}
+                  ref={(el) => {
+                    // v5.1 — auto-scroll l'item hovered (au clavier)
+                    // dans le viewport si la liste est trop longue
+                    // pour que tout tienne. Critique pour l'UX au
+                    // clavier : sans ça, ↓↓↓↓ sortait de l'écran sans
+                    // que la liste suive.
+                    if (i === hoverIdx && el) {
+                      el.scrollIntoView({ block: 'nearest' });
+                    }
+                  }}
                 >
                   {editingId === c.id ? (
                     <input
@@ -234,6 +349,14 @@ export function ConversationSwitcher({
               <AtelierIcon name="i-plus" size={14} />
               New conversation
             </button>
+            {/* v5.1 — keyboard hint footer. Apparait uniquement quand
+                la search box est visible (= le user a 4+ convs et est
+                susceptible de naviguer au clavier). */}
+            {conversations.length >= 4 && (
+              <div className="cswitch__kbd-hint">
+                <kbd>↑</kbd><kbd>↓</kbd> nav · <kbd>↵</kbd> open · <kbd>Esc</kbd> close
+              </div>
+            )}
           </div>,
           document.body,
         )}

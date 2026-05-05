@@ -507,6 +507,45 @@ export function CommandPalette() {
           window.dispatchEvent(new CustomEvent('suxai:open-settings'));
         },
       },
+      // v5.1 — diagnose : copie un dump JSON (version, server health,
+      // platform, mémoire) dans le clipboard pour partager en debug.
+      // Pas de PII : juste username (déjà visible) + version client +
+      // server health snapshot. Utile quand le user dit « ça marche
+      // pas » sans contexte — il peut coller le résultat ici.
+      {
+        id: 'app.diagnose',
+        label: 'Help: Copy diagnostics to clipboard',
+        group: 'Account',
+        run: async () => {
+          try {
+            const { API_BASE_URL } = await import('../../config');
+            const ac = new AbortController();
+            const t = setTimeout(() => ac.abort(), 6_000);
+            let health: unknown = null;
+            try {
+              const res = await fetch(`${API_BASE_URL}/health`, { signal: ac.signal });
+              health = await res.json().catch(() => ({ status: res.status, ok: res.ok }));
+            } catch (err) {
+              health = { error: (err as Error).message };
+            } finally {
+              clearTimeout(t);
+            }
+            const clientVersion = await window.suxai?.app?.getVersion?.() ?? 'unknown';
+            const dump = {
+              client: { version: clientVersion, ua: navigator.userAgent.slice(0, 100), platform: navigator.platform },
+              user: user ? { username: user.username, tier: user.tier ?? 'free' } : null,
+              api_base: API_BASE_URL,
+              server_health: health,
+              fetched_at: new Date().toISOString(),
+            };
+            const text = JSON.stringify(dump, null, 2);
+            await navigator.clipboard.writeText(text);
+            toast.success('Diagnostics copied', `${text.length} chars · paste anywhere to share`);
+          } catch (err) {
+            toast.error('Diagnose failed', (err as Error).message);
+          }
+        },
+      },
       {
         id: 'account.logout',
         label: `Account: Sign out${user ? ` (${user.username})` : ''}`,

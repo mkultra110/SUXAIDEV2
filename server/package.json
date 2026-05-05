@@ -1,6 +1,6 @@
 {
   "name": "suxai-server",
-  "version": "5.2.1",
+  "version": "5.2.2",
   "description": "SUXAI VPS — auth, AI proxy, updates",
   "private": true,
   "type": "module",

@@ -95,6 +95,18 @@ export function ActivityBar({
       >
         <AtelierIcon name="i-search" size={22} />
       </button>
+      {/* v5.2.2 — SUXAVOIP : numéros temporaires + SMS. Click ouvre
+          le panel modal (event suxai:open-sms écouté par SmsPanel).
+          Raccourci équivalent : Cmd/Ctrl+Shift+N. */}
+      <button
+        type="button"
+        className="actbar__btn"
+        onClick={() => window.dispatchEvent(new CustomEvent('suxai:open-sms'))}
+        title="SUXAVOIP — phone numbers (Ctrl/Cmd+Shift+N)"
+        aria-label="Open SUXAVOIP panel"
+      >
+        <AtelierIcon name="i-comment" size={22} />
+      </button>
       {/* v0.15.9 — push the gear to the bottom of the bar (parité
           VSCode). Synthetic Cmd+, fires SettingsDialog's existing
           listener, mirroring the search-icon pattern above. */}

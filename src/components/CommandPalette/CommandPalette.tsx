@@ -455,6 +455,16 @@ export function CommandPalette() {
           window.dispatchEvent(new CustomEvent('suxai:open-sms'));
         },
       },
+      // v5.3 — keyboard shortcuts cheatsheet.
+      {
+        id: 'help.shortcuts',
+        label: 'Help: Keyboard shortcuts',
+        hint: 'Ctrl+Shift+/',
+        group: 'Account',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('suxai:open-shortcuts'));
+        },
+      },
       {
         id: 'ai.export-md',
         label: 'AI: Export conversation as Markdown…',

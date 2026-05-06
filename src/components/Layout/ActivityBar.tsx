@@ -111,6 +111,18 @@ export function ActivityBar({
           VSCode). Synthetic Cmd+, fires SettingsDialog's existing
           listener, mirroring the search-icon pattern above. */}
       <span className="actbar__spacer" aria-hidden />
+      {/* v5.3 — Help / shortcuts cheatsheet. Discreet « ? » in the
+          activity bar so users discover the shortcut list without
+          having to know Ctrl+Shift+/ exists. */}
+      <button
+        type="button"
+        className="actbar__btn"
+        onClick={() => window.dispatchEvent(new CustomEvent('suxai:open-shortcuts'))}
+        title="Keyboard shortcuts (Ctrl/Cmd+Shift+/)"
+        aria-label="Keyboard shortcuts"
+      >
+        <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1, fontFamily: 'var(--font-mono)' }}>?</span>
+      </button>
       <button
         type="button"
         className="actbar__btn"

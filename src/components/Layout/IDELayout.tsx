@@ -15,6 +15,7 @@ import { ProblemsPanel } from '../ProblemsPanel/ProblemsPanel';
 import { OutputPanel } from '../OutputPanel/OutputPanel';
 import { WhatsNewDialog } from '../WhatsNew/WhatsNewDialog';
 import { SmsPanel } from '../SMS/SmsPanel';
+import { ShortcutsCheatsheet } from '../ShortcutsCheatsheet/ShortcutsCheatsheet';
 import './IDELayout.css';
 
 function WorkspaceHotkeys() {
@@ -241,6 +242,14 @@ export function IDELayout() {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('suxai:open-sms'));
       }
+      // v5.3 — Cmd/Ctrl+Shift+/ : open shortcuts cheatsheet.
+      // Le « ? » sur clavier US et le « / » sur azerty atterrissent
+      // sur le même slot ; on capture les deux pour tolérer les
+      // layouts.
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '/' || e.key === '?')) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('suxai:open-shortcuts'));
+      }
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
@@ -375,6 +384,9 @@ export function IDELayout() {
           command palette. Reste invisible tant que l'event
           suxai:open-sms n'a pas été dispatché. */}
       <SmsPanel />
+      {/* v5.3 — Keyboard shortcuts cheatsheet. Ouvert via
+          Ctrl+Shift+/ ou via la command palette. */}
+      <ShortcutsCheatsheet />
     </div>
   );
 }

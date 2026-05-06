@@ -129,7 +129,7 @@ Common VPS tasks Claude Code should be able to do:
 - Edit `/opt/suxai/.env` (requires sudo — file is owned by `suxai`, mode 0600)
 - Upload new installer to `/opt/suxai/releases/` and bump `UPDATE_*` env vars
 
-## Current state / what works (v5.0.0)
+## Current state / what works (v5.3.1)
 
 ### Client (Electron + React)
 - ✅ Login UI, IDE layout (ActivityBar / Sidebar / Editor / AIPanel / StatusBar),
@@ -182,6 +182,39 @@ Common VPS tasks Claude Code should be able to do:
 ### What's New dialog
 - ✅ One-time announcement on major version bump. Shows v5 highlights at first
   launch; subsequent launches stay silent until the next major.
+
+### v5.1 — Conversation polish
+- ✅ Search box dans le ConversationSwitcher quand 4+ convs (filtre titre +
+  premier message, highlight des matches).
+- ✅ Navigation clavier complète : ↑/↓/↵/Esc avec scroll-into-view auto
+  + footer hint des raccourcis.
+- ✅ Per-conversation drafts : switch d'onglet ne perd plus le brouillon en
+  cours d'écriture. Persisté en localStorage (cap 64 entries × 100KB)
+  donc survit aux restarts.
+- ✅ Bouton « Retry » inline sur les messages en erreur — câble sur
+  onRegenerate (drop la dernière paire user/assistant et re-send).
+
+### v5.2 — SUXAVOIP intégration
+- ✅ Panel modal qui wrap l'API 1001sms (rebrand UI : « SUXAVOIP »).
+  Achat de numéros temporaires + polling auto des SMS reçus toutes les 8s
+  + cancel. Server proxy (clé jamais dans le client).
+- ✅ Bouton dédié dans l'ActivityBar + Cmd+Shift+N + entrée Command
+  Palette « SUXAVOIP: Phone numbers… ».
+- ✅ Env var SUXAVOIP_API_KEY (alias backward-compat sur SMS1001_API_KEY).
+- ✅ Tolérance upstream : orderId envoyé sous 3 noms (orderId/order_id/id),
+  normaliseOrders() coerce id|order_id|_id → orderId dans la liste reçue,
+  extraction d'erreur upstream sous plusieurs noms (error|message|details).
+
+### v5.3 — Discoverability + polish
+- ✅ Keyboard shortcuts cheatsheet (Cmd+Shift+/ ou bouton « ? » dans
+  l'ActivityBar). Searchable, groupé par catégorie (Navigation, Editor,
+  AI, Inline diff, Source Control, Window) — 40+ raccourcis listés.
+- ✅ Settings inputs hover state (parité avec selects).
+- ✅ QuickOpen disabled state visible (opacity + bg atténué).
+- ✅ Markdown render guard : try/catch autour de renderMarkdown évite
+  qu'une bulle entière unmount sur du markdown malformé.
+- ✅ AI composer maxLength 1MB + clamp en onChange (évite freeze sur
+  paste accidentel d'un fichier entier).
 
 ## Roadmap / what's NOT done yet
 

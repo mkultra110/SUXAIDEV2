@@ -3446,7 +3446,14 @@ export function AIPanel() {
           ref={textareaRef}
           value={input}
           onChange={(e) => {
-            setInput(e.target.value);
+            // v5.3.1 — clamp à 1MB. Au-delà c'est presque toujours un
+            // paste accidentel (un fichier entier collé) qui bloque
+            // le main thread pendant la sérialisation et faisait
+            // freezer l'IDE quelques secondes. 1MB couvre n'importe
+            // quel prompt légitime (longue conversation summary +
+            // repo-map + un fichier entier de 200KB).
+            const v = e.target.value;
+            setInput(v.length > 1_000_000 ? v.slice(0, 1_000_000) : v);
             autoResize(e.currentTarget);
           }}
           placeholder={
@@ -3455,6 +3462,7 @@ export function AIPanel() {
               : 'Sign in to use AI'
           }
           rows={1}
+          maxLength={1_000_000}
           disabled={!token || streaming}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {

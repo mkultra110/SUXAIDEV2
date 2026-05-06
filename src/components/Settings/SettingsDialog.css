@@ -122,6 +122,11 @@
     border-color var(--dur-quick) var(--ease-standard),
     box-shadow var(--dur-quick) var(--ease-standard);
 }
+/* v5.3.1 — hover state pour matcher .settings__select. Avant : les
+   inputs numériques (font size, tab size) n'avaient aucun feedback
+   visuel au survol alors que les selects en avaient. Inconsistance
+   d'interactivité. */
+.settings__input:hover { border-color: var(--color-border-default); }
 .settings__input:focus {
   border-color: var(--color-focus-ring);
   box-shadow: var(--shadow-accent-glow);

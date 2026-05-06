@@ -92,6 +92,25 @@ interface Part {
   language?: string;
 }
 
+/**
+ * v5.3.1 — Safe wrapper around the markdown parser. If the parser
+ * throws (rare, but possible on broken nesting / huge inputs), fall
+ * back to the escaped raw text wrapped in <pre> so the bubble still
+ * renders SOMETHING instead of unmounting the whole subtree.
+ */
+function safeRenderMarkdown(text: string): string {
+  try {
+    return renderMarkdown(text);
+  } catch (err) {
+    console.warn('[markdown] render failed, falling back to raw text:', err);
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return `<pre class="msg__text-fallback">${escaped}</pre>`;
+  }
+}
+
 function parseMarkdown(text: string): Part[] {
   const parts: Part[] = [];
   // Match closed fences first.
@@ -310,7 +329,14 @@ export function Message({
                   key={`${message.id}:${p.kind}:${i}`}
                   className={`msg__text ${showCursor ? 'msg__text--streaming' : ''}`}
                   dangerouslySetInnerHTML={{
-                    __html: renderMarkdown(p.content),
+                    // v5.3.1 — try/catch autour du parser markdown.
+                    // Sans ça, un code block malformé ou une entité
+                    // HTML cassée pétait le rendu de TOUTE la bulle
+                    // (dangerouslySetInnerHTML avec une exception lève
+                    // au render et React unmount le subtree). Avec le
+                    // fallback, on rend le texte brut échappé pour
+                    // ne pas perdre la conversation.
+                    __html: safeRenderMarkdown(p.content),
                   }}
                 />
               );

@@ -13,6 +13,7 @@ import { CompareDialog } from './components/Editor/CompareDialog';
 import { BranchPickerHost } from './components/Sidebar/BranchPicker';
 import { GitLogHost } from './components/Sidebar/GitLogModal';
 import { SquadModal } from './components/AI/SquadModal';
+import { ErrorBoundary } from './components/ErrorBoundary/ErrorBoundary';
 import { Spinner } from './components/ui/Spinner';
 import { AtelierIconSprite } from './components/ui/AtelierIcon';
 
@@ -66,13 +67,20 @@ function Root() {
 }
 
 export function App() {
+  // v5.3.2 — ErrorBoundary au tout-haut. Si n'importe quel composant
+  // descendant throw au render (markdown parser, prop type wrong,
+  // état impossible), l'ErrorBoundary capture et montre un fallback
+  // au lieu d'unmount tout l'arbre — ça évitait l'« écran blanc »
+  // qui forçait un kill du process Electron.
   return (
-    <ToastProvider>
-      <AuthProvider>
-        <WorkspaceProvider>
-          <Root />
-        </WorkspaceProvider>
-      </AuthProvider>
-    </ToastProvider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <WorkspaceProvider>
+            <Root />
+          </WorkspaceProvider>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

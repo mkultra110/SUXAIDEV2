@@ -1,0 +1,91 @@
+/* ============================================================
+   ErrorBoundary — fallback UI when a render exception bubbles up
+   v5.3.2
+   ============================================================ */
+
+.errboundary__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6vh 4vw;
+  background: var(--color-bg-canvas);
+}
+
+.errboundary {
+  width: min(560px, 100%);
+  padding: 26px 28px;
+  border-radius: var(--radius-2xl);
+  border: 1px solid color-mix(in oklch, var(--color-danger) 36%, transparent);
+}
+
+.errboundary__title {
+  margin: 0 0 8px;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-danger);
+}
+
+.errboundary__msg {
+  margin: 0 0 14px;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relax);
+  color: var(--color-text-secondary);
+}
+
+.errboundary__detail {
+  margin: 0 0 18px;
+  padding: 10px 12px;
+  background: var(--color-bg-canvas);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.errboundary__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.errboundary__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--dur-quick) var(--ease-standard),
+    color var(--dur-quick) var(--ease-standard),
+    border-color var(--dur-quick) var(--ease-standard);
+}
+.errboundary__btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.errboundary__btn--primary {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-text-on-accent);
+}
+.errboundary__btn--primary:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: var(--color-text-on-accent);
+}
